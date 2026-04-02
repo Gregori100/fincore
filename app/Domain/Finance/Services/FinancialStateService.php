@@ -51,7 +51,7 @@ class FinancialStateService
     public function getMonthlyBurnRate(): float
     {
         return Movement::where('type', 'expense')
-            ->where('created_at', '>=', now()->subMonth())
+            ->where('occurred_at', '>=', now()->subMonth())
             ->sum('amount');
     }
 

@@ -61,7 +61,7 @@ class FinanceController extends Controller
 
         $debt = Debt::findOrFail($data['debt_id']);
 
-        PayDebt::execute($debt, $data['amount']);
+        PayDebt::execute($debt->id, $data['amount']);
 
         return response()->json(['message' => 'Deuda pagada']);
     }

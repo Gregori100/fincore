@@ -22,23 +22,25 @@ class PayDebt
         $bo = $state->getBO();
 
         if ($amount > $bo) {
-            throw new InsufficientFunds("Not enough BO");
+            throw new InsufficientFunds();
         }
 
         if ($amount > $debt->current_amount) {
-            throw new OverpayDebt("Cannot pay more than debt");
+            throw new OverpayDebt();
         }
 
-        $debt->update([
-            'current_amount' => $debt->current_amount - $amount
-        ]);
+        return DB::transaction(function () use ($debt, $amount, $description) {
+            $debt->update([
+                'current_amount' => $debt->current_amount - $amount
+            ]);
 
-        return Movement::create([
-            'type' => 'debt_payment',
-            'amount' => $amount,
-            'description' => $description,
-            'debt_id' => $debt->id,
-            'occurred_at' => now(),
-        ]);
+            return Movement::create([
+                'type' => 'debt_payment',
+                'amount' => $amount,
+                'description' => $description,
+                'debt_id' => $debt->id,
+                'occurred_at' => now(),
+            ]);
+        });
     }
 }

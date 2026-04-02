@@ -28,7 +28,7 @@ class FinPay extends Command
     {
         try {
             PayDebt::execute(
-                $this->argument('debtId'),
+                (int) $this->argument('debtId'),
                 (float)$this->argument('amount'),
                 $this->argument('description')
             );

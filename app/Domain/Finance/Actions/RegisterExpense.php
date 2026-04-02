@@ -15,7 +15,7 @@ class RegisterExpense
         $bo = $state->getBO();
 
         if ($amount > $bo) {
-            throw new InsufficientFunds("Not enough BO");
+            throw new InsufficientFunds();
         }
 
         DB::transaction(function () use ($amount, $description) {

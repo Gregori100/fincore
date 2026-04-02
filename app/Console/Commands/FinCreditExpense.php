@@ -26,7 +26,7 @@ class FinCreditExpense extends Command
      */
     public function handle()
     {
-        $debtId = $this->argument('debtId');
+        $debtId = (int) $this->argument('debtId');
         $amount = (float) $this->argument('amount');
         $description = $this->argument('description');
 

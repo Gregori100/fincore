@@ -4,7 +4,7 @@ namespace Tests\Feature\Finance;
 
 use App\Domain\Finance\Actions\CreateDebt;
 use App\Domain\Finance\Actions\RegisterCreditExpense;
-use Exception;
+use App\Domain\Finance\Exceptions\CreditLimitExceeded;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,7 +25,7 @@ class CreditExpenseTest extends TestCase
     {
         $debt = CreateDebt::execute("BBVA", 1000);
 
-        $this->expectException(Exception::class);
+        $this->expectException(CreditLimitExceeded::class);
 
         RegisterCreditExpense::execute($debt->id, 2000);
     }

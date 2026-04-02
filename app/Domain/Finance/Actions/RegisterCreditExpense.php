@@ -2,9 +2,10 @@
 
 namespace App\Domain\Finance\Actions;
 
+use App\Domain\Finance\Exceptions\CreditLimitExceeded;
 use App\Models\Debt;
 use App\Models\Movement;
-use Exception;
+use Illuminate\Support\Facades\DB;
 
 class RegisterCreditExpense
 {
@@ -18,19 +19,21 @@ class RegisterCreditExpense
         $newAmount = $debt->current_amount + $amount;
 
         if ($newAmount > $debt->credit_limit) {
-            throw new Exception('Credit limit exceeded');
+            throw new CreditLimitExceeded();
         }
 
-        $debt->update([
-            'current_amount' => $newAmount,
-        ]);
+        return DB::transaction(function () use ($debt, $newAmount, $amount, $description) {
+            $debt->update([
+                'current_amount' => $newAmount,
+            ]);
 
-        return Movement::create([
-            'type' => 'credit_expense',
-            'amount' => $amount,
-            'description' => $description,
-            'debt_id' => $debt->id,
-            'occurred_at' => now(),
-        ]);
+            return Movement::create([
+                'type' => 'credit_expense',
+                'amount' => $amount,
+                'description' => $description,
+                'debt_id' => $debt->id,
+                'occurred_at' => now(),
+            ]);
+        });
     }
 }
