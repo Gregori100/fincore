@@ -2,37 +2,47 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project vision
+
+**FinCore** is a personal finance tracker for multiple users, with web (Vue) and mobile (Flutter) clients. The API is the single contract for all clients. A future feature is multiple wallets (bolsas) per user — keep this in mind when making data-layer decisions.
+
+## Monorepo structure
+
+```
+fincore/
+├── backend/    # Laravel 12 API
+├── frontend/   # Vue 3 (web client)
+└── compose.yaml
+```
+
 ## Commands
 
 ```bash
-# Install dependencies, generate key, run migrations, build assets
-composer setup
+# Backend — run from backend/
+cd backend
+composer install          # Install PHP dependencies
+php artisan migrate       # Run migrations
+php artisan test          # Run all tests (SQLite in-memory)
+php artisan test tests/Feature/Finance/IncomeTest.php                        # Single file
+php artisan test --filter=test_income_increases_bo                           # Single test
+./vendor/bin/pint                                                             # Lint
 
-# Start dev servers (Laravel + queue + log monitor + Vite) concurrently
-composer dev
+# Frontend — run from frontend/
+cd frontend
+npm install       # Install JS dependencies
+npm run dev       # Dev server (http://localhost:5173)
+npm run build     # Production build
 
-# Run all tests (clears config cache first)
-composer test
-
-# Run a specific test file
-php artisan test tests/Feature/Finance/IncomeTest.php
-
-# Run a specific test method
-php artisan test tests/Feature/Finance/IncomeTest.php --filter=test_income_increases_bo
-
-# Lint (Laravel Pint)
-./vendor/bin/pint
-
-# Frontend build
-npm run build
+# Docker — run from repo root
+docker compose up --build   # Starts backend, frontend, pgsql, redis
 ```
 
-## Architecture
+## Backend architecture (`backend/`)
 
-**FinCore** is a Laravel 12 financial tracker with three core metrics:
-- **BO (Bolsa)**: Cash on hand = sum of incomes − expenses − debt payments
-- **DE (Deudas)**: Total outstanding debt across all credit facilities
-- **CR (Crédito)**: Available credit = sum of (limit − current_amount) per debt
+Three core metrics per user (multi-user scope pending auth implementation):
+- **BO (Bolsa)**: Cash on hand = incomes − expenses − debt payments
+- **DE (Deudas)**: Total outstanding debt = sum of `current_amount` per debt
+- **CR (Crédito)**: Available credit = sum of `(credit_limit − current_amount)` per debt
 
 ### Layer structure
 
@@ -50,7 +60,8 @@ app/
 │   │   └── FinancialStateService.php  # Read-only; computes BO, DE, CR, burn rate
 │   └── Exceptions/
 │       ├── InsufficientFunds.php
-│       └── OverpayDebt.php
+│       ├── OverpayDebt.php
+│       └── CreditLimitExceeded.php
 ├── Models/
 │   ├── Movement.php  # type: income | expense | credit_expense | debt_payment | adjustment
 │   └── Debt.php      # hasMany Movement; tracks current_amount and credit_limit
@@ -66,7 +77,7 @@ app/
 | POST | `/pay-debt` | PayDebt |
 | GET | `/state` | FinancialStateService |
 
-`CreateDebt` and `RegisterCreditExpense` have no API endpoint — they are only accessible via CLI.
+`CreateDebt` and `RegisterCreditExpense` have no API endpoint yet — CLI only.
 
 ### CLI commands (`fin:*`)
 
@@ -93,5 +104,25 @@ app/
 
 - All business logic lives in `Actions/`. Controllers only validate and delegate.
 - `FinancialStateService` is the single source of truth for BO/DE/CR calculations — used both for validation inside Actions and for the state API endpoint.
-- Actions use database transactions and throw domain exceptions (`InsufficientFunds`, `OverpayDebt`) on invalid state.
-- Tests use `RefreshDatabase` + SQLite in-memory (configured in `phpunit.xml`). Production uses PostgreSQL.
+- Actions use `DB::transaction()` and throw domain exceptions (`InsufficientFunds`, `OverpayDebt`, `CreditLimitExceeded`) on invalid state.
+- Tests use `RefreshDatabase` + SQLite in-memory (`phpunit.xml`). Production uses PostgreSQL.
+
+## Frontend architecture (`frontend/`)
+
+Vue 3 + Vite + Pinia + Vue Router + Axios.
+
+- `src/api/client.js` — Axios instance with `baseURL: '/api'`
+- `src/stores/finance.js` — Pinia store for financial state (bo, de, debts)
+- `src/router/index.js` — Vue Router
+- Vite proxy: `/api` → `http://laravel.test` (backend Docker service)
+
+## Docker services (`compose.yaml`)
+
+| Service | Image | Port |
+|---------|-------|------|
+| `laravel.test` | Sail PHP 8.4 | 80 |
+| `frontend` | node:22-alpine | 5173 |
+| `pgsql` | postgres:17-alpine | 5432 |
+| `redis` | redis:alpine | 6379 |
+
+Backend runs `php artisan migrate --force` automatically on startup.
