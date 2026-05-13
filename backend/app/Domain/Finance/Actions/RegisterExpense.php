@@ -12,23 +12,26 @@ use Illuminate\Support\Facades\DB;
 class RegisterExpense
 {
     public static function execute(
+        int $userId,
         int $accountId,
         float $amount,
         ?string $description = null,
     ): JournalEntry {
-        $account = Account::findOrFail($accountId);
+        $account = Account::where('id', $accountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
 
         if (! $account->isCashLike()) {
             throw new InvalidAccountType('Un gasto en efectivo/débito solo puede salir de una cuenta cash o debit. Usa credit_expense para tarjetas de crédito.');
         }
 
-        $state = new FinancialStateService();
+        $state = new FinancialStateService($userId);
         if ($amount > $state->getAccountBalance($account->id)) {
             throw new InsufficientFunds();
         }
 
         return DB::transaction(fn () => JournalEntry::create([
-            'user_id' => $account->user_id,
+            'user_id' => $userId,
             'kind' => JournalEntry::KIND_EXPENSE,
             'amount' => $amount,
             'account_origin_id' => $account->id,

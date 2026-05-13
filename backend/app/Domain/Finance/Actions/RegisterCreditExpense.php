@@ -12,17 +12,20 @@ use Illuminate\Support\Facades\DB;
 class RegisterCreditExpense
 {
     public static function execute(
+        int $userId,
         int $accountId,
         float $amount,
         ?string $description = null,
     ): JournalEntry {
-        $account = Account::findOrFail($accountId);
+        $account = Account::where('id', $accountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
 
         if (! $account->isCredit()) {
             throw new InvalidAccountType('Solo se puede cargar a una cuenta de tipo credit.');
         }
 
-        $state = new FinancialStateService();
+        $state = new FinancialStateService($userId);
         $newBalance = $state->getAccountBalance($account->id) + $amount;
         $limit = (float) ($account->credit_limit ?? 0);
 
@@ -31,7 +34,7 @@ class RegisterCreditExpense
         }
 
         return DB::transaction(fn () => JournalEntry::create([
-            'user_id' => $account->user_id,
+            'user_id' => $userId,
             'kind' => JournalEntry::KIND_CREDIT_EXPENSE,
             'amount' => $amount,
             'account_origin_id' => $account->id,

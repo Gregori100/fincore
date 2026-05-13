@@ -16,9 +16,11 @@ class UpdateAccount
         'minimum_payment_pct',
     ];
 
-    public static function execute(int $accountId, array $changes): Account
+    public static function execute(int $userId, int $accountId, array $changes): Account
     {
-        $account = Account::findOrFail($accountId);
+        $account = Account::where('id', $accountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
 
         if ($account->is_protected) {
             throw new ProtectedAccount();

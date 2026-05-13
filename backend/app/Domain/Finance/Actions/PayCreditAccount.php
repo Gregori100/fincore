@@ -13,13 +13,19 @@ use Illuminate\Support\Facades\DB;
 class PayCreditAccount
 {
     public static function execute(
+        int $userId,
         int $originAccountId,
         int $creditAccountId,
         float $amount,
         ?string $description = null,
     ): JournalEntry {
-        $origin = Account::findOrFail($originAccountId);
-        $credit = Account::findOrFail($creditAccountId);
+        $origin = Account::where('id', $originAccountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
+
+        $credit = Account::where('id', $creditAccountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
 
         if (! $origin->isCashLike()) {
             throw new InvalidAccountType('El pago debe salir de una cuenta cash o debit.');
@@ -29,7 +35,7 @@ class PayCreditAccount
             throw new InvalidAccountType('El destino del pago debe ser una cuenta de crédito.');
         }
 
-        $state = new FinancialStateService();
+        $state = new FinancialStateService($userId);
 
         if ($amount > $state->getAccountBalance($origin->id)) {
             throw new InsufficientFunds();
@@ -40,7 +46,7 @@ class PayCreditAccount
         }
 
         return DB::transaction(fn () => JournalEntry::create([
-            'user_id' => $origin->user_id,
+            'user_id' => $userId,
             'kind' => JournalEntry::KIND_DEBT_PAYMENT,
             'amount' => $amount,
             'account_origin_id' => $origin->id,

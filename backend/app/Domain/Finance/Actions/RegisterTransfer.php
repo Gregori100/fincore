@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 class RegisterTransfer
 {
     public static function execute(
+        int $userId,
         int $originAccountId,
         int $destinationAccountId,
         float $amount,
@@ -21,20 +22,25 @@ class RegisterTransfer
             throw new InvalidAccountType('La cuenta de origen y destino no pueden ser la misma.');
         }
 
-        $origin = Account::findOrFail($originAccountId);
-        $destination = Account::findOrFail($destinationAccountId);
+        $origin = Account::where('id', $originAccountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
+
+        $destination = Account::where('id', $destinationAccountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
 
         if (! $origin->isCashLike() || ! $destination->isCashLike()) {
             throw new InvalidAccountType('Las transferencias solo se permiten entre cuentas cash o debit. Usa pay-credit para pagar tarjetas.');
         }
 
-        $state = new FinancialStateService();
+        $state = new FinancialStateService($userId);
         if ($amount > $state->getAccountBalance($origin->id)) {
             throw new InsufficientFunds();
         }
 
         return DB::transaction(fn () => JournalEntry::create([
-            'user_id' => $origin->user_id,
+            'user_id' => $userId,
             'kind' => JournalEntry::KIND_TRANSFER,
             'amount' => $amount,
             'account_origin_id' => $origin->id,

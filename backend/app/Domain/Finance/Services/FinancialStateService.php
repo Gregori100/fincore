@@ -8,15 +8,24 @@ use Illuminate\Support\Collection;
 
 class FinancialStateService
 {
+    public function __construct(private int $userId)
+    {
+    }
+
     public function getAccountBalance(int $accountId): float
     {
-        $account = Account::findOrFail($accountId);
+        $account = Account::where('id', $accountId)
+            ->where('user_id', $this->userId)
+            ->firstOrFail();
 
-        $incoming = (float) JournalEntry::where('account_destination_id', $accountId)->sum('amount');
-        $outgoing = (float) JournalEntry::where('account_origin_id', $accountId)->sum('amount');
+        $incoming = (float) JournalEntry::where('user_id', $this->userId)
+            ->where('account_destination_id', $accountId)
+            ->sum('amount');
 
-        // En cuentas de crédito, el balance representa deuda actual:
-        // los cargos (origin) la suben, los pagos (destination) la bajan.
+        $outgoing = (float) JournalEntry::where('user_id', $this->userId)
+            ->where('account_origin_id', $accountId)
+            ->sum('amount');
+
         return $account->isCredit()
             ? $outgoing - $incoming
             : $incoming - $outgoing;
@@ -24,33 +33,38 @@ class FinancialStateService
 
     public function getAccounts(): Collection
     {
-        return Account::all()->map(function (Account $account) {
-            $balance = $this->getAccountBalance($account->id);
-            $account->balance = $balance;
-            if ($account->isCredit() && $account->credit_limit !== null) {
-                $account->available_credit = (float) $account->credit_limit - $balance;
-            }
-            return $account;
-        });
+        return Account::where('user_id', $this->userId)
+            ->get()
+            ->map(function (Account $account) {
+                $balance = $this->getAccountBalance($account->id);
+                $account->balance = $balance;
+                if ($account->isCredit() && $account->credit_limit !== null) {
+                    $account->available_credit = (float) $account->credit_limit - $balance;
+                }
+                return $account;
+            });
     }
 
     public function getBO(): float
     {
-        return Account::whereIn('type', [Account::TYPE_CASH, Account::TYPE_DEBIT])
+        return Account::where('user_id', $this->userId)
+            ->whereIn('type', [Account::TYPE_CASH, Account::TYPE_DEBIT])
             ->get()
             ->sum(fn (Account $a) => $this->getAccountBalance($a->id));
     }
 
     public function getDE(): float
     {
-        return Account::where('type', Account::TYPE_CREDIT)
+        return Account::where('user_id', $this->userId)
+            ->where('type', Account::TYPE_CREDIT)
             ->get()
             ->sum(fn (Account $a) => $this->getAccountBalance($a->id));
     }
 
     public function getCR(): float
     {
-        return Account::where('type', Account::TYPE_CREDIT)
+        return Account::where('user_id', $this->userId)
+            ->where('type', Account::TYPE_CREDIT)
             ->get()
             ->sum(function (Account $a) {
                 $limit = (float) ($a->credit_limit ?? 0);
@@ -60,7 +74,8 @@ class FinancialStateService
 
     public function getRecentEntries(int $limit = 10): Collection
     {
-        return JournalEntry::with(['origin', 'destination'])
+        return JournalEntry::where('user_id', $this->userId)
+            ->with(['origin', 'destination'])
             ->orderByDesc('occurred_at')
             ->limit($limit)
             ->get();
@@ -68,17 +83,20 @@ class FinancialStateService
 
     public function getMonthlyBurnRate(): float
     {
-        return (float) JournalEntry::whereIn('kind', [
-            JournalEntry::KIND_EXPENSE,
-            JournalEntry::KIND_CREDIT_EXPENSE,
-        ])
+        return (float) JournalEntry::where('user_id', $this->userId)
+            ->whereIn('kind', [
+                JournalEntry::KIND_EXPENSE,
+                JournalEntry::KIND_CREDIT_EXPENSE,
+            ])
             ->where('occurred_at', '>=', now()->subMonth())
             ->sum('amount');
     }
 
     public function getCreditUsagePercentage(): float
     {
-        $totalLimit = (float) Account::where('type', Account::TYPE_CREDIT)->sum('credit_limit');
+        $totalLimit = (float) Account::where('user_id', $this->userId)
+            ->where('type', Account::TYPE_CREDIT)
+            ->sum('credit_limit');
 
         if ($totalLimit == 0) {
             return 0;

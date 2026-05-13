@@ -11,15 +11,19 @@ use App\Domain\Finance\Actions\RegisterIncome;
 use App\Domain\Finance\Actions\RegisterTransfer;
 use App\Domain\Finance\Actions\UpdateAccount;
 use App\Domain\Finance\Services\FinancialStateService;
-use App\Models\Account;
 use App\Models\JournalEntry;
 use Illuminate\Http\Request;
 
 class FinanceController extends Controller
 {
-    public function state()
+    private function service(Request $request): FinancialStateService
     {
-        $state = new FinancialStateService();
+        return new FinancialStateService($request->user()->id);
+    }
+
+    public function state(Request $request)
+    {
+        $state = $this->service($request);
 
         return response()->json([
             'bo' => $state->getBO(),
@@ -41,6 +45,7 @@ class FinanceController extends Controller
         ]);
 
         $entry = RegisterIncome::execute(
+            $request->user()->id,
             (int) $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
@@ -58,6 +63,7 @@ class FinanceController extends Controller
         ]);
 
         $entry = RegisterExpense::execute(
+            $request->user()->id,
             (int) $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
@@ -75,6 +81,7 @@ class FinanceController extends Controller
         ]);
 
         $entry = RegisterCreditExpense::execute(
+            $request->user()->id,
             (int) $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
@@ -93,6 +100,7 @@ class FinanceController extends Controller
         ]);
 
         $entry = PayCreditAccount::execute(
+            $request->user()->id,
             (int) $data['origin_id'],
             (int) $data['credit_account_id'],
             (float) $data['amount'],
@@ -112,6 +120,7 @@ class FinanceController extends Controller
         ]);
 
         $entry = RegisterTransfer::execute(
+            $request->user()->id,
             (int) $data['origin_id'],
             (int) $data['destination_id'],
             (float) $data['amount'],
@@ -121,10 +130,9 @@ class FinanceController extends Controller
         return response()->json(['message' => 'Transferencia registrada', 'entry' => $entry], 201);
     }
 
-    public function listAccounts()
+    public function listAccounts(Request $request)
     {
-        $state = new FinancialStateService();
-        return response()->json(['accounts' => $state->getAccounts()]);
+        return response()->json(['accounts' => $this->service($request)->getAccounts()]);
     }
 
     public function createAccount(Request $request)
@@ -144,6 +152,7 @@ class FinanceController extends Controller
         ]));
 
         $account = CreateAccount::execute(
+            $request->user()->id,
             $data['name'],
             $data['type'],
             $creditMeta,
@@ -163,14 +172,14 @@ class FinanceController extends Controller
             'minimum_payment_pct' => 'sometimes|nullable|numeric|min:0|max:1',
         ]);
 
-        $account = UpdateAccount::execute($id, $data);
+        $account = UpdateAccount::execute($request->user()->id, $id, $data);
 
         return response()->json(['account' => $account]);
     }
 
-    public function deleteAccount(int $id)
+    public function deleteAccount(Request $request, int $id)
     {
-        DeleteAccount::execute($id);
+        DeleteAccount::execute($request->user()->id, $id);
 
         return response()->json(['message' => 'Cuenta eliminada']);
     }
@@ -186,6 +195,7 @@ class FinanceController extends Controller
         ]);
 
         $query = JournalEntry::with(['origin', 'destination'])
+            ->where('user_id', $request->user()->id)
             ->orderByDesc('occurred_at');
 
         if (isset($filters['account_id'])) {

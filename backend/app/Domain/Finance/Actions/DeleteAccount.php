@@ -9,16 +9,21 @@ use Illuminate\Support\Facades\DB;
 
 class DeleteAccount
 {
-    public static function execute(int $accountId): void
+    public static function execute(int $userId, int $accountId): void
     {
-        $account = Account::findOrFail($accountId);
+        $account = Account::where('id', $accountId)
+            ->where('user_id', $userId)
+            ->firstOrFail();
 
         if ($account->is_protected) {
             throw new ProtectedAccount();
         }
 
-        $hasEntries = JournalEntry::where('account_origin_id', $accountId)
-            ->orWhere('account_destination_id', $accountId)
+        $hasEntries = JournalEntry::where('user_id', $userId)
+            ->where(function ($q) use ($accountId) {
+                $q->where('account_origin_id', $accountId)
+                    ->orWhere('account_destination_id', $accountId);
+            })
             ->exists();
 
         if ($hasEntries) {

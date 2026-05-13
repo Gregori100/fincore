@@ -33,6 +33,11 @@ class JournalEntry extends Model
         'occurred_at' => 'datetime',
     ];
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
     public function origin(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'account_origin_id');
