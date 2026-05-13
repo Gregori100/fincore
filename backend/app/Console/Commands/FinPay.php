@@ -2,26 +2,32 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\ResolvesUser;
 use App\Domain\Finance\Actions\PayCreditAccount;
 use Illuminate\Console\Command;
 
 class FinPay extends Command
 {
-    protected $signature = 'fin:pay {originId} {creditAccountId} {amount} {description?}';
+    use ResolvesUser;
+
+    protected $signature = 'fin:pay {originId} {creditAccountId} {amount} {description?} {--user= : Email del usuario}';
 
     protected $description = 'Paga una cuenta de crédito desde una cuenta cash/debit';
 
     public function handle(): int
     {
         try {
+            $user = $this->resolveUser();
+
             PayCreditAccount::execute(
+                $user->id,
                 (int) $this->argument('originId'),
                 (int) $this->argument('creditAccountId'),
                 (float) $this->argument('amount'),
                 $this->argument('description'),
             );
 
-            $this->info("Pago aplicado: {$this->argument('amount')}");
+            $this->info("Pago aplicado: {$this->argument('amount')} (user={$user->email})");
             return self::SUCCESS;
         } catch (\Exception $e) {
             $this->error($e->getMessage());

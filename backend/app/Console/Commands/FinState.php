@@ -2,21 +2,31 @@
 
 namespace App\Console\Commands;
 
+use App\Console\Commands\Concerns\ResolvesUser;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
 use Illuminate\Console\Command;
 
 class FinState extends Command
 {
-    protected $signature = 'fin:state';
+    use ResolvesUser;
+
+    protected $signature = 'fin:state {--user= : Email del usuario}';
 
     protected $description = 'Muestra el estado financiero actual';
 
     public function handle(): int
     {
-        $state = new FinancialStateService();
+        try {
+            $user = $this->resolveUser();
+        } catch (\Exception $e) {
+            $this->error($e->getMessage());
+            return self::FAILURE;
+        }
 
-        $this->line("\n=== FINCORE STATE ===\n");
+        $state = new FinancialStateService($user->id);
+
+        $this->line("\n=== FINCORE STATE (user={$user->email}) ===\n");
         $this->info('BO: ' . number_format($state->getBO(), 2));
         $this->info('DE: ' . number_format($state->getDE(), 2));
         $this->info('CR: ' . number_format($state->getCR(), 2));
