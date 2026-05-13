@@ -54,9 +54,27 @@ Para ver el listado en vivo:
 docker compose exec api php artisan list fin
 ```
 
+## Autenticación en el CLI
+
+Cada comando `fin:*` necesita saber **sobre qué usuario** operar. Lo decide así, en orden:
+
+1. Si pasas `--user=email`, busca ese usuario.
+2. Si no lo pasas y solo existe **un** usuario, lo usa por conveniencia.
+3. Si no lo pasas y hay varios, falla con mensaje pidiendo el flag.
+
+```bash
+# Con un solo user en BD: el flag es opcional
+docker compose exec api php artisan fin:state
+
+# Con varios users: especifica
+docker compose exec api php artisan fin:state --user=diego@example.com
+```
+
+Los usuarios se crean vía API (`POST /api/auth/register`), no por CLI.
+
 ## Conceptos clave
 
-- **Bolsa**: cuenta `cash` singleton, creada por seeder (`is_protected=true`), no se puede eliminar ni renombrar. Tiene `id=1` en una instalación fresca.
+- **Bolsa**: cuenta `cash` singleton **por usuario**, creada automáticamente al registrarse (`is_protected=true`). No se puede eliminar ni renombrar.
 - **BO** (Bolsa): efectivo disponible. Suma de balances de cuentas `cash` + `debit`.
 - **DE** (Deudas): deuda total. Suma de balances de cuentas `credit`.
 - **CR** (Crédito): crédito disponible. `Σ (límite − deuda)` por cuenta de crédito.

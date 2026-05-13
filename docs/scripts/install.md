@@ -25,7 +25,7 @@ Si alguno ya existe lo respeta — nunca sobreescribe configuración manual.
 
 ### 3. Autodetecta puertos libres y rellena UID/GID
 
-Para cada puerto (`APP_PORT`, `VITE_PORT`, `FORWARD_DB_PORT`, `FORWARD_REDIS_PORT`):
+Para cada puerto (`APP_PORT`, `VITE_PORT`, `FORWARD_DB_PORT`, `FORWARD_REDIS_PORT`, `FORWARD_MAILPIT_PORT`, `FORWARD_MAILPIT_DASHBOARD_PORT`):
 
 | Estado en `.env` | Estado del puerto | Comportamiento |
 |------------------|-------------------|----------------|

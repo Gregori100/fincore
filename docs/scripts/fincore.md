@@ -29,6 +29,7 @@ Verifica que la instalación esté completa (`backend/.env` y `backend/vendor/` 
 ```
   Backend  → http://localhost:81
   Frontend → http://localhost:5173
+  Mailpit  → http://localhost:8025
 ```
 
 > Los puertos vienen del `.env`. Si tu `APP_PORT` quedó en 81 por autodetect, ahí lo verás.
@@ -77,6 +78,7 @@ api                running      -          81→80/tcp
 frontend           running      -          5173→5173/tcp
 pgsql              running      healthy    5432→5432/tcp
 redis              running      healthy    6380→6379/tcp
+mailpit            running      -          1025→1025/tcp, 8025→8025/tcp
 ```
 
 - **ESTADO**: `running` (verde), `exited` (rojo), `down` o ausente (gris).

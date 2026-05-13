@@ -39,6 +39,8 @@ El **CLI de la aplicación** (`fin:income`, `fin:expense`, etc.) corre dentro de
 
 ## Cambios recientes notables
 
+- **Mailpit añadido al stack**: nuevo servicio en `compose.yaml` que intercepta los emails de auth (verificación + reset). UI web en `http://localhost:8025` (puerto autodetectado por `install.sh`). El backend manda emails a `mailpit:1025` vía SMTP en lugar del driver `log`.
+- **Auth con Sanctum + Bearer tokens**: la API ahora requiere `Authorization: Bearer <token>` en `/api/finance/*` y email verificado. La cuenta Bolsa pasó de ser global a ser una por usuario (la crea el listener `CreateUserBolsaAccount` al registrarse).
 - **Rename del servicio backend (`laravel.test` → `api`)**: el contenedor antes se llamaba `fincore-laravel.test-1`; ahora es `fincore-api-1`. Si tienes contenedores viejos colgando, `docker compose down --remove-orphans` los limpia. El cambio fue cosmético — la lógica interna del contenedor (imagen Sail, supervisord, etc.) es idéntica.
 - **Autodetect de puertos ampliado**: si `APP_PORT` (o cualquier `*_PORT`) ya está en `.env` pero su valor está ocupado en el host, `install.sh` ahora **reasigna** automáticamente al siguiente puerto libre. Antes solo avisaba y dejaba la configuración rota.
-- **Seeder corre con `install.sh`**: la cuenta `Bolsa` se crea en una instalación fresca (antes solo se creaban las tablas vacías).
+- **DatabaseSeeder vacío**: la cuenta Bolsa ya no se crea por seeder (ahora la crea el listener cuando alguien se registra). El seeder se mantiene como placeholder por si en el futuro queremos crear datos de dev.

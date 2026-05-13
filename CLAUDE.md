@@ -73,11 +73,18 @@ npm run build
 
 ## Backend architecture (`backend/`)
 
-### Domain model: Accounts + JournalEntries
+Full REST API reference in [`docs/api/`](./docs/api/README.md). This section gives the architectural overview.
 
-Everything financial is modeled as an **Account** (`app/Models/Account.php`) of one of three types:
+### Domain model: Users → Accounts → JournalEntries
 
-- `cash` — physical money/wallet. **Singleton** named "Bolsa", `is_protected=true`, created by `DatabaseSeeder`. Cannot be deleted or renamed.
+Everything is scoped by `User`. Each user has:
+- One **Bolsa** (`Account` with `type=cash`, `is_protected=true`), created automatically at registration by the `CreateUserBolsaAccount` listener.
+- N additional `Account`s of type `debit` or `credit`.
+- M `JournalEntry`s connecting them.
+
+An **Account** (`app/Models/Account.php`) has one of three types:
+
+- `cash` — physical money/wallet. **Singleton per user** named "Bolsa", `is_protected=true`. Cannot be deleted or renamed.
 - `debit` — bank checking/debit accounts (N per user).
 - `credit` — credit cards with `credit_limit`, `closing_day`, `payment_day`, `interest_rate`, `minimum_payment_pct`. The metadata is stored but no alert/interest engine exists yet (Phase 2).
 
@@ -108,46 +115,84 @@ The three aggregated metrics:
 
 ```
 app/
-├── Http/Controllers/FinanceController.php   # Validates requests, delegates to Actions
+├── Http/Controllers/
+│   ├── FinanceController.php                # Finance endpoints; scopes by request->user()->id
+│   └── Auth/                                # Sanctum-backed auth endpoints
+│       ├── RegisterController.php           # Fires Registered event (creates Bolsa + sends email)
+│       ├── LoginController.php              # Returns bearer token
+│       ├── LogoutController.php             # current() + all()
+│       ├── MeController.php                 # Current user
+│       ├── EmailVerificationController.php  # Signed URL verify + resend
+│       └── PasswordResetController.php      # forgot() + reset()
 ├── Domain/Finance/
-│   ├── Actions/                             # One class per use case (stateless, transactional)
-│   │   ├── CreateAccount.php
-│   │   ├── UpdateAccount.php                # Rejects if is_protected
-│   │   ├── DeleteAccount.php                # Rejects if is_protected or has entries
+│   ├── Actions/                             # All take int $userId as first param
+│   │   ├── CreateAccount.php                # Refuses TYPE_CASH (Bolsa is auto-created)
+│   │   ├── UpdateAccount.php                # Rejects if is_protected; scoped by user
+│   │   ├── DeleteAccount.php                # Rejects if is_protected or has entries; scoped
 │   │   ├── RegisterIncome.php
 │   │   ├── RegisterExpense.php              # Insufficient funds against the account's own balance
 │   │   ├── RegisterCreditExpense.php
 │   │   ├── PayCreditAccount.php             # Validates funds at origin AND not overpaying credit
 │   │   └── RegisterTransfer.php             # cash/debit ↔ cash/debit only
-│   ├── Services/FinancialStateService.php   # Read-only; balances + BO/DE/CR aggregates
+│   ├── Services/FinancialStateService.php   # Takes int $userId in constructor
 │   └── Exceptions/
-│       ├── DomainException.php          # Base — renders to JSON {error, code} with HTTP status
-│       ├── InsufficientFunds.php        # 422
-│       ├── OverpayDebt.php              # 422
-│       ├── CreditLimitExceeded.php      # 422
-│       ├── InvalidAccountType.php       # 422
-│       └── ProtectedAccount.php         # 409
+│       ├── DomainException.php              # Base — renders to JSON {error, code}
+│       ├── InsufficientFunds.php            # 422
+│       ├── OverpayDebt.php                  # 422
+│       ├── CreditLimitExceeded.php          # 422
+│       ├── InvalidAccountType.php           # 422
+│       └── ProtectedAccount.php             # 409
+├── Listeners/
+│   └── CreateUserBolsaAccount.php           # On Registered: creates the user's Bolsa
+├── Providers/AppServiceProvider.php          # Registers listener + custom reset URL
 ├── Models/
+│   ├── User.php             # HasApiTokens, MustVerifyEmail, Notifiable; hasMany(Account)
 │   ├── Account.php          # constants TYPE_CASH/TYPE_DEBIT/TYPE_CREDIT + isCredit()/isCashLike()
 │   └── JournalEntry.php     # KIND_* constants
-└── Console/Commands/        # fin:* Artisan commands wrapping Actions
+└── Console/Commands/
+    ├── Concerns/ResolvesUser.php            # Trait: resolves --user= flag for fin:* commands
+    └── Fin*.php                             # All fin:* commands use the trait
 ```
 
-### API routes (`routes/api.php`, prefix `/api/finance`)
+### Auth flow (Sanctum + Bearer tokens)
 
-| Method | Path | Action |
-|--------|------|--------|
-| GET | `/state` | Aggregated BO/DE/CR + accounts with balance + recent entries |
-| GET | `/entries` | Paginated journal entries with optional filters (`account_id`, `kind`, `from`, `to`, `per_page`) |
-| GET | `/accounts` | List accounts with balances |
-| POST | `/accounts` | CreateAccount (debit or credit; cash forbidden) |
-| PATCH | `/accounts/{id}` | UpdateAccount |
-| DELETE | `/accounts/{id}` | DeleteAccount |
-| POST | `/income` | RegisterIncome (`account_id`, `amount`, `description?`) |
-| POST | `/expense` | RegisterExpense (same payload) |
-| POST | `/credit-expense` | RegisterCreditExpense (same payload, requires credit type) |
-| POST | `/pay-credit` | PayCreditAccount (`origin_id`, `credit_account_id`, `amount`, ...) |
-| POST | `/transfer` | RegisterTransfer (`origin_id`, `destination_id`, ...) |
+Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
+
+1. `POST /api/auth/register { name, email, password, password_confirmation }` → `201 { user, token }`. The `Registered` event fires and triggers:
+   - `SendEmailVerificationNotification` (email goes through Mailpit in dev).
+   - `CreateUserBolsaAccount` listener creates the user's Bolsa singleton.
+2. `POST /api/auth/login { email, password }` → `200 { user, token }`.
+3. Cliente envía `Authorization: Bearer <token>` en cada request a `/api/finance/*`.
+4. Hasta que el usuario verifique su email, `/api/finance/*` devuelve `403` (middleware `verified`).
+5. `POST /api/auth/logout` revoca el token actual; `POST /api/auth/logout-all` revoca todos.
+6. Password reset: `POST /api/auth/password/forgot { email }` → email; `POST /api/auth/password/reset { token, email, password, password_confirmation }`.
+
+### API routes (`routes/api.php`)
+
+| Method | Path | Auth | Action |
+|--------|------|------|--------|
+| POST | `/auth/register` | public | Register + auto-create Bolsa + send verification email |
+| POST | `/auth/login` | public | Returns bearer token |
+| POST | `/auth/password/forgot` | public | Sends reset email |
+| POST | `/auth/password/reset` | public | Performs password reset |
+| GET | `/auth/email/verify/{id}/{hash}` | signed URL | Marks email as verified, redirects to FRONTEND_URL |
+| GET | `/auth/me` | sanctum | Current user |
+| POST | `/auth/logout` | sanctum | Revoke current token |
+| POST | `/auth/logout-all` | sanctum | Revoke all user tokens |
+| POST | `/auth/email/verification-notification` | sanctum | Resend verification email |
+| GET | `/finance/state` | sanctum + verified | BO/DE/CR + accounts + recent entries |
+| GET | `/finance/entries` | sanctum + verified | Paginated entries with filters |
+| GET | `/finance/accounts` | sanctum + verified | List accounts |
+| POST | `/finance/accounts` | sanctum + verified | CreateAccount (debit/credit, cash forbidden) |
+| PATCH | `/finance/accounts/{id}` | sanctum + verified | UpdateAccount |
+| DELETE | `/finance/accounts/{id}` | sanctum + verified | DeleteAccount |
+| POST | `/finance/income` | sanctum + verified | RegisterIncome |
+| POST | `/finance/expense` | sanctum + verified | RegisterExpense |
+| POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense |
+| POST | `/finance/pay-credit` | sanctum + verified | PayCreditAccount |
+| POST | `/finance/transfer` | sanctum + verified | RegisterTransfer |
+
+Rate-limited (`throttle:6,1`): register, login, password forgot/reset, verification resend.
 
 ### Domain error contract
 
@@ -165,23 +210,26 @@ Validation errors from `$request->validate()` still produce the standard Laravel
 
 ### CLI commands (`fin:*`)
 
+All commands accept `--user=email` (optional if there's exactly one user; required otherwise). Trait `App\Console\Commands\Concerns\ResolvesUser` handles the resolution.
+
 | Command | Signature | Description |
 |---------|-----------|-------------|
-| `fin:account:create` | `{name} {type} [--limit] [--closingDay] [--paymentDay] [--interest] [--minPct]` | Create debit or credit account |
-| `fin:income` | `{accountId} {amount} {description?}` | Income into a cash/debit account |
-| `fin:expense` | `{accountId} {amount} {description?}` | Expense from a cash/debit account |
-| `fin:credit-expense` | `{accountId} {amount} {description?}` | Charge to a credit account |
-| `fin:pay` | `{originId} {creditAccountId} {amount} {description?}` | Pay a credit account from a cash/debit one |
-| `fin:state` | — | Print BO/DE/CR, accounts table, last 10 entries |
+| `fin:account:create` | `{name} {type} [--limit] [--closingDay] [--paymentDay] [--interest] [--minPct] [--user]` | Create debit or credit account |
+| `fin:income` | `{accountId} {amount} {description?} [--user]` | Income into a cash/debit account |
+| `fin:expense` | `{accountId} {amount} {description?} [--user]` | Expense from a cash/debit account |
+| `fin:credit-expense` | `{accountId} {amount} {description?} [--user]` | Charge to a credit account |
+| `fin:pay` | `{originId} {creditAccountId} {amount} {description?} [--user]` | Pay a credit account from a cash/debit one |
+| `fin:state` | `[--user]` | Print BO/DE/CR, accounts table, last 10 entries |
 
 ### Key design rules
 
 - All business logic lives in `Actions/`. Controllers only validate and delegate.
-- `FinancialStateService` is the single source of truth for balances and aggregates — both Actions (for validation) and the API consume it.
+- Every Action takes `int $userId` as its first parameter; all queries scope by `user_id` to enforce isolation.
+- `FinancialStateService` takes `int $userId` in its constructor. Both Actions (for validation) and `FinanceController` consume it.
 - Actions use `DB::transaction()` and throw domain exceptions on invalid state.
-- The Bolsa account is created by `DatabaseSeeder`. `tests/TestCase.php` sets `$seed = true` so every test starts with Bolsa available.
-- `user_id` is nullable on both tables — auth (Sanctum or similar) is intentionally deferred to Phase 2.
-- Frontend is currently out of sync with this backend shape (legacy expected `bo`, `de`, `debts`). It will be reworked after the backend is fully polished.
+- The Bolsa account is created automatically by the `CreateUserBolsaAccount` listener when the `Registered` event fires. `DatabaseSeeder` is intentionally empty.
+- `tests/TestCase.php` exposes a `createUserWithBolsa()` helper that replicates what the listener does (creates user + Bolsa).
+- Frontend is currently out of sync with this backend (legacy shape + no auth). It will be reworked once auth is stable.
 
 ## Frontend architecture (`frontend/`)
 
@@ -200,6 +248,7 @@ Vue 3 + Vite + Pinia + Vue Router + Axios. Currently consumes a legacy `/api/fin
 | `frontend` | node:22-alpine | 5173 |
 | `pgsql` | postgres:17-alpine | 5432 |
 | `redis` | redis:alpine | 6379 |
+| `mailpit` | axllent/mailpit | 1025 (SMTP), 8025 (web UI) |
 
 Backend uses Sail's default entrypoint (`start-container` → `supervisord` as root). Migrations are **not** run automatically on container startup — they are executed once by `scripts/install.sh` after `pgsql` is healthy, and on demand via `./scripts/fincore migrate` afterwards. Two `.env` files are needed, with separate templates:
 
