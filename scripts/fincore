@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+# fincore — Gestor del stack Docker de FinCore (estilo CLI).
+#
+# Uso:
+#   ./scripts/fincore start            # arrancar todo en background
+#   ./scripts/fincore stop             # detener (mantiene containers)
+#   ./scripts/fincore restart [svc]    # reiniciar todo o un servicio
+#   ./scripts/fincore down             # detener y eliminar containers
+#   ./scripts/fincore status           # tabla con estado de cada servicio
+#   ./scripts/fincore health           # check HTTP/DB de cada servicio
+#   ./scripts/fincore logs <svc>       # seguir logs (tail 100)
+#   ./scripts/fincore migrate          # correr migraciones
+#   ./scripts/fincore shell <svc>      # abrir shell en un servicio
+#   ./scripts/fincore rebuild          # reconstruir imagen y relanzar
+#   ./scripts/fincore                  # equivale a status
+
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_ROOT"
+
+SERVICES=(api frontend pgsql redis)
+
+# Lee una variable del .env raíz, con fallback al default. Quirúrgico: no
+# sourcea el archivo entero para no contagiar el shell con vars de Laravel
+# ni fallar por líneas inesperadas.
+env_get() {
+    local var="$1" default="$2"
+    local value=""
+    if [[ -f .env ]]; then
+        value=$(grep -E "^${var}=" .env 2>/dev/null | tail -n1 | cut -d= -f2- | sed 's/^["\x27]//; s/["\x27]$//')
+    fi
+    echo "${value:-$default}"
+}
+
+# Puertos del host (los autodetectados por install.sh en .env).
+APP_PORT=$(env_get APP_PORT 80)
+VITE_PORT=$(env_get VITE_PORT 5173)
+
+CYAN=$'\033[36m'
+GREEN=$'\033[32m'
+RED=$'\033[31m'
+YELLOW=$'\033[33m'
+GREY=$'\033[90m'
+BOLD=$'\033[1m'
+RESET=$'\033[0m'
+
+info()  { printf "${CYAN}▶ %s${RESET}\n" "$1"; }
+ok()    { printf "${GREEN}✓ %s${RESET}\n" "$1"; }
+warn()  { printf "${YELLOW}! %s${RESET}\n" "$1"; }
+err()   { printf "${RED}✗ %s${RESET}\n" "$1" >&2; }
+
+require_docker() {
+    command -v docker >/dev/null || { err "Docker no está instalado."; exit 1; }
+    docker compose version >/dev/null 2>&1 || { err "Necesitas docker compose v2."; exit 1; }
+}
+
+require_installed() {
+    if [[ ! -f backend/.env || ! -d backend/vendor ]]; then
+        err "Falta instalación. Corre primero: ./scripts/install.sh"
+        exit 1
+    fi
+}
+
+cmd_start() {
+    require_installed
+    info "Arrancando FinCore"
+    docker compose up -d
+    ok "Stack arriba"
+    echo
+    cmd_status
+    echo
+    echo "  ${BOLD}Backend${RESET}  → http://localhost:${APP_PORT:-80}"
+    echo "  ${BOLD}Frontend${RESET} → http://localhost:${VITE_PORT:-5173}"
+}
+
+cmd_stop() {
+    info "Deteniendo servicios"
+    docker compose stop
+    ok "Detenidos (containers conservados)"
+}
+
+cmd_restart() {
+    local svc="${1:-}"
+    if [[ -n "$svc" ]]; then
+        info "Reiniciando $svc"
+        docker compose restart "$svc"
+    else
+        info "Reiniciando todos los servicios"
+        docker compose restart
+    fi
+    ok "Reiniciado"
+}
+
+cmd_down() {
+    warn "Esto elimina los containers (volúmenes y .env se conservan)."
+    read -rp "¿Continuar? [y/N] " ans
+    [[ "$ans" =~ ^[Yy]$ ]] || { echo "Cancelado."; return 0; }
+    docker compose down
+    ok "Stack apagado"
+}
+
+cmd_status() {
+    printf "${BOLD}%-18s %-12s %-10s %s${RESET}\n" "SERVICIO" "ESTADO" "HEALTH" "PUERTOS"
+    printf "%-18s %-12s %-10s %s\n" "────────" "──────" "──────" "───────"
+    for svc in "${SERVICES[@]}"; do
+        local container state health ports color
+        container=$(docker compose ps -q "$svc" 2>/dev/null || true)
+        if [[ -z "$container" ]]; then
+            printf "%-18s ${GREY}%-12s${RESET} ${GREY}%-10s${RESET} ${GREY}%s${RESET}\n" \
+                "$svc" "down" "-" "-"
+            continue
+        fi
+        state=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null || echo "missing")
+        health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}-{{end}}' "$container" 2>/dev/null || echo "-")
+        ports=$(docker inspect -f '{{range $p, $conf := .NetworkSettings.Ports}}{{if $conf}}{{(index $conf 0).HostPort}}→{{$p}} {{end}}{{end}}' "$container" 2>/dev/null || echo "")
+        case "$state" in
+            running) color="${GREEN}" ;;
+            exited)  color="${RED}" ;;
+            *)       color="${GREY}" ;;
+        esac
+        printf "%-18s ${color}%-12s${RESET} %-10s ${GREY}%s${RESET}\n" \
+            "$svc" "$state" "$health" "$ports"
+    done
+}
+
+cmd_health() {
+    info "Health check"
+
+    # pgsql via healthcheck
+    local pg
+    pg=$(docker compose ps -q pgsql)
+    if [[ -n "$pg" ]] && [[ $(docker inspect -f '{{.State.Health.Status}}' "$pg" 2>/dev/null) == "healthy" ]]; then
+        ok "pgsql healthy"
+    else
+        err "pgsql no healthy"
+    fi
+
+    # redis via healthcheck
+    local rd
+    rd=$(docker compose ps -q redis)
+    if [[ -n "$rd" ]] && [[ $(docker inspect -f '{{.State.Health.Status}}' "$rd" 2>/dev/null) == "healthy" ]]; then
+        ok "redis healthy"
+    else
+        err "redis no healthy"
+    fi
+
+    # backend Laravel: endpoint /up que registra bootstrap/app.php
+    if curl -sf -o /dev/null -m 3 "http://localhost:${APP_PORT:-80}/up"; then
+        ok "api responde en /up"
+    else
+        err "api no responde en http://localhost:${APP_PORT:-80}/up"
+    fi
+
+    # frontend Vite
+    if curl -sf -o /dev/null -m 3 "http://localhost:${VITE_PORT:-5173}"; then
+        ok "frontend responde en :${VITE_PORT:-5173}"
+    else
+        err "frontend no responde en http://localhost:${VITE_PORT:-5173}"
+    fi
+}
+
+cmd_logs() {
+    local svc="${1:-}"
+    if [[ -z "$svc" ]]; then
+        err "Uso: fincore logs <servicio>"
+        echo "Servicios disponibles: ${SERVICES[*]}"
+        exit 1
+    fi
+    docker compose logs -f --tail=100 "$svc"
+}
+
+cmd_migrate() {
+    info "Corriendo migraciones"
+    local cid
+    cid=$(docker compose ps -q api 2>/dev/null || true)
+    if [[ -n "$cid" ]] && [[ $(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null) == "running" ]]; then
+        docker compose exec api php artisan migrate "$@"
+    else
+        docker compose run --rm --no-deps api php artisan migrate "$@"
+    fi
+    ok "Migraciones aplicadas"
+}
+
+cmd_shell() {
+    local svc="${1:-api}"
+    info "Abriendo shell en $svc"
+    case "$svc" in
+        frontend|redis|pgsql) docker compose exec "$svc" sh ;;
+        *)                    docker compose exec "$svc" bash ;;
+    esac
+}
+
+cmd_rebuild() {
+    info "Reconstruyendo imagen api"
+    docker compose build api
+    info "Relanzando stack"
+    docker compose up -d
+    ok "Rebuild completo"
+    cmd_status
+}
+
+cmd_help() {
+    sed -n '3,17p' "$0" | sed 's/^# //; s/^#//'
+}
+
+require_docker
+
+cmd="${1:-status}"
+shift || true
+
+case "$cmd" in
+    start|up)   cmd_start "$@" ;;
+    stop)       cmd_stop "$@" ;;
+    restart)    cmd_restart "$@" ;;
+    down)       cmd_down "$@" ;;
+    status|ps|"") cmd_status "$@" ;;
+    health)     cmd_health "$@" ;;
+    logs)       cmd_logs "$@" ;;
+    migrate)    cmd_migrate "$@" ;;
+    shell|sh)   cmd_shell "$@" ;;
+    rebuild)    cmd_rebuild "$@" ;;
+    help|-h|--help) cmd_help ;;
+    *)
+        err "Comando desconocido: $cmd"
+        echo
+        cmd_help
+        exit 1
+        ;;
+esac

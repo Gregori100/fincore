@@ -11,4 +11,10 @@ Thumbs.db
 /node_modules/
 /vendor/
 
+# Environment (raíz — usado por docker compose). .env.example sí se commitea.
+/.env
+
+# Test cache (PHPUnit deja esto fuera de backend/ si se corre desde la raíz)
+/.phpunit.result.cache
+
 # Each subproject handles its own ignores via backend/.gitignore and frontend/.gitignore
