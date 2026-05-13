@@ -1,15 +1,49 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import { useAuthStore } from '@/stores/auth'
+
+const routes = [
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/auth/LoginView.vue'),
+    meta: { requiresGuest: true },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/auth/RegisterView.vue'),
+    meta: { requiresGuest: true },
+  },
+  {
+    path: '/email-verified',
+    name: 'email-verified',
+    component: () => import('@/views/auth/EmailVerifiedView.vue'),
+  },
+  {
+    path: '/dashboard',
+    name: 'dashboard',
+    component: () => import('@/views/app/DashboardView.vue'),
+    meta: { requiresAuth: true },
+  },
+  { path: '/', redirect: { name: 'dashboard' } },
+  { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
+]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes: [
-    {
-      path: '/',
-      name: 'home',
-      component: HomeView,
-    },
-  ],
+  routes,
+})
+
+router.beforeEach((to) => {
+  const auth = useAuthStore()
+
+  if (to.meta.requiresAuth && !auth.isAuthenticated) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+
+  if (to.meta.requiresGuest && auth.isAuthenticated) {
+    return { name: 'dashboard' }
+  }
 })
 
 export default router
