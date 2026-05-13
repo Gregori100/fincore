@@ -11,9 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```
 fincore/
 ├── backend/    # Laravel 12 API
-├── frontend/   # Vue 3 (currently out of sync with backend — to be reworked after MVP)
+├── frontend/   # Vue 3 SPA (Tailwind + Headless UI)
 ├── scripts/    # install.sh + fincore CLI (Docker stack management)
-├── docs/       # Project docs — see docs/cli/ and docs/scripts/
+├── docs/       # Project docs — see docs/cli/, docs/scripts/, docs/api/, docs/frontend/
 └── compose.yaml
 ```
 
@@ -229,16 +229,41 @@ All commands accept `--user=email` (optional if there's exactly one user; requir
 - Actions use `DB::transaction()` and throw domain exceptions on invalid state.
 - The Bolsa account is created automatically by the `CreateUserBolsaAccount` listener when the `Registered` event fires. `DatabaseSeeder` is intentionally empty.
 - `tests/TestCase.php` exposes a `createUserWithBolsa()` helper that replicates what the listener does (creates user + Bolsa).
-- Frontend is currently out of sync with this backend (legacy shape + no auth). It will be reworked once auth is stable.
 
 ## Frontend architecture (`frontend/`)
 
-Vue 3 + Vite + Pinia + Vue Router + Axios. Currently consumes a legacy `/api/finance/state` shape that no longer matches — **expected to break** until the frontend rewrite.
+Full reference in [`docs/frontend/README.md`](./docs/frontend/README.md).
 
-- `src/api/client.js` — Axios instance with `baseURL: '/api'`
-- `src/stores/finance.js` — Pinia store
-- `src/router/index.js` — Vue Router
-- Vite proxy: `/api` → `http://api`
+**Stack**: Vue 3 (Composition API + `<script setup>`) + Pinia + Vue Router + Axios + **Tailwind CSS v4** + **Headless UI** + **@vueuse/core** + **@heroicons/vue**. Tests con Vitest + @vue/test-utils + jsdom.
+
+```
+src/
+├── api/
+│   ├── client.js       # Axios + interceptors (Bearer + 401 handler)
+│   ├── auth.js         # endpoints /api/auth/*
+│   └── finance.js      # endpoints /api/finance/*
+├── stores/
+│   ├── auth.js         # token (useStorage), user, login/logout/register/fetchMe
+│   ├── finance.js      # state, accounts, recentEntries + mutaciones
+│   └── toast.js        # feedback global
+├── router/             # rutas + beforeEach guard (requiresAuth/requiresGuest)
+├── components/
+│   ├── layout/         # AppLayout (con topbar) + AuthLayout (card)
+│   ├── ui/             # BaseButton, BaseInput, BaseSelect, BaseModal, ToastList
+│   └── finance/        # StateSummary, AccountCard, AccountList, RecentEntries
+│                       # + 6 Forms (Account, Income, Expense, CreditExpense, PayCredit, Transfer)
+└── views/
+    ├── auth/           # LoginView, RegisterView, EmailVerifiedView
+    └── app/            # DashboardView
+```
+
+**Patrones clave**:
+- Token persistido en `localStorage` vía `useStorage` de `@vueuse/core`.
+- Axios request interceptor lee el token del store; response interceptor dispara `auth.clear()` + redirect en 401.
+- El binding store ↔ client es **perezoso** (vía `bindAuth`/`bindRouter` en `main.js`) para evitar ciclo de imports.
+- Formularios viven en modales (`BaseModal` con Headless UI Dialog) abiertos desde el dashboard.
+- Tema oscuro único con CSS variables en `@theme` (Tailwind v4).
+- Vite proxy: `/api` → `http://api`.
 
 ## Docker services (`compose.yaml`)
 
