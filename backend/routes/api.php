@@ -1,11 +1,46 @@
 <?php
 
+use App\Http\Controllers\Auth\EmailVerificationController;
+use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\LogoutController;
+use App\Http\Controllers\Auth\MeController;
+use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\FinanceController;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('finance')->group(function () {
-    Route::get('/state', [FinanceController::class, 'state']);
+// --- Auth (públicos, con rate limit donde corresponde) ---
+Route::prefix('auth')->group(function () {
+    Route::post('/register', RegisterController::class)->middleware('throttle:6,1');
+    Route::post('/login', LoginController::class)->middleware('throttle:6,1');
 
+    Route::post('/password/forgot', [PasswordResetController::class, 'forgot'])
+        ->middleware('throttle:6,1')
+        ->name('password.email');
+
+    Route::post('/password/reset', [PasswordResetController::class, 'reset'])
+        ->middleware('throttle:6,1')
+        ->name('password.update');
+
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+        ->middleware('signed')
+        ->name('verification.verify');
+
+    // --- Auth (requieren sesión válida) ---
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::get('/me', MeController::class);
+        Route::post('/logout', [LogoutController::class, 'current']);
+        Route::post('/logout-all', [LogoutController::class, 'all']);
+
+        Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
+            ->middleware('throttle:6,1')
+            ->name('verification.send');
+    });
+});
+
+// --- Finance (auth + email verified obligatorio) ---
+Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(function () {
+    Route::get('/state', [FinanceController::class, 'state']);
     Route::get('/entries', [FinanceController::class, 'listEntries']);
 
     Route::get('/accounts', [FinanceController::class, 'listAccounts']);

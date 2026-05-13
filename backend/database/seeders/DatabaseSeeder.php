@@ -2,19 +2,15 @@
 
 namespace Database\Seeders;
 
-use App\Models\Account;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        Account::firstOrCreate(
-            ['type' => Account::TYPE_CASH, 'user_id' => null],
-            [
-                'name' => Account::PROTECTED_CASH_NAME,
-                'is_protected' => true,
-            ]
-        );
+        // Antes este seeder creaba una cuenta Bolsa global (user_id=null).
+        // Con auth real, la Bolsa es singleton-por-usuario y la crea el listener
+        // CreateUserBolsaAccount en respuesta al evento Registered.
+        // Este seeder queda vacío por diseño; los tests usan UserFactory.
     }
 }
