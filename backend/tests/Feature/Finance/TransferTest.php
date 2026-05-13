@@ -17,13 +17,14 @@ class TransferTest extends TestCase
 
     public function test_transfer_moves_balance_between_cash_like_accounts()
     {
-        $bolsa = Account::where('type', Account::TYPE_CASH)->firstOrFail();
-        $banamex = Account::factory()->debit()->create();
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $banamex = Account::factory()->debit()->for($user)->create();
 
-        RegisterIncome::execute($bolsa->id, 5000);
-        RegisterTransfer::execute($bolsa->id, $banamex->id, 2000, 'depósito');
+        RegisterIncome::execute($user->id, $bolsa->id, 5000);
+        RegisterTransfer::execute($user->id, $bolsa->id, $banamex->id, 2000, 'depósito');
 
-        $state = new FinancialStateService();
+        $state = new FinancialStateService($user->id);
 
         $this->assertEquals(3000, $state->getAccountBalance($bolsa->id));
         $this->assertEquals(2000, $state->getAccountBalance($banamex->id));
@@ -32,32 +33,35 @@ class TransferTest extends TestCase
 
     public function test_transfer_to_self_is_invalid()
     {
-        $bolsa = Account::where('type', Account::TYPE_CASH)->firstOrFail();
-        RegisterIncome::execute($bolsa->id, 1000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
 
         $this->expectException(InvalidAccountType::class);
 
-        RegisterTransfer::execute($bolsa->id, $bolsa->id, 500);
+        RegisterTransfer::execute($user->id, $bolsa->id, $bolsa->id, 500);
     }
 
     public function test_transfer_to_credit_account_is_invalid()
     {
-        $bolsa = Account::where('type', Account::TYPE_CASH)->firstOrFail();
-        $card = Account::factory()->credit()->create(['credit_limit' => 10000]);
-        RegisterIncome::execute($bolsa->id, 1000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $card = Account::factory()->credit()->for($user)->create(['credit_limit' => 10000]);
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
 
         $this->expectException(InvalidAccountType::class);
 
-        RegisterTransfer::execute($bolsa->id, $card->id, 500);
+        RegisterTransfer::execute($user->id, $bolsa->id, $card->id, 500);
     }
 
     public function test_transfer_requires_sufficient_funds()
     {
-        $bolsa = Account::where('type', Account::TYPE_CASH)->firstOrFail();
-        $banamex = Account::factory()->debit()->create();
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $banamex = Account::factory()->debit()->for($user)->create();
 
         $this->expectException(InsufficientFunds::class);
 
-        RegisterTransfer::execute($bolsa->id, $banamex->id, 500);
+        RegisterTransfer::execute($user->id, $bolsa->id, $banamex->id, 500);
     }
 }

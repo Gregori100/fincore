@@ -14,48 +14,49 @@ class IncomeTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function bolsa(): Account
-    {
-        return Account::where('type', Account::TYPE_CASH)->firstOrFail();
-    }
-
     public function test_income_increases_bo()
     {
-        RegisterIncome::execute($this->bolsa()->id, 5000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
 
-        $state = new FinancialStateService();
+        RegisterIncome::execute($user->id, $bolsa->id, 5000);
 
+        $state = new FinancialStateService($user->id);
         $this->assertEquals(5000, $state->getBO());
     }
 
     public function test_expense_reduces_bo()
     {
-        $bolsa = $this->bolsa();
-        RegisterIncome::execute($bolsa->id, 5000);
-        RegisterExpense::execute($bolsa->id, 2000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
 
-        $state = new FinancialStateService();
+        RegisterIncome::execute($user->id, $bolsa->id, 5000);
+        RegisterExpense::execute($user->id, $bolsa->id, 2000);
 
+        $state = new FinancialStateService($user->id);
         $this->assertEquals(3000, $state->getBO());
     }
 
     public function test_cannot_spend_more_than_balance()
     {
-        $bolsa = $this->bolsa();
-        RegisterIncome::execute($bolsa->id, 1000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
 
         $this->expectException(InsufficientFunds::class);
 
-        RegisterExpense::execute($bolsa->id, 2000);
+        RegisterExpense::execute($user->id, $bolsa->id, 2000);
     }
 
     public function test_income_into_debit_account()
     {
-        $debit = Account::factory()->debit()->create();
+        $user = $this->createUserWithBolsa();
+        $debit = Account::factory()->debit()->for($user)->create();
 
-        RegisterIncome::execute($debit->id, 1500);
+        RegisterIncome::execute($user->id, $debit->id, 1500);
 
-        $state = new FinancialStateService();
+        $state = new FinancialStateService($user->id);
         $this->assertEquals(1500, $state->getAccountBalance($debit->id));
         $this->assertEquals(1500, $state->getBO());
     }

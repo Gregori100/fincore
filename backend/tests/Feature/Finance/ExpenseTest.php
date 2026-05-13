@@ -17,51 +17,54 @@ class ExpenseTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function bolsa(): Account
-    {
-        return Account::where('type', Account::TYPE_CASH)->firstOrFail();
-    }
-
     public function test_cannot_spend_more_than_account_balance()
     {
-        $bolsa = $this->bolsa();
-        RegisterIncome::execute($bolsa->id, 1000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
 
         $this->expectException(InsufficientFunds::class);
 
-        RegisterExpense::execute($bolsa->id, 1500);
+        RegisterExpense::execute($user->id, $bolsa->id, 1500);
     }
 
     public function test_cannot_overpay_credit_account()
     {
-        $bolsa = $this->bolsa();
-        RegisterIncome::execute($bolsa->id, 5000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $card = Account::factory()->credit()->for($user)->create(['credit_limit' => 10000]);
 
-        $card = Account::factory()->credit()->create(['credit_limit' => 10000]);
-        RegisterCreditExpense::execute($card->id, 1000);
+        RegisterIncome::execute($user->id, $bolsa->id, 5000);
+        RegisterCreditExpense::execute($user->id, $card->id, 1000);
 
         $this->expectException(OverpayDebt::class);
 
-        PayCreditAccount::execute($bolsa->id, $card->id, 2000);
+        PayCreditAccount::execute($user->id, $bolsa->id, $card->id, 2000);
     }
 
     public function test_cannot_pay_credit_account_without_funds()
     {
-        $card = Account::factory()->credit()->create(['credit_limit' => 10000]);
-        RegisterCreditExpense::execute($card->id, 1000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $card = Account::factory()->credit()->for($user)->create(['credit_limit' => 10000]);
+
+        RegisterCreditExpense::execute($user->id, $card->id, 1000);
 
         $this->expectException(InsufficientFunds::class);
 
-        PayCreditAccount::execute($this->bolsa()->id, $card->id, 500);
+        PayCreditAccount::execute($user->id, $bolsa->id, $card->id, 500);
     }
 
     public function test_account_balance_reaches_zero()
     {
-        $bolsa = $this->bolsa();
-        RegisterIncome::execute($bolsa->id, 1000);
-        RegisterExpense::execute($bolsa->id, 1000);
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
 
-        $state = new FinancialStateService();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        RegisterExpense::execute($user->id, $bolsa->id, 1000);
+
+        $state = new FinancialStateService($user->id);
 
         $this->assertEquals(0, $state->getBO());
         $this->assertEquals(0, $state->getAccountBalance($bolsa->id));

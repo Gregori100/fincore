@@ -16,49 +16,54 @@ class ProtectedAccountTest extends TestCase
 
     public function test_bolsa_cannot_be_updated()
     {
-        $bolsa = Account::where('type', Account::TYPE_CASH)->firstOrFail();
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
 
         $this->expectException(ProtectedAccount::class);
 
-        UpdateAccount::execute($bolsa->id, ['name' => 'Otro nombre']);
+        UpdateAccount::execute($user->id, $bolsa->id, ['name' => 'Otro nombre']);
     }
 
     public function test_bolsa_cannot_be_deleted()
     {
-        $bolsa = Account::where('type', Account::TYPE_CASH)->firstOrFail();
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
 
         $this->expectException(ProtectedAccount::class);
 
-        DeleteAccount::execute($bolsa->id);
+        DeleteAccount::execute($user->id, $bolsa->id);
     }
 
     public function test_account_with_entries_cannot_be_deleted()
     {
-        $debit = Account::factory()->debit()->create();
-        RegisterIncome::execute($debit->id, 100);
+        $user = $this->createUserWithBolsa();
+        $debit = Account::factory()->debit()->for($user)->create();
+        RegisterIncome::execute($user->id, $debit->id, 100);
 
         $this->expectException(ProtectedAccount::class);
 
-        DeleteAccount::execute($debit->id);
+        DeleteAccount::execute($user->id, $debit->id);
     }
 
     public function test_empty_account_can_be_deleted()
     {
-        $debit = Account::factory()->debit()->create();
+        $user = $this->createUserWithBolsa();
+        $debit = Account::factory()->debit()->for($user)->create();
 
-        DeleteAccount::execute($debit->id);
+        DeleteAccount::execute($user->id, $debit->id);
 
         $this->assertDatabaseMissing('accounts', ['id' => $debit->id]);
     }
 
     public function test_updating_a_credit_account_metadata()
     {
-        $card = Account::factory()->credit()->create([
+        $user = $this->createUserWithBolsa();
+        $card = Account::factory()->credit()->for($user)->create([
             'credit_limit' => 10000,
             'closing_day' => 10,
         ]);
 
-        $updated = UpdateAccount::execute($card->id, [
+        $updated = UpdateAccount::execute($user->id, $card->id, [
             'credit_limit' => 15000,
             'closing_day' => 20,
         ]);

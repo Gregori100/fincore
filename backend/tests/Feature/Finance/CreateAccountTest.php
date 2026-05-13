@@ -14,9 +14,12 @@ class CreateAccountTest extends TestCase
 
     public function test_create_debit_account()
     {
-        CreateAccount::execute('Banamex Débito', Account::TYPE_DEBIT);
+        $user = $this->createUserWithBolsa();
+
+        CreateAccount::execute($user->id, 'Banamex Débito', Account::TYPE_DEBIT);
 
         $this->assertDatabaseHas('accounts', [
+            'user_id' => $user->id,
             'name' => 'Banamex Débito',
             'type' => 'debit',
             'is_protected' => false,
@@ -25,7 +28,10 @@ class CreateAccountTest extends TestCase
 
     public function test_create_credit_account_with_full_metadata()
     {
+        $user = $this->createUserWithBolsa();
+
         CreateAccount::execute(
+            $user->id,
             'Costco Visa',
             Account::TYPE_CREDIT,
             [
@@ -38,6 +44,7 @@ class CreateAccountTest extends TestCase
         );
 
         $this->assertDatabaseHas('accounts', [
+            'user_id' => $user->id,
             'name' => 'Costco Visa',
             'type' => 'credit',
             'credit_limit' => 25000,
@@ -48,22 +55,28 @@ class CreateAccountTest extends TestCase
 
     public function test_credit_account_requires_credit_limit()
     {
+        $user = $this->createUserWithBolsa();
+
         $this->expectException(InvalidAccountType::class);
 
-        CreateAccount::execute('Sin Límite', Account::TYPE_CREDIT, []);
+        CreateAccount::execute($user->id, 'Sin Límite', Account::TYPE_CREDIT, []);
     }
 
     public function test_cannot_create_extra_cash_account()
     {
+        $user = $this->createUserWithBolsa();
+
         $this->expectException(InvalidAccountType::class);
 
-        CreateAccount::execute('Bolsa 2', Account::TYPE_CASH);
+        CreateAccount::execute($user->id, 'Bolsa 2', Account::TYPE_CASH);
     }
 
     public function test_unknown_type_is_rejected()
     {
+        $user = $this->createUserWithBolsa();
+
         $this->expectException(InvalidAccountType::class);
 
-        CreateAccount::execute('Raro', 'savings');
+        CreateAccount::execute($user->id, 'Raro', 'savings');
     }
 }

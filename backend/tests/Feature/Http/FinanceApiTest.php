@@ -5,6 +5,7 @@ namespace Tests\Feature\Http;
 use App\Domain\Finance\Actions\RegisterCreditExpense;
 use App\Domain\Finance\Actions\RegisterIncome;
 use App\Models\Account;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -12,9 +13,18 @@ class FinanceApiTest extends TestCase
 {
     use RefreshDatabase;
 
+    private User $user;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->user = $this->createUserWithBolsa();
+        $this->actingAs($this->user, 'sanctum');
+    }
+
     private function bolsa(): Account
     {
-        return Account::where('type', Account::TYPE_CASH)->firstOrFail();
+        return $this->user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
     }
 
     public function test_state_endpoint_returns_full_shape()
@@ -22,13 +32,7 @@ class FinanceApiTest extends TestCase
         $this->getJson('/api/finance/state')
             ->assertOk()
             ->assertJsonStructure([
-                'bo',
-                'de',
-                'cr',
-                'burn_rate',
-                'credit_usage_pct',
-                'accounts',
-                'recent_entries',
+                'bo', 'de', 'cr', 'burn_rate', 'credit_usage_pct', 'accounts', 'recent_entries',
             ]);
     }
 
@@ -47,7 +51,8 @@ class FinanceApiTest extends TestCase
         ])
             ->assertCreated()
             ->assertJsonPath('account.name', 'Banamex')
-            ->assertJsonPath('account.type', 'debit');
+            ->assertJsonPath('account.type', 'debit')
+            ->assertJsonPath('account.user_id', $this->user->id);
     }
 
     public function test_create_credit_account_via_api()
@@ -76,9 +81,7 @@ class FinanceApiTest extends TestCase
 
     public function test_update_account_rejects_protected_bolsa()
     {
-        $this->patchJson('/api/finance/accounts/' . $this->bolsa()->id, [
-            'name' => 'Hackeada',
-        ])
+        $this->patchJson('/api/finance/accounts/' . $this->bolsa()->id, ['name' => 'Hackeada'])
             ->assertStatus(409)
             ->assertJsonPath('code', 'protected_account');
     }
@@ -121,7 +124,7 @@ class FinanceApiTest extends TestCase
 
     public function test_credit_expense_returns_422_when_limit_exceeded()
     {
-        $card = Account::factory()->credit()->create(['credit_limit' => 1000]);
+        $card = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 1000]);
 
         $this->postJson('/api/finance/credit-expense', [
             'account_id' => $card->id,
@@ -133,14 +136,13 @@ class FinanceApiTest extends TestCase
 
     public function test_pay_credit_happy_path()
     {
-        $bolsa = $this->bolsa();
-        $card = Account::factory()->credit()->create(['credit_limit' => 10000]);
+        $card = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 10000]);
 
-        RegisterIncome::execute($bolsa->id, 5000);
-        RegisterCreditExpense::execute($card->id, 2000);
+        RegisterIncome::execute($this->user->id, $this->bolsa()->id, 5000);
+        RegisterCreditExpense::execute($this->user->id, $card->id, 2000);
 
         $this->postJson('/api/finance/pay-credit', [
-            'origin_id' => $bolsa->id,
+            'origin_id' => $this->bolsa()->id,
             'credit_account_id' => $card->id,
             'amount' => 1500,
         ])
@@ -150,14 +152,13 @@ class FinanceApiTest extends TestCase
 
     public function test_pay_credit_returns_422_overpay()
     {
-        $bolsa = $this->bolsa();
-        $card = Account::factory()->credit()->create(['credit_limit' => 10000]);
+        $card = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 10000]);
 
-        RegisterIncome::execute($bolsa->id, 5000);
-        RegisterCreditExpense::execute($card->id, 1000);
+        RegisterIncome::execute($this->user->id, $this->bolsa()->id, 5000);
+        RegisterCreditExpense::execute($this->user->id, $card->id, 1000);
 
         $this->postJson('/api/finance/pay-credit', [
-            'origin_id' => $bolsa->id,
+            'origin_id' => $this->bolsa()->id,
             'credit_account_id' => $card->id,
             'amount' => 2000,
         ])
@@ -167,12 +168,11 @@ class FinanceApiTest extends TestCase
 
     public function test_transfer_between_cash_accounts()
     {
-        $bolsa = $this->bolsa();
-        $banamex = Account::factory()->debit()->create();
-        RegisterIncome::execute($bolsa->id, 1000);
+        $banamex = Account::factory()->debit()->for($this->user)->create();
+        RegisterIncome::execute($this->user->id, $this->bolsa()->id, 1000);
 
         $this->postJson('/api/finance/transfer', [
-            'origin_id' => $bolsa->id,
+            'origin_id' => $this->bolsa()->id,
             'destination_id' => $banamex->id,
             'amount' => 400,
         ])
@@ -182,12 +182,11 @@ class FinanceApiTest extends TestCase
 
     public function test_transfer_to_credit_account_is_422()
     {
-        $bolsa = $this->bolsa();
-        $card = Account::factory()->credit()->create(['credit_limit' => 10000]);
-        RegisterIncome::execute($bolsa->id, 1000);
+        $card = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 10000]);
+        RegisterIncome::execute($this->user->id, $this->bolsa()->id, 1000);
 
         $this->postJson('/api/finance/transfer', [
-            'origin_id' => $bolsa->id,
+            'origin_id' => $this->bolsa()->id,
             'destination_id' => $card->id,
             'amount' => 100,
         ])
@@ -197,9 +196,8 @@ class FinanceApiTest extends TestCase
 
     public function test_entries_endpoint_paginates_and_filters()
     {
-        $bolsa = $this->bolsa();
-        RegisterIncome::execute($bolsa->id, 1000, 'a');
-        RegisterIncome::execute($bolsa->id, 2000, 'b');
+        RegisterIncome::execute($this->user->id, $this->bolsa()->id, 1000, 'a');
+        RegisterIncome::execute($this->user->id, $this->bolsa()->id, 2000, 'b');
 
         $this->getJson('/api/finance/entries?per_page=10')
             ->assertOk()
@@ -213,7 +211,7 @@ class FinanceApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('total', 0);
 
-        $this->getJson('/api/finance/entries?account_id=' . $bolsa->id)
+        $this->getJson('/api/finance/entries?account_id=' . $this->bolsa()->id)
             ->assertOk()
             ->assertJsonPath('total', 2);
     }
