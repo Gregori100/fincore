@@ -3,37 +3,41 @@
 namespace App\Domain\Finance\Actions;
 
 use App\Domain\Finance\Exceptions\CreditLimitExceeded;
-use App\Models\Debt;
-use App\Models\Movement;
+use App\Domain\Finance\Exceptions\InvalidAccountType;
+use App\Domain\Finance\Services\FinancialStateService;
+use App\Models\Account;
+use App\Models\JournalEntry;
 use Illuminate\Support\Facades\DB;
 
 class RegisterCreditExpense
 {
     public static function execute(
-        int $debtId,
+        int $accountId,
         float $amount,
-        ?string $description = null
-    ): Movement {
-        $debt = Debt::findOrFail($debtId);
+        ?string $description = null,
+    ): JournalEntry {
+        $account = Account::findOrFail($accountId);
 
-        $newAmount = $debt->current_amount + $amount;
+        if (! $account->isCredit()) {
+            throw new InvalidAccountType('Solo se puede cargar a una cuenta de tipo credit.');
+        }
 
-        if ($newAmount > $debt->credit_limit) {
+        $state = new FinancialStateService();
+        $newBalance = $state->getAccountBalance($account->id) + $amount;
+        $limit = (float) ($account->credit_limit ?? 0);
+
+        if ($newBalance > $limit) {
             throw new CreditLimitExceeded();
         }
 
-        return DB::transaction(function () use ($debt, $newAmount, $amount, $description) {
-            $debt->update([
-                'current_amount' => $newAmount,
-            ]);
-
-            return Movement::create([
-                'type' => 'credit_expense',
-                'amount' => $amount,
-                'description' => $description,
-                'debt_id' => $debt->id,
-                'occurred_at' => now(),
-            ]);
-        });
+        return DB::transaction(fn () => JournalEntry::create([
+            'user_id' => $account->user_id,
+            'kind' => JournalEntry::KIND_CREDIT_EXPENSE,
+            'amount' => $amount,
+            'account_origin_id' => $account->id,
+            'account_destination_id' => null,
+            'description' => $description,
+            'occurred_at' => now(),
+        ]));
     }
 }

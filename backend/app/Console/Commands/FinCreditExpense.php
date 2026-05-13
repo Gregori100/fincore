@@ -7,35 +7,24 @@ use Illuminate\Console\Command;
 
 class FinCreditExpense extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'fin:credit-expense {debtId} {amount} {description?}';
+    protected $signature = 'fin:credit-expense {accountId} {amount} {description?}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Registra un gasto con tarjeta';
+    protected $description = 'Registra un cargo a una cuenta de crédito';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
-        $debtId = (int) $this->argument('debtId');
-        $amount = (float) $this->argument('amount');
-        $description = $this->argument('description');
+        try {
+            RegisterCreditExpense::execute(
+                (int) $this->argument('accountId'),
+                (float) $this->argument('amount'),
+                $this->argument('description'),
+            );
 
-        RegisterCreditExpense::execute(
-            $debtId,
-            $amount,
-            $description
-        );
-
-        $this->info("Credit expense registered: $amount");
+            $this->info("Cargo a crédito registrado: {$this->argument('amount')}");
+            return self::SUCCESS;
+        } catch (\Exception $e) {
+            $this->error($e->getMessage());
+            return self::FAILURE;
+        }
     }
 }

@@ -3,51 +3,56 @@
 namespace App\Console\Commands;
 
 use App\Domain\Finance\Services\FinancialStateService;
+use App\Models\Account;
 use Illuminate\Console\Command;
 
 class FinState extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'fin:state';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Muestra el estado financiero actual';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
         $state = new FinancialStateService();
 
         $this->line("\n=== FINCORE STATE ===\n");
+        $this->info('BO: ' . number_format($state->getBO(), 2));
+        $this->info('DE: ' . number_format($state->getDE(), 2));
+        $this->info('CR: ' . number_format($state->getCR(), 2));
 
-        $this->info("BO: " . $state->getBO());
-        $this->info("DE: " . $state->getDE());
-        $this->info("CR: " . $state->getCR());
+        $this->info("\nBurn rate mensual: " . number_format($state->getMonthlyBurnRate(), 2));
+        $this->info('Uso de crédito: ' . $state->getCreditUsagePercentage() . '%');
 
+        $this->line("\n--- Cuentas ---");
+        $rows = $state->getAccounts()->map(function (Account $a) {
+            return [
+                $a->id,
+                $a->name,
+                $a->type,
+                number_format($a->balance ?? 0, 2),
+                $a->isCredit() && $a->credit_limit !== null
+                    ? number_format($a->credit_limit, 2)
+                    : '-',
+                $a->isCredit() && isset($a->available_credit)
+                    ? number_format($a->available_credit, 2)
+                    : '-',
+            ];
+        })->toArray();
 
-        $this->info("\nBurn rate mensual: " . $state->getMonthlyBurnRate());
-        $this->info("Uso de crédito: " . $state->getCreditUsagePercentage() . "%\n");
-
-        $this->line("\n--- Deudas ---");
-        foreach ($state->getDebts() as $debt) {
-            $this->line("[{$debt->id}] {$debt->name} → {$debt->current_amount} / {$debt->credit_limit}");
-        }
+        $this->table(
+            ['ID', 'Nombre', 'Tipo', 'Balance', 'Límite', 'Disp.'],
+            $rows,
+        );
 
         $this->line("\n--- Últimos movimientos ---");
-        foreach ($state->getMovements()->take(10) as $m) {
-            $this->line("{$m->type}  {$m->amount}  {$m->description}");
+        foreach ($state->getRecentEntries(10) as $entry) {
+            $origin = $entry->origin?->name ?? '—';
+            $dest = $entry->destination?->name ?? '—';
+            $this->line("[{$entry->kind}] {$entry->amount}  {$origin} → {$dest}  {$entry->description}");
         }
 
         $this->line("\n=== END FINCORE STATE ===\n");
+        return self::SUCCESS;
     }
 }

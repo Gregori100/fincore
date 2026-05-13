@@ -2,40 +2,30 @@
 
 namespace App\Console\Commands;
 
-use App\Domain\Finance\Actions\PayDebt;
+use App\Domain\Finance\Actions\PayCreditAccount;
 use Illuminate\Console\Command;
 
 class FinPay extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'fin:pay {debtId} {amount} {description?}';
+    protected $signature = 'fin:pay {originId} {creditAccountId} {amount} {description?}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Paga una deuda';
+    protected $description = 'Paga una cuenta de crédito desde una cuenta cash/debit';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
         try {
-            PayDebt::execute(
-                (int) $this->argument('debtId'),
-                (float)$this->argument('amount'),
-                $this->argument('description')
+            PayCreditAccount::execute(
+                (int) $this->argument('originId'),
+                (int) $this->argument('creditAccountId'),
+                (float) $this->argument('amount'),
+                $this->argument('description'),
             );
 
-            $this->info("Debt paid successfully");
+            $this->info("Pago aplicado: {$this->argument('amount')}");
+            return self::SUCCESS;
         } catch (\Exception $e) {
             $this->error($e->getMessage());
+            return self::FAILURE;
         }
     }
 }

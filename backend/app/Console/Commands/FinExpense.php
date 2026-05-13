@@ -3,38 +3,28 @@
 namespace App\Console\Commands;
 
 use App\Domain\Finance\Actions\RegisterExpense;
-use App\Domain\Finance\Exceptions\InsufficientFunds;
 use Illuminate\Console\Command;
 
 class FinExpense extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'fin:expense {amount} {description?}';
+    protected $signature = 'fin:expense {accountId} {amount} {description?}';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Registra un gasto';
+    protected $description = 'Registra un gasto desde una cuenta cash/debit';
 
-    /**
-     * Execute the console command.
-     */
-    public function handle()
+    public function handle(): int
     {
-        $amount = (float) $this->argument('amount');
-        $description = $this->argument('description');
-
         try {
-            RegisterExpense::execute($amount, $description);
-            $this->info("Gasto registrado: $amount");
-        } catch (InsufficientFunds $e) {
+            RegisterExpense::execute(
+                (int) $this->argument('accountId'),
+                (float) $this->argument('amount'),
+                $this->argument('description'),
+            );
+
+            $this->info("Gasto registrado: {$this->argument('amount')}");
+            return self::SUCCESS;
+        } catch (\Exception $e) {
             $this->error($e->getMessage());
+            return self::FAILURE;
         }
     }
 }

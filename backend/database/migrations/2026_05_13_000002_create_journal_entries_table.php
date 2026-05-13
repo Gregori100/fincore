@@ -7,29 +7,31 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('movements', function (Blueprint $table) {
+        Schema::create('journal_entries', function (Blueprint $table) {
             $table->id();
-            $table->enum('type', [
+            $table->unsignedBigInteger('user_id')->nullable();
+            $table->enum('kind', [
                 'income',
                 'expense',
                 'credit_expense',
                 'debt_payment',
-                'adjustment'
+                'transfer',
+                'adjustment',
             ]);
             $table->decimal('amount', 12, 2);
-            $table->foreignId('debt_id')->nullable()->constrained('debts');
+            $table->foreignId('account_origin_id')->nullable()->constrained('accounts');
+            $table->foreignId('account_destination_id')->nullable()->constrained('accounts');
             $table->string('description')->nullable();
             $table->timestamp('occurred_at');
             $table->timestamps();
 
-            $table->index('type');
-            $table->index('debt_id');
-            $table->index('occurred_at');
+            $table->index(['user_id', 'occurred_at']);
+            $table->index('kind');
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('movements');
+        Schema::dropIfExists('journal_entries');
     }
 };

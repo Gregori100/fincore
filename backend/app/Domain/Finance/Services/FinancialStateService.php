@@ -2,65 +2,89 @@
 
 namespace App\Domain\Finance\Services;
 
-use App\Models\Debt;
-use App\Models\Movement;
+use App\Models\Account;
+use App\Models\JournalEntry;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 
 class FinancialStateService
 {
+    public function getAccountBalance(int $accountId): float
+    {
+        $account = Account::findOrFail($accountId);
+
+        $incoming = (float) JournalEntry::where('account_destination_id', $accountId)->sum('amount');
+        $outgoing = (float) JournalEntry::where('account_origin_id', $accountId)->sum('amount');
+
+        // En cuentas de crédito, el balance representa deuda actual:
+        // los cargos (origin) la suben, los pagos (destination) la bajan.
+        return $account->isCredit()
+            ? $outgoing - $incoming
+            : $incoming - $outgoing;
+    }
+
+    public function getAccounts(): Collection
+    {
+        return Account::all()->map(function (Account $account) {
+            $balance = $this->getAccountBalance($account->id);
+            $account->balance = $balance;
+            if ($account->isCredit() && $account->credit_limit !== null) {
+                $account->available_credit = (float) $account->credit_limit - $balance;
+            }
+            return $account;
+        });
+    }
+
     public function getBO(): float
     {
-        $income = Movement::where('type', 'income')->sum('amount');
-        $expense = Movement::where('type', 'expense')->sum('amount');
-        $payments = Movement::where('type', 'debt_payment')->sum('amount');
-
-        return (float) ($income - $expense - $payments);
+        return Account::whereIn('type', [Account::TYPE_CASH, Account::TYPE_DEBIT])
+            ->get()
+            ->sum(fn (Account $a) => $this->getAccountBalance($a->id));
     }
 
     public function getDE(): float
     {
-        return (float) Debt::sum('current_amount');
+        return Account::where('type', Account::TYPE_CREDIT)
+            ->get()
+            ->sum(fn (Account $a) => $this->getAccountBalance($a->id));
     }
 
     public function getCR(): float
     {
-        return Debt::sum(DB::raw('credit_limit - current_amount'));
+        return Account::where('type', Account::TYPE_CREDIT)
+            ->get()
+            ->sum(function (Account $a) {
+                $limit = (float) ($a->credit_limit ?? 0);
+                return $limit - $this->getAccountBalance($a->id);
+            });
     }
 
-    public function getDebts(): Collection
+    public function getRecentEntries(int $limit = 10): Collection
     {
-        return Debt::all();
-    }
-
-    public function getMovements(): Collection
-    {
-        return Movement::latest()->get();
-    }
-
-    public function getDebtsSummary(): array
-    {
-        return Debt::all()
-            ->map(fn($debt) => [
-                'name' => $debt->name,
-                'current_amount' => (float) $debt->current_amount,
-            ])
-            ->toArray();
+        return JournalEntry::with(['origin', 'destination'])
+            ->orderByDesc('occurred_at')
+            ->limit($limit)
+            ->get();
     }
 
     public function getMonthlyBurnRate(): float
     {
-        return Movement::where('type', 'expense')
+        return (float) JournalEntry::whereIn('kind', [
+            JournalEntry::KIND_EXPENSE,
+            JournalEntry::KIND_CREDIT_EXPENSE,
+        ])
             ->where('occurred_at', '>=', now()->subMonth())
             ->sum('amount');
     }
 
     public function getCreditUsagePercentage(): float
     {
-        $totalLimit = Debt::sum('credit_limit');
-        $used = Debt::sum('current_amount');
+        $totalLimit = (float) Account::where('type', Account::TYPE_CREDIT)->sum('credit_limit');
 
-        if ($totalLimit == 0) return 0;
+        if ($totalLimit == 0) {
+            return 0;
+        }
+
+        $used = $this->getDE();
 
         return round(($used / $totalLimit) * 100, 2);
     }

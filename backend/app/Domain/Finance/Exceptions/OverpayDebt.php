@@ -2,9 +2,12 @@
 
 namespace App\Domain\Finance\Exceptions;
 
-use Exception;
-
-class OverpayDebt extends Exception
+class OverpayDebt extends DomainException
 {
     protected $message = 'El pago excede el saldo de la deuda.';
+
+    public function errorCode(): string
+    {
+        return 'overpay_debt';
+    }
 }

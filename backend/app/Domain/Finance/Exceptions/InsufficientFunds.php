@@ -2,9 +2,12 @@
 
 namespace App\Domain\Finance\Exceptions;
 
-use Exception;
-
-class InsufficientFunds extends Exception
+class InsufficientFunds extends DomainException
 {
-    protected $message = 'Fondos insuficientes en la bolsa (BO).';
+    protected $message = 'Fondos insuficientes en la cuenta de origen.';
+
+    public function errorCode(): string
+    {
+        return 'insufficient_funds';
+    }
 }
