@@ -158,6 +158,24 @@ ensure_port FORWARD_MAILPIT_DASHBOARD_PORT 8025
 ensure_var WWWUSER "$(id -u)"
 ensure_var WWWGROUP "$(id -g)"
 
+# Sincronizamos APP_URL y FRONTEND_URL en backend/.env con los puertos que
+# acabamos de fijar en el .env raíz. Sin esto, los links de email de Laravel
+# apuntan al hostname interno de Docker (http://api) y el navegador no puede
+# resolverlos.
+backend_env_replace() {
+    local var="$1" value="$2"
+    if grep -qE "^${var}=" backend/.env; then
+        sed -i "s|^${var}=.*|${var}=${value}|" backend/.env
+    else
+        printf '%s=%s\n' "$var" "$value" >> backend/.env
+    fi
+}
+APP_PORT_VAL=$(env_get APP_PORT)
+VITE_PORT_VAL=$(env_get VITE_PORT)
+backend_env_replace APP_URL "http://localhost:${APP_PORT_VAL}"
+backend_env_replace FRONTEND_URL "http://localhost:${VITE_PORT_VAL}"
+ok "APP_URL y FRONTEND_URL sincronizados en backend/.env"
+
 # 3. Dependencias PHP
 step "Instalando dependencias PHP"
 if [[ ! -d backend/vendor ]]; then

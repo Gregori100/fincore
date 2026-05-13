@@ -2,10 +2,8 @@
 
 namespace App\Providers;
 
-use App\Listeners\CreateUserBolsaAccount;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Notifications\ResetPassword;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -17,6 +15,18 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // El backend vive detrás del proxy de Vite (frontend → http://api → backend).
+        // Las requests llegan con Host: api, así que url() y rutas firmadas
+        // construyen links como http://api/... que el navegador no puede resolver.
+        // Forzamos el root URL a APP_URL (típicamente http://localhost:<APP_PORT>)
+        // para que los emails y signed URLs apunten al puerto público del host.
+        if ($appUrl = config('app.url')) {
+            URL::forceRootUrl($appUrl);
+            if (str_starts_with($appUrl, 'https://')) {
+                URL::forceScheme('https');
+            }
+        }
+
         // El link de reset apunta al frontend (no al backend) porque el form
         // de captura de nueva contraseña vive en la SPA.
         ResetPassword::createUrlUsing(function ($user, string $token) {
@@ -24,8 +34,9 @@ class AppServiceProvider extends ServiceProvider
             return $frontend.'/reset-password?token='.$token.'&email='.urlencode($user->email);
         });
 
-        // Crea automáticamente la cuenta Bolsa (cash, protegida) cuando se
-        // registra un nuevo usuario.
-        Event::listen(Registered::class, CreateUserBolsaAccount::class);
+        // La creación automática de la Bolsa al registrarse vive en
+        // App\Listeners\CreateUserBolsaAccount. Laravel 11+ lo descubre solo
+        // por convención (handle(Registered $event)). NO lo registres aquí
+        // manualmente — duplicarías la suscripción y crearías dos Bolsas.
     }
 }
