@@ -19,7 +19,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-SERVICES=(api frontend pgsql redis)
+SERVICES=(api frontend pgsql redis mailpit)
 
 # Lee una variable del .env raíz, con fallback al default. Quirúrgico: no
 # sourcea el archivo entero para no contagiar el shell con vars de Laravel
@@ -36,6 +36,7 @@ env_get() {
 # Puertos del host (los autodetectados por install.sh en .env).
 APP_PORT=$(env_get APP_PORT 80)
 VITE_PORT=$(env_get VITE_PORT 5173)
+MAILPIT_PORT=$(env_get FORWARD_MAILPIT_DASHBOARD_PORT 8025)
 
 CYAN=$'\033[36m'
 GREEN=$'\033[32m'
@@ -72,6 +73,7 @@ cmd_start() {
     echo
     echo "  ${BOLD}Backend${RESET}  → http://localhost:${APP_PORT:-80}"
     echo "  ${BOLD}Frontend${RESET} → http://localhost:${VITE_PORT:-5173}"
+    echo "  ${BOLD}Mailpit${RESET}  → http://localhost:${MAILPIT_PORT:-8025}"
 }
 
 cmd_stop() {

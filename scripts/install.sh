@@ -153,6 +153,8 @@ ensure_port APP_PORT 80
 ensure_port VITE_PORT 5173
 ensure_port FORWARD_DB_PORT 5432
 ensure_port FORWARD_REDIS_PORT 6379
+ensure_port FORWARD_MAILPIT_PORT 1025
+ensure_port FORWARD_MAILPIT_DASHBOARD_PORT 8025
 ensure_var WWWUSER "$(id -u)"
 ensure_var WWWGROUP "$(id -g)"
 
