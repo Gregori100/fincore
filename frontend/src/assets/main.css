@@ -1,0 +1,40 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+
+@theme {
+  /* Paleta sobria oscura. La app es para uso personal, no para clientes externos. */
+  --color-canvas: oklch(0.18 0.01 250);
+  --color-surface: oklch(0.22 0.012 250);
+  --color-surface-elevated: oklch(0.27 0.014 250);
+  --color-border: oklch(0.32 0.012 250);
+
+  --color-text-primary: oklch(0.96 0.005 250);
+  --color-text-muted: oklch(0.72 0.01 250);
+  --color-text-subtle: oklch(0.55 0.01 250);
+
+  --color-accent: oklch(0.74 0.16 215);
+  --color-accent-hover: oklch(0.78 0.16 215);
+  --color-positive: oklch(0.78 0.18 145);
+  --color-negative: oklch(0.7 0.2 25);
+  --color-warning: oklch(0.82 0.14 75);
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-[color:var(--color-canvas)] text-[color:var(--color-text-primary)] font-sans antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    @apply font-sans;
+  }
+}
