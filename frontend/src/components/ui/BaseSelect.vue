@@ -39,7 +39,7 @@ const selected = computed(() =>
     >
       <div class="relative">
         <ListboxButton
-          class="relative w-full cursor-default rounded-md bg-[color:var(--color-surface-elevated)] border border-[color:var(--color-border)] py-2 pl-3 pr-10 text-left text-[color:var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] transition"
+          class="relative w-full cursor-default rounded-md bg-[color:var(--color-surface-elevated)] border border-[color:var(--color-border)] py-2 pl-3 pr-10 text-left text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] transition"
           :class="error && 'border-[color:var(--color-negative)]'"
         >
           <span class="block truncate">

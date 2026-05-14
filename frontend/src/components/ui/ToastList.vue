@@ -12,7 +12,12 @@ const kindClasses = {
 </script>
 
 <template>
-  <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
+  <div
+    class="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm"
+    role="region"
+    aria-label="Notificaciones"
+    aria-live="polite"
+  >
     <transition-group
       enter-active-class="transition duration-200 ease-out"
       enter-from-class="translate-x-full opacity-0"
@@ -26,11 +31,13 @@ const kindClasses = {
         :key="m.id"
         class="rounded-lg border-l-4 shadow-lg pr-3 pl-4 py-3 flex items-start gap-3"
         :class="kindClasses[m.kind] ?? kindClasses.info"
+        :role="m.kind === 'error' ? 'alert' : 'status'"
       >
         <p class="flex-1 text-sm">{{ m.text }}</p>
         <button
           type="button"
-          class="text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-text-primary)]"
+          class="text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] rounded"
+          aria-label="Cerrar notificación"
           @click="toast.dismiss(m.id)"
         >
           <XMarkIcon class="h-4 w-4" />

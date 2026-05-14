@@ -11,16 +11,16 @@ const props = defineProps({
 
 const classes = computed(() => {
   const base =
-    'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[color:var(--color-canvas)] disabled:opacity-50 disabled:cursor-not-allowed'
+    'inline-flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--color-canvas)] disabled:opacity-50 disabled:cursor-not-allowed'
   const variants = {
     primary:
-      'bg-[color:var(--color-accent)] text-black hover:bg-[color:var(--color-accent-hover)] focus:ring-[color:var(--color-accent)]',
+      'bg-[color:var(--color-accent)] text-black hover:bg-[color:var(--color-accent-hover)] focus-visible:ring-[color:var(--color-accent)]',
     secondary:
-      'bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-border)] border border-[color:var(--color-border)]',
+      'bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-border)] border border-[color:var(--color-border)] focus-visible:ring-[color:var(--color-accent)]',
     ghost:
-      'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-surface-elevated)]',
+      'text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:ring-[color:var(--color-accent)]',
     danger:
-      'bg-[color:var(--color-negative)] text-white hover:opacity-90 focus:ring-[color:var(--color-negative)]',
+      'bg-[color:var(--color-negative)] text-white hover:opacity-90 focus-visible:ring-[color:var(--color-negative)]',
   }
   return [base, variants[props.variant] ?? variants.primary, props.block && 'w-full']
 })

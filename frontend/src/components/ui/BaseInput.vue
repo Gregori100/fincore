@@ -40,8 +40,8 @@ const inputId = computed(() => `in-${Math.random().toString(36).slice(2, 9)}`)
       :min="min"
       :max="max"
       :autocomplete="autocomplete"
-      class="w-full px-3 py-2 rounded-md bg-[color:var(--color-surface-elevated)] border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-subtle)] focus:outline-none focus:ring-2 focus:ring-[color:var(--color-accent)] focus:border-transparent transition"
-      :class="error && 'border-[color:var(--color-negative)] focus:ring-[color:var(--color-negative)]'"
+      class="w-full px-3 py-2 rounded-md bg-[color:var(--color-surface-elevated)] border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] focus-visible:border-transparent transition"
+      :class="error && 'border-[color:var(--color-negative)] focus-visible:ring-[color:var(--color-negative)]'"
       @input="$emit('update:modelValue', $event.target.value)"
     />
     <p v-if="error" class="mt-1 text-xs text-[color:var(--color-negative)]">
