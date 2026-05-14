@@ -20,11 +20,11 @@ async function handleLogout() {
 <template>
   <div class="min-h-full flex flex-col">
     <header
-      class="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)]"
+      class="border-b border-[color:var(--color-border)] bg-[color:var(--color-surface)]/80 backdrop-blur supports-[backdrop-filter]:bg-[color:var(--color-surface)]/60 sticky top-0 z-10"
     >
       <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-        <h1 class="text-lg font-semibold tracking-tight">
-          FinCore
+        <h1 class="text-base font-semibold tracking-tight">
+          <span class="text-[color:var(--color-accent)]">Fin</span>Core
         </h1>
 
         <div class="flex items-center gap-4 text-sm">

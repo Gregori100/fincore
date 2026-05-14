@@ -4,6 +4,7 @@ import { LockClosedIcon } from '@heroicons/vue/20/solid'
 
 const props = defineProps({
   account: { type: Object, required: true },
+  highlighted: { type: Boolean, default: false },
 })
 
 function fmt(n) {
@@ -33,7 +34,12 @@ const typeColor = computed(() => {
 
 <template>
   <article
-    class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-4"
+    class="bg-[color:var(--color-surface)] border rounded-xl p-4 transition-all duration-300 hover:border-[color:var(--color-accent)]/60"
+    :class="
+      highlighted
+        ? 'border-[color:var(--color-accent)] ring-2 ring-[color:var(--color-accent)]/40 shadow-lg shadow-[color:var(--color-accent)]/10'
+        : 'border-[color:var(--color-border)]'
+    "
   >
     <header class="flex items-start justify-between gap-2 mb-3">
       <div class="min-w-0">
@@ -45,13 +51,13 @@ const typeColor = computed(() => {
             :title="'Cuenta protegida'"
           />
         </h3>
-        <p class="text-xs mt-0.5 uppercase tracking-wide" :class="typeColor">
+        <p class="text-[10px] mt-0.5 uppercase tracking-[0.08em] font-semibold" :class="typeColor">
           {{ typeLabel }}
         </p>
       </div>
     </header>
 
-    <p class="text-2xl font-semibold tabular-nums">
+    <p class="text-2xl font-semibold tabular-nums tracking-tight">
       {{ fmt(account.balance) }}
     </p>
 

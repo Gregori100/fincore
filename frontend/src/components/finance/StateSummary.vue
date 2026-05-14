@@ -20,13 +20,13 @@ function fmt(n) {
     <article
       class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5"
     >
-      <p class="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-subtle)]">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]">
         Bolsa (BO)
       </p>
-      <p class="text-3xl font-semibold mt-2 text-[color:var(--color-positive)]">
+      <p class="text-3xl font-semibold mt-2 tabular-nums tracking-tight text-[color:var(--color-positive)]">
         {{ fmt(state.bo) }}
       </p>
-      <p class="mt-1 text-xs text-[color:var(--color-text-muted)]">
+      <p class="mt-1.5 text-xs text-[color:var(--color-text-muted)]">
         Efectivo disponible
       </p>
     </article>
@@ -34,13 +34,13 @@ function fmt(n) {
     <article
       class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5"
     >
-      <p class="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-subtle)]">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]">
         Deudas (DE)
       </p>
-      <p class="text-3xl font-semibold mt-2 text-[color:var(--color-negative)]">
+      <p class="text-3xl font-semibold mt-2 tabular-nums tracking-tight text-[color:var(--color-negative)]">
         {{ fmt(state.de) }}
       </p>
-      <p class="mt-1 text-xs text-[color:var(--color-text-muted)]">
+      <p class="mt-1.5 text-xs text-[color:var(--color-text-muted)]">
         Total que debes a tarjetas
       </p>
     </article>
@@ -48,13 +48,13 @@ function fmt(n) {
     <article
       class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5"
     >
-      <p class="text-xs font-medium uppercase tracking-wide text-[color:var(--color-text-subtle)]">
+      <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]">
         Crédito (CR)
       </p>
-      <p class="text-3xl font-semibold mt-2 text-[color:var(--color-accent)]">
+      <p class="text-3xl font-semibold mt-2 tabular-nums tracking-tight text-[color:var(--color-accent)]">
         {{ fmt(state.cr) }}
       </p>
-      <p class="mt-1 text-xs text-[color:var(--color-text-muted)]">
+      <p class="mt-1.5 text-xs text-[color:var(--color-text-muted)]">
         Disponible en tus tarjetas
       </p>
     </article>
@@ -62,20 +62,20 @@ function fmt(n) {
     <article
       class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5 sm:col-span-2 lg:col-span-3"
     >
-      <div class="flex flex-wrap items-baseline gap-6">
+      <div class="flex flex-wrap items-baseline gap-8">
         <div>
-          <p class="text-xs uppercase tracking-wide text-[color:var(--color-text-subtle)]">
+          <p class="text-[11px] uppercase tracking-[0.08em] font-semibold text-[color:var(--color-text-subtle)]">
             Burn rate mensual
           </p>
-          <p class="text-xl font-medium mt-1">
+          <p class="text-xl font-medium mt-1.5 tabular-nums">
             {{ fmt(state.burn_rate) }}
           </p>
         </div>
         <div>
-          <p class="text-xs uppercase tracking-wide text-[color:var(--color-text-subtle)]">
+          <p class="text-[11px] uppercase tracking-[0.08em] font-semibold text-[color:var(--color-text-subtle)]">
             Uso de crédito
           </p>
-          <p class="text-xl font-medium mt-1">
+          <p class="text-xl font-medium mt-1.5 tabular-nums">
             {{ Number(state.credit_usage_pct).toFixed(2) }}%
           </p>
         </div>

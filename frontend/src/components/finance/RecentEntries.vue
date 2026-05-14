@@ -1,4 +1,6 @@
 <script setup>
+import { InboxIcon } from '@heroicons/vue/24/outline'
+
 const KIND_LABELS = {
   income: 'Ingreso',
   expense: 'Gasto',
@@ -56,11 +58,14 @@ function fmtDate(d) {
             <th class="text-right px-4 py-3 font-medium hidden sm:table-cell">Fecha</th>
           </tr>
         </thead>
-        <tbody>
+        <transition-group
+          name="entry"
+          tag="tbody"
+        >
           <tr
             v-for="e in entries"
             :key="e.id"
-            class="border-b border-[color:var(--color-border)] last:border-0"
+            class="border-b border-[color:var(--color-border)] last:border-0 hover:bg-[color:var(--color-surface-elevated)]/40 transition-colors"
           >
             <td class="px-4 py-3">
               <span
@@ -87,14 +92,37 @@ function fmtDate(d) {
               {{ fmtDate(e.occurred_at) }}
             </td>
           </tr>
-        </tbody>
+        </transition-group>
       </table>
-      <p
+      <div
         v-else
-        class="text-sm text-[color:var(--color-text-subtle)] italic py-8 text-center"
+        class="py-10 text-center"
       >
-        Sin movimientos todavía.
-      </p>
+        <InboxIcon class="h-10 w-10 mx-auto text-[color:var(--color-text-subtle)] opacity-60" />
+        <p class="text-sm text-[color:var(--color-text-muted)] mt-3">
+          Sin movimientos todavía.
+        </p>
+        <p class="text-xs text-[color:var(--color-text-subtle)] mt-1">
+          Cuando registres un ingreso o gasto, aparecerá aquí.
+        </p>
+      </div>
     </div>
   </section>
 </template>
+
+<style scoped>
+.entry-enter-active {
+  transition: all 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.entry-enter-from {
+  opacity: 0;
+  transform: translateY(-8px);
+  background-color: color-mix(in oklch, var(--color-accent) 10%, transparent);
+}
+.entry-leave-active {
+  transition: opacity 180ms;
+}
+.entry-leave-to {
+  opacity: 0;
+}
+</style>

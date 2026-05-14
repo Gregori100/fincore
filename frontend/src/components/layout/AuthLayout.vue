@@ -10,9 +10,9 @@ defineProps({
     <div class="w-full max-w-md">
       <div class="mb-8 text-center">
         <h1 class="text-3xl font-semibold tracking-tight text-[color:var(--color-text-primary)]">
-          FinCore
+          <span class="text-[color:var(--color-accent)]">Fin</span>Core
         </h1>
-        <p class="mt-1 text-sm text-[color:var(--color-text-muted)]">
+        <p class="mt-1.5 text-sm text-[color:var(--color-text-muted)]">
           Tu libreta digital de finanzas
         </p>
       </div>
