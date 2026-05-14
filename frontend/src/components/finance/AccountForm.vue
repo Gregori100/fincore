@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useToastStore } from '@/stores/toast'
+import { useFormErrors } from '@/composables/useFormErrors'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -20,50 +21,79 @@ const form = ref({
   interest_rate: '',
   minimum_payment_pct: '',
 })
-const submitting = ref(false)
-const errors = ref({})
 
 const isCredit = computed(() => form.value.type === 'credit')
 
-async function handleSubmit() {
-  errors.value = {}
-  submitting.value = true
-  try {
-    const payload = {
-      name: form.value.name,
-      type: form.value.type,
-    }
-    if (isCredit.value) {
-      payload.credit_limit = Number(form.value.credit_limit)
-      if (form.value.closing_day) payload.closing_day = Number(form.value.closing_day)
-      if (form.value.payment_day) payload.payment_day = Number(form.value.payment_day)
-      if (form.value.interest_rate) payload.interest_rate = Number(form.value.interest_rate)
-      if (form.value.minimum_payment_pct) {
-        payload.minimum_payment_pct = Number(form.value.minimum_payment_pct)
-      }
-    }
+function dayValid(v) {
+  if (v === '' || v === null) return true
+  const n = Number(v)
+  return Number.isInteger(n) && n >= 1 && n <= 31
+}
 
-    await finance.createAccount(payload)
+function pctValid(v) {
+  if (v === '' || v === null) return true
+  const n = Number(v)
+  return !Number.isNaN(n) && n >= 0 && n <= 1
+}
+
+function validate() {
+  const e = {}
+  if (!form.value.name?.trim()) e.name = 'Ingresa un nombre'
+  if (!['debit', 'credit'].includes(form.value.type)) {
+    e.type = 'Selecciona un tipo válido'
+  }
+  if (isCredit.value) {
+    const limit = Number(form.value.credit_limit)
+    if (!form.value.credit_limit) {
+      e.credit_limit = 'Ingresa el límite de crédito'
+    } else if (Number.isNaN(limit) || limit <= 0) {
+      e.credit_limit = 'El límite debe ser mayor a 0'
+    }
+    if (!dayValid(form.value.closing_day)) e.closing_day = 'Día entre 1 y 31'
+    if (!dayValid(form.value.payment_day)) e.payment_day = 'Día entre 1 y 31'
+    if (!pctValid(form.value.interest_rate)) {
+      e.interest_rate = 'Valor entre 0 y 1 (ej. 0.0367)'
+    }
+    if (!pctValid(form.value.minimum_payment_pct)) {
+      e.minimum_payment_pct = 'Valor entre 0 y 1 (ej. 0.05)'
+    }
+  }
+  return e
+}
+
+const { errors, submitting, submit } = useFormErrors(validate)
+
+async function handleSubmit() {
+  const payload = {
+    name: form.value.name.trim(),
+    type: form.value.type,
+  }
+  if (isCredit.value) {
+    payload.credit_limit = Number(form.value.credit_limit)
+    if (form.value.closing_day) payload.closing_day = Number(form.value.closing_day)
+    if (form.value.payment_day) payload.payment_day = Number(form.value.payment_day)
+    if (form.value.interest_rate) payload.interest_rate = Number(form.value.interest_rate)
+    if (form.value.minimum_payment_pct) {
+      payload.minimum_payment_pct = Number(form.value.minimum_payment_pct)
+    }
+  }
+
+  const result = await submit(() => finance.createAccount(payload))
+  if (result.ok) {
     toast.success(`Cuenta "${payload.name}" creada`)
     emit('success')
     emit('close')
-  } catch (e) {
-    const payload = e.response?.data
-    if (payload?.errors) {
-      errors.value = Object.fromEntries(
-        Object.entries(payload.errors).map(([k, v]) => [k, v[0]]),
-      )
-    } else {
-      toast.error(payload?.error ?? 'No se pudo crear la cuenta')
+  } else if (result.reason === 'server') {
+    const data = result.error.response?.data
+    if (!data?.errors) {
+      toast.error(data?.error ?? 'No se pudo crear la cuenta')
     }
-  } finally {
-    submitting.value = false
   }
 }
 </script>
 
 <template>
-  <form class="space-y-4" @submit.prevent="handleSubmit">
+  <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
     <BaseInput v-model="form.name" label="Nombre" :error="errors.name" required />
 
     <BaseSelect
@@ -82,6 +112,7 @@ async function handleSubmit() {
         type="number"
         step="0.01"
         min="0"
+        placeholder="0.00"
         :error="errors.credit_limit"
         required
       />
@@ -114,7 +145,7 @@ async function handleSubmit() {
           min="0"
           max="1"
           :error="errors.interest_rate"
-          hint="ej. 0.0367"
+          hint="ej. 0.0367 = 3.67%"
         />
         <BaseInput
           v-model="form.minimum_payment_pct"
@@ -124,7 +155,7 @@ async function handleSubmit() {
           min="0"
           max="1"
           :error="errors.minimum_payment_pct"
-          hint="ej. 0.05"
+          hint="ej. 0.05 = 5%"
         />
       </div>
     </template>

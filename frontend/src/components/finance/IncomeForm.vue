@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useToastStore } from '@/stores/toast'
+import { useFormErrors } from '@/composables/useFormErrors'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -20,38 +21,44 @@ const form = ref({
   amount: '',
   description: '',
 })
-const submitting = ref(false)
-const errors = ref({})
+
+function validate() {
+  const e = {}
+  if (!form.value.account_id) e.account_id = 'Selecciona una cuenta'
+  const amount = Number(form.value.amount)
+  if (!form.value.amount) {
+    e.amount = 'Ingresa un monto'
+  } else if (Number.isNaN(amount) || amount <= 0) {
+    e.amount = 'El monto debe ser mayor a 0'
+  }
+  return e
+}
+
+const { errors, submitting, submit } = useFormErrors(validate)
 
 async function handleSubmit() {
-  errors.value = {}
-  submitting.value = true
-  try {
-    await finance.registerIncome({
+  const result = await submit(() =>
+    finance.registerIncome({
       account_id: form.value.account_id,
       amount: Number(form.value.amount),
       description: form.value.description || null,
-    })
+    }),
+  )
+  if (result.ok) {
     toast.success('Ingreso registrado')
     emit('success')
     emit('close')
-  } catch (e) {
-    const payload = e.response?.data
-    if (payload?.errors) {
-      errors.value = Object.fromEntries(
-        Object.entries(payload.errors).map(([k, v]) => [k, v[0]]),
-      )
-    } else {
+  } else if (result.reason === 'server') {
+    const payload = result.error.response?.data
+    if (!payload?.errors) {
       toast.error(payload?.error ?? 'No se pudo registrar el ingreso')
     }
-  } finally {
-    submitting.value = false
   }
 }
 </script>
 
 <template>
-  <form class="space-y-4" @submit.prevent="handleSubmit">
+  <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
     <BaseSelect
       v-model="form.account_id"
       label="Cuenta destino"
@@ -66,6 +73,8 @@ async function handleSubmit() {
       type="number"
       step="0.01"
       min="0.01"
+      placeholder="0.00"
+      hint="Cantidad recibida (ej. sueldo, transferencia)"
       :error="errors.amount"
       required
     />

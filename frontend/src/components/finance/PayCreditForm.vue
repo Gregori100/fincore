@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { useToastStore } from '@/stores/toast'
+import { useFormErrors } from '@/composables/useFormErrors'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -11,11 +12,18 @@ const emit = defineEmits(['close', 'success'])
 const finance = useFinanceStore()
 const toast = useToastStore()
 
+function fmt(n) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+  }).format(Number(n ?? 0))
+}
+
 const originOptions = computed(() =>
   finance.cashAndDebitAccounts.map((a) => ({
     value: a.id,
     label: a.name,
-    sublabel: `Saldo: ${a.balance ?? 0}`,
+    sublabel: `Saldo: ${fmt(a.balance)}`,
   })),
 )
 
@@ -23,7 +31,7 @@ const creditOptions = computed(() =>
   finance.creditAccounts.map((a) => ({
     value: a.id,
     label: a.name,
-    sublabel: `Deuda: ${a.balance ?? 0}`,
+    sublabel: `Deuda: ${fmt(a.balance)}`,
   })),
 )
 
@@ -33,43 +41,63 @@ const form = ref({
   amount: '',
   description: '',
 })
-const submitting = ref(false)
-const errors = ref({})
+
+const origin = computed(() =>
+  finance.cashAndDebitAccounts.find((a) => a.id === form.value.origin_id),
+)
+const credit = computed(() =>
+  finance.creditAccounts.find((a) => a.id === form.value.credit_account_id),
+)
+const originBalance = computed(() => Number(origin.value?.balance ?? 0))
+const creditDebt = computed(() => Number(credit.value?.balance ?? 0))
 
 const canSubmit = computed(
   () => originOptions.value.length && creditOptions.value.length,
 )
 
+function validate() {
+  const e = {}
+  if (!form.value.origin_id) e.origin_id = 'Selecciona una cuenta origen'
+  if (!form.value.credit_account_id) e.credit_account_id = 'Selecciona la tarjeta a pagar'
+  const amount = Number(form.value.amount)
+  if (!form.value.amount) {
+    e.amount = 'Ingresa un monto'
+  } else if (Number.isNaN(amount) || amount <= 0) {
+    e.amount = 'El monto debe ser mayor a 0'
+  } else if (amount > originBalance.value) {
+    e.amount = `Excede el saldo de la cuenta origen (${fmt(originBalance.value)})`
+  } else if (amount > creditDebt.value) {
+    e.amount = `Excede la deuda de la tarjeta (${fmt(creditDebt.value)})`
+  }
+  return e
+}
+
+const { errors, submitting, submit } = useFormErrors(validate)
+
 async function handleSubmit() {
-  errors.value = {}
-  submitting.value = true
-  try {
-    await finance.payCredit({
+  const result = await submit(() =>
+    finance.payCredit({
       origin_id: form.value.origin_id,
       credit_account_id: form.value.credit_account_id,
       amount: Number(form.value.amount),
       description: form.value.description || null,
-    })
+    }),
+  )
+  if (result.ok) {
     toast.success('Pago aplicado')
     emit('success')
     emit('close')
-  } catch (e) {
-    const payload = e.response?.data
-    if (payload?.errors) {
-      errors.value = Object.fromEntries(
-        Object.entries(payload.errors).map(([k, v]) => [k, v[0]]),
-      )
-    } else {
+  } else if (result.reason === 'server') {
+    const payload = result.error.response?.data
+    if (!payload?.errors) {
       toast.error(payload?.error ?? 'No se pudo aplicar el pago')
     }
-  } finally {
-    submitting.value = false
   }
 }
 </script>
 
 <template>
-  <form class="space-y-4" @submit.prevent="handleSubmit">
+  <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
     <p
       v-if="!canSubmit"
       class="text-sm text-[color:var(--color-text-subtle)] italic"
@@ -97,6 +125,12 @@ async function handleSubmit() {
         type="number"
         step="0.01"
         min="0.01"
+        placeholder="0.00"
+        :hint="
+          origin && credit
+            ? `Disponible en origen: ${fmt(originBalance)} · Deuda en tarjeta: ${fmt(creditDebt)}`
+            : ''
+        "
         :error="errors.amount"
         required
       />
