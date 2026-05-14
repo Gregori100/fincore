@@ -14,7 +14,13 @@ class FinancialStateService
 
     public function getAccountBalance(int $accountId): float
     {
-        $account = Account::where('id', $accountId)
+        // withTrashed() porque DeleteAccount soft-deletea: las cuentas archivadas
+        // siguen siendo referenciadas por journal_entries históricas y debemos
+        // poder leer su balance (siempre 0 si fue archivada con la regla actual,
+        // pero también necesario para resolver el `type` cash/credit en
+        // operaciones que cargan la entry sin filtrar por archivada).
+        $account = Account::withTrashed()
+            ->where('id', $accountId)
             ->where('user_id', $this->userId)
             ->firstOrFail();
 

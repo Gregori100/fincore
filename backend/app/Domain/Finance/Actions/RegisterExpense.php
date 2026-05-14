@@ -17,27 +17,33 @@ class RegisterExpense
         float $amount,
         ?string $description = null,
     ): JournalEntry {
-        $account = Account::where('id', $accountId)
-            ->where('user_id', $userId)
-            ->firstOrFail();
+        return DB::transaction(function () use ($userId, $accountId, $amount, $description) {
+            // lockForUpdate previene que dos gastos simultáneos lean el mismo
+            // balance y ambos pasen la validación (race que dejaría saldo
+            // negativo). El segundo espera al commit del primero.
+            $account = Account::where('id', $accountId)
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (! $account->isCashLike()) {
-            throw new InvalidAccountType('Un gasto en efectivo/débito solo puede salir de una cuenta cash o debit. Usa credit_expense para tarjetas de crédito.');
-        }
+            if (! $account->isCashLike()) {
+                throw new InvalidAccountType('Un gasto en efectivo/débito solo puede salir de una cuenta cash o debit. Usa credit_expense para tarjetas de crédito.');
+            }
 
-        $state = new FinancialStateService($userId);
-        if ($amount > $state->getAccountBalance($account->id)) {
-            throw new InsufficientFunds();
-        }
+            $state = new FinancialStateService($userId);
+            if ($amount > $state->getAccountBalance($account->id)) {
+                throw new InsufficientFunds();
+            }
 
-        return DB::transaction(fn () => JournalEntry::create([
-            'user_id' => $userId,
-            'kind' => JournalEntry::KIND_EXPENSE,
-            'amount' => $amount,
-            'account_origin_id' => $account->id,
-            'account_destination_id' => null,
-            'description' => $description,
-            'occurred_at' => now(),
-        ]));
+            return JournalEntry::create([
+                'user_id' => $userId,
+                'kind' => JournalEntry::KIND_EXPENSE,
+                'amount' => $amount,
+                'account_origin_id' => $account->id,
+                'account_destination_id' => null,
+                'description' => $description,
+                'occurred_at' => now(),
+            ]);
+        });
     }
 }

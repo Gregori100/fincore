@@ -17,30 +17,35 @@ class RegisterCreditExpense
         float $amount,
         ?string $description = null,
     ): JournalEntry {
-        $account = Account::where('id', $accountId)
-            ->where('user_id', $userId)
-            ->firstOrFail();
+        return DB::transaction(function () use ($userId, $accountId, $amount, $description) {
+            // lockForUpdate previene que dos cargos simultáneos sumen y excedan
+            // el límite de crédito por race condition.
+            $account = Account::where('id', $accountId)
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (! $account->isCredit()) {
-            throw new InvalidAccountType('Solo se puede cargar a una cuenta de tipo credit.');
-        }
+            if (! $account->isCredit()) {
+                throw new InvalidAccountType('Solo se puede cargar a una cuenta de tipo credit.');
+            }
 
-        $state = new FinancialStateService($userId);
-        $newBalance = $state->getAccountBalance($account->id) + $amount;
-        $limit = (float) ($account->credit_limit ?? 0);
+            $state = new FinancialStateService($userId);
+            $newBalance = $state->getAccountBalance($account->id) + $amount;
+            $limit = (float) ($account->credit_limit ?? 0);
 
-        if ($newBalance > $limit) {
-            throw new CreditLimitExceeded();
-        }
+            if ($newBalance > $limit) {
+                throw new CreditLimitExceeded();
+            }
 
-        return DB::transaction(fn () => JournalEntry::create([
-            'user_id' => $userId,
-            'kind' => JournalEntry::KIND_CREDIT_EXPENSE,
-            'amount' => $amount,
-            'account_origin_id' => $account->id,
-            'account_destination_id' => null,
-            'description' => $description,
-            'occurred_at' => now(),
-        ]));
+            return JournalEntry::create([
+                'user_id' => $userId,
+                'kind' => JournalEntry::KIND_CREDIT_EXPENSE,
+                'amount' => $amount,
+                'account_origin_id' => $account->id,
+                'account_destination_id' => null,
+                'description' => $description,
+                'occurred_at' => now(),
+            ]);
+        });
     }
 }

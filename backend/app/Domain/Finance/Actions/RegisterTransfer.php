@@ -22,31 +22,48 @@ class RegisterTransfer
             throw new InvalidAccountType('La cuenta de origen y destino no pueden ser la misma.');
         }
 
-        $origin = Account::where('id', $originAccountId)
-            ->where('user_id', $userId)
-            ->firstOrFail();
+        return DB::transaction(function () use ($userId, $originAccountId, $destinationAccountId, $amount, $description) {
+            // Bloqueamos en orden ascendente de id para evitar deadlocks entre
+            // dos transferencias simultáneas que crucen las mismas cuentas en
+            // direcciones opuestas.
+            [$firstId, $secondId] = $originAccountId < $destinationAccountId
+                ? [$originAccountId, $destinationAccountId]
+                : [$destinationAccountId, $originAccountId];
 
-        $destination = Account::where('id', $destinationAccountId)
-            ->where('user_id', $userId)
-            ->firstOrFail();
+            Account::where('id', $firstId)
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->firstOrFail();
+            Account::where('id', $secondId)
+                ->where('user_id', $userId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-        if (! $origin->isCashLike() || ! $destination->isCashLike()) {
-            throw new InvalidAccountType('Las transferencias solo se permiten entre cuentas cash o debit. Usa pay-credit para pagar tarjetas.');
-        }
+            $origin = Account::where('id', $originAccountId)
+                ->where('user_id', $userId)
+                ->firstOrFail();
+            $destination = Account::where('id', $destinationAccountId)
+                ->where('user_id', $userId)
+                ->firstOrFail();
 
-        $state = new FinancialStateService($userId);
-        if ($amount > $state->getAccountBalance($origin->id)) {
-            throw new InsufficientFunds();
-        }
+            if (! $origin->isCashLike() || ! $destination->isCashLike()) {
+                throw new InvalidAccountType('Las transferencias solo se permiten entre cuentas cash o debit. Usa pay-credit para pagar tarjetas.');
+            }
 
-        return DB::transaction(fn () => JournalEntry::create([
-            'user_id' => $userId,
-            'kind' => JournalEntry::KIND_TRANSFER,
-            'amount' => $amount,
-            'account_origin_id' => $origin->id,
-            'account_destination_id' => $destination->id,
-            'description' => $description,
-            'occurred_at' => now(),
-        ]));
+            $state = new FinancialStateService($userId);
+            if ($amount > $state->getAccountBalance($origin->id)) {
+                throw new InsufficientFunds();
+            }
+
+            return JournalEntry::create([
+                'user_id' => $userId,
+                'kind' => JournalEntry::KIND_TRANSFER,
+                'amount' => $amount,
+                'account_origin_id' => $origin->id,
+                'account_destination_id' => $destination->id,
+                'description' => $description,
+                'occurred_at' => now(),
+            ]);
+        });
     }
 }

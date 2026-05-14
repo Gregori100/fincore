@@ -38,13 +38,19 @@ class JournalEntry extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Las relaciones con Account usan withTrashed() porque las pólizas son
+     * append-only e históricas: deben seguir cargando origin/destination
+     * aunque la cuenta haya sido archivada (soft-deleted). Sin esto, las
+     * entries de cuentas archivadas mostrarían `origin: null` en /entries.
+     */
     public function origin(): BelongsTo
     {
-        return $this->belongsTo(Account::class, 'account_origin_id');
+        return $this->belongsTo(Account::class, 'account_origin_id')->withTrashed();
     }
 
     public function destination(): BelongsTo
     {
-        return $this->belongsTo(Account::class, 'account_destination_id');
+        return $this->belongsTo(Account::class, 'account_destination_id')->withTrashed();
     }
 }
