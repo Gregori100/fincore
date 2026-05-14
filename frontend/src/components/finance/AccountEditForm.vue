@@ -4,8 +4,11 @@ import { useFinanceStore } from '@/stores/finance'
 import { useToastStore } from '@/stores/toast'
 import { useFormErrors } from '@/composables/useFormErrors'
 import BaseInput from '@/components/ui/BaseInput.vue'
-import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+
+const props = defineProps({
+  account: { type: Object, required: true },
+})
 
 const emit = defineEmits(['close', 'success'])
 
@@ -13,23 +16,33 @@ const finance = useFinanceStore()
 const toast = useToastStore()
 
 const form = ref({
-  name: '',
-  type: 'debit',
-  credit_limit: '',
-  closing_day: '',
-  payment_day: '',
-  interest_rate: '',
-  minimum_payment_pct: '',
+  name: props.account.name ?? '',
+  credit_limit: props.account.credit_limit ?? '',
+  closing_day: props.account.closing_day ?? '',
+  payment_day: props.account.payment_day ?? '',
+  interest_rate: props.account.interest_rate ?? '',
+  minimum_payment_pct: props.account.minimum_payment_pct ?? '',
 })
 
-const isCredit = computed(() => form.value.type === 'credit')
+const isCredit = computed(() => props.account.type === 'credit')
+
+// Para tarjetas, la "deuda actual" es el balance (recordar: en credit el
+// balance representa deuda, no efectivo). El nuevo límite debe ser ≥ deuda
+// o dejaríamos crédito disponible negativo.
+const currentDebt = computed(() => Number(props.account.balance ?? 0))
+
+function fmtMxn(n) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+  }).format(Number(n ?? 0))
+}
 
 function dayValid(v) {
   if (v === '' || v === null) return true
   const n = Number(v)
   return Number.isInteger(n) && n >= 1 && n <= 31
 }
-
 function pctValid(v) {
   if (v === '' || v === null) return true
   const n = Number(v)
@@ -38,7 +51,9 @@ function pctValid(v) {
 
 function nameAlreadyTaken(name) {
   const lc = name.toLowerCase()
-  return finance.accounts.some((a) => a.name.toLowerCase() === lc)
+  return finance.accounts.some(
+    (a) => a.id !== props.account.id && a.name.toLowerCase() === lc,
+  )
 }
 
 function validate() {
@@ -51,30 +66,35 @@ function validate() {
   } else if (nameAlreadyTaken(name)) {
     e.name = 'Ya tienes una cuenta con ese nombre'
   }
-  if (!['debit', 'credit'].includes(form.value.type)) {
-    e.type = 'Selecciona un tipo válido'
-  }
   if (isCredit.value) {
-    const limit = Number(form.value.credit_limit)
-    if (!form.value.credit_limit) {
-      e.credit_limit = 'Ingresa el límite de crédito'
-    } else if (Number.isNaN(limit) || limit <= 0) {
-      e.credit_limit = 'El límite debe ser mayor a 0'
+    // En credit, credit_limit no puede quedar vacío.
+    if (form.value.credit_limit === '' || form.value.credit_limit === null) {
+      e.credit_limit = 'El límite no puede quedar vacío en una cuenta de crédito'
+    } else {
+      const limit = Number(form.value.credit_limit)
+      if (Number.isNaN(limit) || limit <= 0) {
+        e.credit_limit = 'El límite debe ser mayor a 0'
+      } else if (limit < currentDebt.value) {
+        e.credit_limit = `No puedes bajar el límite por debajo de la deuda actual (${fmtMxn(currentDebt.value)})`
+      }
     }
     if (!dayValid(form.value.closing_day)) e.closing_day = 'Día entre 1 y 31'
     if (!dayValid(form.value.payment_day)) e.payment_day = 'Día entre 1 y 31'
-    if (
-      form.value.closing_day !== '' && form.value.payment_day !== ''
-      && form.value.closing_day !== null && form.value.payment_day !== null
-      && Number(form.value.closing_day) === Number(form.value.payment_day)
-    ) {
+
+    // closing_day y payment_day no pueden quedar iguales tras el update.
+    const closing = form.value.closing_day !== '' && form.value.closing_day !== null
+      ? Number(form.value.closing_day)
+      : null
+    const payment = form.value.payment_day !== '' && form.value.payment_day !== null
+      ? Number(form.value.payment_day)
+      : null
+    if (closing !== null && payment !== null && closing === payment) {
       e.payment_day = 'El día de corte y pago no pueden ser iguales'
     }
-    if (!pctValid(form.value.interest_rate)) {
-      e.interest_rate = 'Valor entre 0 y 1 (ej. 0.0367)'
-    }
+
+    if (!pctValid(form.value.interest_rate)) e.interest_rate = 'Valor entre 0 y 1'
     if (!pctValid(form.value.minimum_payment_pct)) {
-      e.minimum_payment_pct = 'Valor entre 0 y 1 (ej. 0.05)'
+      e.minimum_payment_pct = 'Valor entre 0 y 1'
     }
   }
   return e
@@ -83,29 +103,31 @@ function validate() {
 const { errors, submitting, submit } = useFormErrors(validate)
 
 async function handleSubmit() {
-  const payload = {
-    name: form.value.name.trim(),
-    type: form.value.type,
-  }
+  const payload = { name: form.value.name.trim() }
   if (isCredit.value) {
-    payload.credit_limit = Number(form.value.credit_limit)
-    if (form.value.closing_day) payload.closing_day = Number(form.value.closing_day)
-    if (form.value.payment_day) payload.payment_day = Number(form.value.payment_day)
-    if (form.value.interest_rate) payload.interest_rate = Number(form.value.interest_rate)
-    if (form.value.minimum_payment_pct) {
+    if (form.value.credit_limit !== '') payload.credit_limit = Number(form.value.credit_limit)
+    if (form.value.closing_day !== '') payload.closing_day = Number(form.value.closing_day)
+    if (form.value.payment_day !== '') payload.payment_day = Number(form.value.payment_day)
+    if (form.value.interest_rate !== '') payload.interest_rate = Number(form.value.interest_rate)
+    if (form.value.minimum_payment_pct !== '') {
       payload.minimum_payment_pct = Number(form.value.minimum_payment_pct)
     }
   }
 
-  const result = await submit(() => finance.createAccount(payload))
+  const result = await submit(() => finance.updateAccount(props.account.id, payload))
   if (result.ok) {
-    toast.success(`Cuenta "${payload.name}" creada`)
+    toast.success(`Cuenta "${payload.name}" actualizada`)
     emit('success')
     emit('close')
   } else if (result.reason === 'server') {
+    const status = result.error.response?.status
     const data = result.error.response?.data
-    if (!data?.errors) {
-      toast.error(data?.error ?? 'No se pudo crear la cuenta')
+    if (status === 404) {
+      toast.error('La cuenta ya no existe (¿la archivaste en otra sesión?)')
+      emit('close')
+      await finance.fetchState()
+    } else if (!data?.errors) {
+      toast.error(data?.error ?? 'No se pudo actualizar la cuenta')
     }
   }
 }
@@ -115,14 +137,10 @@ async function handleSubmit() {
   <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
     <BaseInput v-model="form.name" label="Nombre" :error="errors.name" required />
 
-    <BaseSelect
-      v-model="form.type"
-      label="Tipo"
-      :options="[
-        { value: 'debit', label: 'Débito (banco)' },
-        { value: 'credit', label: 'Crédito (tarjeta)' },
-      ]"
-    />
+    <p class="text-xs text-[color:var(--color-text-subtle)] -mt-2">
+      Tipo: <span class="uppercase tracking-wide font-medium">{{ account.type }}</span>
+      <span class="text-[color:var(--color-text-muted)]"> · no se puede cambiar</span>
+    </p>
 
     <template v-if="isCredit">
       <BaseInput
@@ -131,9 +149,8 @@ async function handleSubmit() {
         type="number"
         step="0.01"
         min="0"
-        placeholder="0.00"
+        :hint="currentDebt > 0 ? `Deuda actual: ${fmtMxn(currentDebt)} (mínimo permitido)` : ''"
         :error="errors.credit_limit"
-        required
       />
       <div class="grid grid-cols-2 gap-3">
         <BaseInput
@@ -181,7 +198,7 @@ async function handleSubmit() {
 
     <footer class="flex gap-2 justify-end pt-2">
       <BaseButton variant="ghost" type="button" @click="emit('close')">Cancelar</BaseButton>
-      <BaseButton type="submit" :loading="submitting">Crear cuenta</BaseButton>
+      <BaseButton type="submit" :loading="submitting">Guardar cambios</BaseButton>
     </footer>
   </form>
 </template>

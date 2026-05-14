@@ -73,6 +73,17 @@ export const useFinanceStore = defineStore('finance', () => {
     markAffected([data?.account?.id])
   }
 
+  async function updateAccount(id, payload) {
+    await financeApi.updateAccount(id, payload)
+    await fetchState()
+    markAffected([id])
+  }
+
+  async function deleteAccount(id) {
+    await financeApi.deleteAccount(id)
+    await fetchState()
+  }
+
   async function registerIncome(payload) {
     await financeApi.income(payload)
     await fetchState()
@@ -125,6 +136,8 @@ export const useFinanceStore = defineStore('finance', () => {
     creditAccounts,
     fetchState,
     createAccount,
+    updateAccount,
+    deleteAccount,
     registerIncome,
     registerExpense,
     registerCreditExpense,

@@ -10,7 +10,7 @@ const props = defineProps({
   highlightedIds: { type: Object, default: () => new Set() },
 })
 
-defineEmits(['create'])
+defineEmits(['create', 'edit', 'delete'])
 
 // "Vacío" significa que solo existe la Bolsa (todos los users la tienen).
 const onlyHasBolsa = computed(
@@ -47,6 +47,8 @@ const onlyHasBolsa = computed(
           :key="a.id"
           :account="a"
           :highlighted="highlightedIds.has(a.id)"
+          @edit="$emit('edit', $event)"
+          @delete="$emit('delete', $event)"
         />
       </transition-group>
 

@@ -12,7 +12,9 @@ import DashboardSkeleton from '@/components/finance/DashboardSkeleton.vue'
 import ShortcutsHelp from '@/components/finance/ShortcutsHelp.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseConfirm from '@/components/ui/BaseConfirm.vue'
 import AccountForm from '@/components/finance/AccountForm.vue'
+import AccountEditForm from '@/components/finance/AccountEditForm.vue'
 import IncomeForm from '@/components/finance/IncomeForm.vue'
 import ExpenseForm from '@/components/finance/ExpenseForm.vue'
 import CreditExpenseForm from '@/components/finance/CreditExpenseForm.vue'
@@ -32,8 +34,64 @@ const auth = useAuthStore()
 const finance = useFinanceStore()
 const toast = useToastStore()
 
-const openModal = ref(null) // 'account' | 'income' | 'expense' | 'credit-expense' | 'pay-credit' | 'transfer' | 'shortcuts' | null
+const openModal = ref(null) // 'account' | 'edit-account' | 'delete-account' | 'income' | 'expense' | 'credit-expense' | 'pay-credit' | 'transfer' | 'shortcuts' | null
 const hasLoadedOnce = ref(false)
+const editingAccount = ref(null)
+const deletingAccount = ref(null)
+const deletingState = ref(false)
+
+function fmtMxn(n) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+  }).format(Number(n ?? 0))
+}
+
+function handleEditAccount(account) {
+  editingAccount.value = account
+  openModal.value = 'edit-account'
+}
+
+function handleDeleteAccount(account) {
+  // Check client-side: si la cuenta tiene saldo/deuda, ni siquiera abrimos el
+  // modal — toast directo con instrucción. El backend valida lo mismo de
+  // todos modos (defensa en profundidad).
+  const balance = Number(account.balance ?? 0)
+  if (Math.abs(balance) > 0.005) {
+    toast.error(
+      account.type === 'credit'
+        ? `Esta tarjeta tiene deuda de ${fmtMxn(balance)}. Págala antes de archivar.`
+        : `Esta cuenta tiene saldo de ${fmtMxn(balance)}. Transfiérelo o gástalo antes de archivar.`,
+    )
+    return
+  }
+  deletingAccount.value = account
+  openModal.value = 'delete-account'
+}
+
+async function confirmDeleteAccount() {
+  if (!deletingAccount.value) return
+  deletingState.value = true
+  try {
+    await finance.deleteAccount(deletingAccount.value.id)
+    toast.success(`Cuenta "${deletingAccount.value.name}" archivada`)
+    openModal.value = null
+    deletingAccount.value = null
+  } catch (e) {
+    const status = e.response?.status
+    const payload = e.response?.data
+    if (status === 404) {
+      toast.error('La cuenta ya no existe (¿la archivaste en otra sesión?)')
+      openModal.value = null
+      deletingAccount.value = null
+      await finance.fetchState()
+    } else {
+      toast.error(payload?.error ?? 'No se pudo archivar la cuenta')
+    }
+  } finally {
+    deletingState.value = false
+  }
+}
 
 // Atajos de teclado. Solo abrir modales si el user está verificado (excepto ?).
 function openIfVerified(name) {
@@ -200,6 +258,8 @@ const ACTIONS = [
           :can-create="auth.isVerified"
           :highlighted-ids="finance.lastAffectedAccountIds"
           @create="openModal = 'account'"
+          @edit="handleEditAccount"
+          @delete="handleDeleteAccount"
         />
 
         <!-- Últimos movimientos -->
@@ -229,5 +289,26 @@ const ACTIONS = [
     <BaseModal :open="openModal === 'shortcuts'" title="Atajos de teclado" @close="close">
       <ShortcutsHelp />
     </BaseModal>
+    <BaseModal
+      :open="openModal === 'edit-account'"
+      :title="editingAccount ? `Editar ${editingAccount.name}` : 'Editar cuenta'"
+      @close="close"
+    >
+      <AccountEditForm
+        v-if="editingAccount"
+        :account="editingAccount"
+        @close="close"
+      />
+    </BaseModal>
+    <BaseConfirm
+      :open="openModal === 'delete-account'"
+      :title="`Archivar ${deletingAccount?.name ?? 'cuenta'}`"
+      message="Esta cuenta dejará de aparecer en el dashboard. Su historial seguirá visible en el registro de movimientos."
+      confirm-label="Archivar"
+      variant="danger"
+      :loading="deletingState"
+      @confirm="confirmDeleteAccount"
+      @cancel="close"
+    />
   </AppLayout>
 </template>
