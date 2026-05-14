@@ -17,4 +17,7 @@ Thumbs.db
 # Test cache (PHPUnit deja esto fuera de backend/ si se corre desde la raíz)
 /.phpunit.result.cache
 
+# Playwright MCP artefactos (snapshots, console logs de smoke tests)
+/.playwright-mcp/
+
 # Each subproject handles its own ignores via backend/.gitignore and frontend/.gitignore

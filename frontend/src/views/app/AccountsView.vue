@@ -12,7 +12,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseConfirm from '@/components/ui/BaseConfirm.vue'
 import AccountForm from '@/components/finance/AccountForm.vue'
 import AccountEditForm from '@/components/finance/AccountEditForm.vue'
-import { PlusIcon, ArchiveBoxIcon } from '@heroicons/vue/24/outline'
+import { PlusIcon, ArchiveBoxIcon, MagnifyingGlassIcon } from '@heroicons/vue/24/outline'
 
 const auth = useAuthStore()
 const finance = useFinanceStore()
@@ -26,6 +26,7 @@ const openModal = ref(null)
 const editingAccount = ref(null)
 const deletingAccount = ref(null)
 const deletingState = ref(false)
+const searchQuery = ref('')
 
 function fmtMxn(n) {
   return new Intl.NumberFormat('es-MX', {
@@ -34,11 +35,25 @@ function fmtMxn(n) {
   }).format(Number(n ?? 0))
 }
 
+// Filtro por nombre case-insensitive. También busca en description si existe.
+const filteredAccounts = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return allAccounts.value
+  return allAccounts.value.filter((a) => {
+    const name = (a.name ?? '').toLowerCase()
+    const description = (a.description ?? '').toLowerCase()
+    return name.includes(q) || description.includes(q)
+  })
+})
+
 const activeAccounts = computed(() =>
-  allAccounts.value.filter((a) => !a.deleted_at),
+  filteredAccounts.value.filter((a) => !a.deleted_at),
 )
 const archivedAccounts = computed(() =>
-  allAccounts.value.filter((a) => a.deleted_at),
+  filteredAccounts.value.filter((a) => a.deleted_at),
+)
+const hasResults = computed(
+  () => activeAccounts.value.length > 0 || archivedAccounts.value.length > 0,
 )
 
 async function fetchAll() {
@@ -169,8 +184,30 @@ onMounted(async () => {
       </div>
 
       <template v-else>
+        <!-- Búsqueda: aparece solo si hay suficientes cuentas para que importe -->
+        <div v-if="allAccounts.length > 3" class="relative max-w-md">
+          <MagnifyingGlassIcon class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--color-text-subtle)] pointer-events-none" />
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="Buscar por nombre o descripción..."
+            class="w-full pl-9 pr-3 py-2 rounded-md bg-[color:var(--color-surface-elevated)] border border-[color:var(--color-border)] text-[color:var(--color-text-primary)] placeholder:text-[color:var(--color-text-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] focus-visible:border-transparent transition text-sm"
+          />
+        </div>
+
+        <!-- Sin resultados -->
+        <div
+          v-if="searchQuery && !hasResults"
+          class="rounded-xl border border-[color:var(--color-border)] p-8 text-center"
+        >
+          <p class="text-sm text-[color:var(--color-text-muted)]">
+            Ninguna cuenta coincide con
+            <span class="text-[color:var(--color-text-primary)] font-medium">"{{ searchQuery }}"</span>
+          </p>
+        </div>
+
         <!-- Activas -->
-        <section>
+        <section v-if="activeAccounts.length">
           <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)] mb-3">
             Activas <span class="text-[color:var(--color-text-muted)] normal-case font-normal">({{ activeAccounts.length }})</span>
           </h3>

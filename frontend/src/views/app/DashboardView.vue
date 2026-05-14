@@ -1,5 +1,6 @@
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
+import { useDocumentVisibility } from '@vueuse/core'
 import { useAuthStore } from '@/stores/auth'
 import { useFinanceStore } from '@/stores/finance'
 import { useToastStore } from '@/stores/toast'
@@ -133,6 +134,42 @@ async function handleResend() {
   }
 }
 
+// Re-fetch del estado de verificación + recursos del usuario.
+// Usado en dos contextos:
+//   1. Auto: cuando la pestaña vuelve a estar visible y el user aún no está verificado
+//      (típicamente porque acaba de hacer click en el link de Mailpit en otra pestaña).
+//   2. Manual: botón "Ya verifiqué" del banner, como fallback si el auto no dispara.
+const refreshing = ref(false)
+async function refreshVerification() {
+  if (refreshing.value) return
+  refreshing.value = true
+  try {
+    await auth.fetchMe()
+    if (auth.isVerified) {
+      await finance.fetchState()
+      toast.success('Email verificado. ¡Listo para empezar!')
+    }
+  } catch {
+    // El interceptor 401 se encarga del logout si el token caducó.
+  } finally {
+    refreshing.value = false
+  }
+}
+
+// Auto-refresh: cuando la pestaña vuelve a estar visible y aún no está verificado,
+// chequeamos discretamente si el user verificó el email en otra pestaña.
+const visibility = useDocumentVisibility()
+watch(visibility, (current, previous) => {
+  if (
+    current === 'visible'
+    && previous === 'hidden'
+    && auth.isAuthenticated
+    && !auth.isVerified
+  ) {
+    refreshVerification()
+  }
+})
+
 async function loadState() {
   try {
     await finance.fetchState()
@@ -153,6 +190,32 @@ onMounted(async () => {
     await auth.fetchMe().catch(() => {})
   }
 })
+
+// Resumen de cuentas en el dashboard: solo las "relevantes" para no duplicar
+// la vista /accounts. El criterio:
+//   1. La Bolsa va siempre primero (el user siempre la tiene).
+//   2. Cuentas referenciadas en las últimas pólizas (origen o destino).
+//   3. Tope de MAX_FEATURED para mantener el dashboard compacto.
+// Si el usuario tiene más cuentas, mostramos un link "Ver todas →".
+const MAX_FEATURED = 5
+const featuredAccounts = computed(() => {
+  const ids = new Set()
+  const bolsa = finance.accounts.find((a) => a.type === 'cash')
+  if (bolsa) ids.add(bolsa.id)
+
+  for (const entry of finance.recentEntries) {
+    if (ids.size >= MAX_FEATURED) break
+    if (entry.account_origin_id) ids.add(entry.account_origin_id)
+    if (ids.size >= MAX_FEATURED) break
+    if (entry.account_destination_id) ids.add(entry.account_destination_id)
+  }
+
+  return finance.accounts.filter((a) => ids.has(a.id))
+})
+
+const hasMoreAccounts = computed(
+  () => finance.accounts.length > featuredAccounts.value.length,
+)
 
 const ACTIONS = [
   { key: 'income', label: 'Ingreso', icon: ArrowDownTrayIcon, color: 'text-[color:var(--color-positive)]' },
@@ -188,7 +251,12 @@ const ACTIONS = [
             </a>.
           </p>
         </div>
-        <BaseButton variant="secondary" @click="handleResend">Reenviar email</BaseButton>
+        <div class="flex flex-col sm:flex-row gap-2 shrink-0">
+          <BaseButton variant="secondary" :loading="refreshing" @click="refreshVerification">
+            Ya verifiqué
+          </BaseButton>
+          <BaseButton variant="ghost" @click="handleResend">Reenviar email</BaseButton>
+        </div>
       </div>
 
       <!-- Skeleton durante la primera carga -->
@@ -252,15 +320,25 @@ const ACTIONS = [
           </div>
         </section>
 
-        <!-- Cuentas -->
-        <AccountList
-          :accounts="finance.accounts"
-          :can-create="auth.isVerified"
-          :highlighted-ids="finance.lastAffectedAccountIds"
-          @create="openModal = 'account'"
-          @edit="handleEditAccount"
-          @delete="handleDeleteAccount"
-        />
+        <!-- Cuentas: resumen con las más relevantes; vista completa en /accounts -->
+        <div>
+          <AccountList
+            :accounts="featuredAccounts"
+            :can-create="auth.isVerified"
+            :highlighted-ids="finance.lastAffectedAccountIds"
+            @create="openModal = 'account'"
+            @edit="handleEditAccount"
+            @delete="handleDeleteAccount"
+          />
+          <p v-if="hasMoreAccounts" class="text-sm text-right mt-3">
+            <RouterLink
+              :to="{ name: 'accounts' }"
+              class="text-[color:var(--color-accent)] hover:underline"
+            >
+              Ver todas mis cuentas →
+            </RouterLink>
+          </p>
+        </div>
 
         <!-- Últimos movimientos -->
         <RecentEntries :entries="finance.recentEntries" />
