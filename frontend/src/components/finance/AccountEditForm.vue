@@ -135,7 +135,7 @@ async function handleSubmit() {
 
 <template>
   <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
-    <BaseInput v-model="form.name" label="Nombre" :error="errors.name" required />
+    <BaseInput v-model.trim="form.name" label="Nombre" :error="errors.name" required />
 
     <p class="text-xs text-[color:var(--color-text-subtle)] -mt-2">
       Tipo: <span class="uppercase tracking-wide font-medium">{{ account.type }}</span>

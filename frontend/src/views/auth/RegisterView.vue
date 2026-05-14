@@ -45,8 +45,8 @@ async function handleSubmit() {
 <template>
   <AuthLayout title="Crear cuenta" subtitle="Empieza a llevar tu contabilidad personal">
     <form class="space-y-4" @submit.prevent="handleSubmit">
-      <BaseInput v-model="form.name" label="Nombre" autocomplete="name" :error="errors.name" required />
-      <BaseInput v-model="form.email" label="Email" type="email" autocomplete="email" :error="errors.email" required />
+      <BaseInput v-model.trim="form.name" label="Nombre" autocomplete="name" :error="errors.name" required />
+      <BaseInput v-model.trim="form.email" label="Email" type="email" autocomplete="email" :error="errors.email" required />
       <BaseInput
         v-model="form.password"
         label="Contraseña"

@@ -113,7 +113,7 @@ async function handleSubmit() {
 
 <template>
   <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
-    <BaseInput v-model="form.name" label="Nombre" :error="errors.name" required />
+    <BaseInput v-model.trim="form.name" label="Nombre" :error="errors.name" required />
 
     <BaseSelect
       v-model="form.type"

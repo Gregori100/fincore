@@ -98,7 +98,7 @@ async function handleSubmit() {
 
     <form v-else class="space-y-4" novalidate @submit.prevent="handleSubmit">
       <BaseInput
-        v-model="form.email"
+        v-model.trim="form.email"
         label="Email"
         type="email"
         autocomplete="email"

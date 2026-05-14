@@ -44,7 +44,7 @@ async function handleSubmit() {
   <AuthLayout title="Iniciar sesión" subtitle="Accede a tu libreta de finanzas">
     <form class="space-y-4" @submit.prevent="handleSubmit">
       <BaseInput
-        v-model="email"
+        v-model.trim="email"
         label="Email"
         type="email"
         autocomplete="email"
