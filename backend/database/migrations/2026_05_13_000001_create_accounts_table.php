@@ -8,8 +8,10 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::create('accounts', function (Blueprint $table) {
-            $table->id();
-            $table->unsignedBigInteger('user_id')->nullable();
+            // PK como UUID v4 (ver create_users_table). user_id también es uuid
+            // para que la FK encaje con users.id.
+            $table->uuid('id')->primary();
+            $table->uuid('user_id')->nullable();
             $table->string('name');
             $table->enum('type', ['cash', 'debit', 'credit']);
             $table->boolean('is_protected')->default(false);

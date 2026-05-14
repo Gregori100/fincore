@@ -5,6 +5,7 @@ import { useToastStore } from '@/stores/toast'
 import { useFormErrors } from '@/composables/useFormErrors'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseTextarea from '@/components/ui/BaseTextarea.vue'
 
 const props = defineProps({
   account: { type: Object, required: true },
@@ -17,6 +18,7 @@ const toast = useToastStore()
 
 const form = ref({
   name: props.account.name ?? '',
+  description: props.account.description ?? '',
   credit_limit: props.account.credit_limit ?? '',
   closing_day: props.account.closing_day ?? '',
   payment_day: props.account.payment_day ?? '',
@@ -66,6 +68,10 @@ function validate() {
   } else if (nameAlreadyTaken(name)) {
     e.name = 'Ya tienes una cuenta con ese nombre'
   }
+  const description = form.value.description?.trim() ?? ''
+  if (description.length > 200) {
+    e.description = 'Máximo 200 caracteres'
+  }
   if (isCredit.value) {
     // En credit, credit_limit no puede quedar vacío.
     if (form.value.credit_limit === '' || form.value.credit_limit === null) {
@@ -104,6 +110,10 @@ const { errors, submitting, submit } = useFormErrors(validate)
 
 async function handleSubmit() {
   const payload = { name: form.value.name.trim() }
+  // En edit, una descripción vacía borra la actual; mandamos null explícito.
+  const trimmedDescription = form.value.description?.trim() ?? ''
+  payload.description = trimmedDescription === '' ? null : trimmedDescription
+
   if (isCredit.value) {
     if (form.value.credit_limit !== '') payload.credit_limit = Number(form.value.credit_limit)
     if (form.value.closing_day !== '') payload.closing_day = Number(form.value.closing_day)
@@ -136,6 +146,15 @@ async function handleSubmit() {
 <template>
   <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
     <BaseInput v-model.trim="form.name" label="Nombre" :error="errors.name" required />
+
+    <BaseTextarea
+      v-model.trim="form.description"
+      label="Descripción"
+      :rows="3"
+      :maxlength="200"
+      :error="errors.description"
+      hint="Notas opcionales (máx. 200 caracteres). Vacío la elimina."
+    />
 
     <p class="text-xs text-[color:var(--color-text-subtle)] -mt-2">
       Tipo: <span class="uppercase tracking-wide font-medium">{{ account.type }}</span>

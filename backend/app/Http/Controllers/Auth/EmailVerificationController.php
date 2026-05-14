@@ -16,7 +16,7 @@ class EmailVerificationController extends Controller
      * Ruta firmada a la que apunta el email de verificación.
      * Valida el hash y marca al user como verified; redirige al frontend.
      */
-    public function verify(Request $request, int $id, string $hash): RedirectResponse
+    public function verify(Request $request, string $id, string $hash): RedirectResponse
     {
         $user = User::findOrFail($id);
 

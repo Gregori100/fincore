@@ -6,6 +6,7 @@ import { useFormErrors } from '@/composables/useFormErrors'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseTextarea from '@/components/ui/BaseTextarea.vue'
 
 const emit = defineEmits(['close', 'success'])
 
@@ -14,6 +15,7 @@ const toast = useToastStore()
 
 const form = ref({
   name: '',
+  description: '',
   type: 'debit',
   credit_limit: '',
   closing_day: '',
@@ -51,6 +53,10 @@ function validate() {
   } else if (nameAlreadyTaken(name)) {
     e.name = 'Ya tienes una cuenta con ese nombre'
   }
+  const description = form.value.description?.trim() ?? ''
+  if (description.length > 200) {
+    e.description = 'Máximo 200 caracteres'
+  }
   if (!['debit', 'credit'].includes(form.value.type)) {
     e.type = 'Selecciona un tipo válido'
   }
@@ -87,6 +93,10 @@ async function handleSubmit() {
     name: form.value.name.trim(),
     type: form.value.type,
   }
+  const trimmedDescription = form.value.description?.trim() ?? ''
+  if (trimmedDescription) {
+    payload.description = trimmedDescription
+  }
   if (isCredit.value) {
     payload.credit_limit = Number(form.value.credit_limit)
     if (form.value.closing_day) payload.closing_day = Number(form.value.closing_day)
@@ -114,6 +124,15 @@ async function handleSubmit() {
 <template>
   <form class="space-y-4" novalidate @submit.prevent="handleSubmit">
     <BaseInput v-model.trim="form.name" label="Nombre" :error="errors.name" required />
+
+    <BaseTextarea
+      v-model.trim="form.description"
+      label="Descripción"
+      :rows="3"
+      :maxlength="200"
+      :error="errors.description"
+      hint="Notas opcionales (máx. 200 caracteres)"
+    />
 
     <BaseSelect
       v-model="form.type"

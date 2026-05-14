@@ -21,8 +21,8 @@ class FinPay extends Command
 
             PayCreditAccount::execute(
                 $user->id,
-                (int) $this->argument('originId'),
-                (int) $this->argument('creditAccountId'),
+                (string) $this->argument('originId'),
+                (string) $this->argument('creditAccountId'),
                 (float) $this->argument('amount'),
                 $this->argument('description'),
             );

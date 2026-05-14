@@ -206,4 +206,42 @@ class ProtectedAccountTest extends TestCase
 
         $this->assertEquals(6000, $updated->credit_limit);
     }
+
+    public function test_update_persists_description_and_trims()
+    {
+        $user = $this->createUserWithBolsa();
+        $debit = Account::factory()->debit()->for($user)->create();
+
+        $updated = UpdateAccount::execute($user->id, $debit->id, [
+            'description' => '   Mi cuenta principal   ',
+        ]);
+
+        $this->assertSame('Mi cuenta principal', $updated->description);
+    }
+
+    public function test_update_can_clear_description_with_null()
+    {
+        $user = $this->createUserWithBolsa();
+        $debit = Account::factory()->debit()->for($user)->create([
+            'description' => 'algo anterior',
+        ]);
+
+        $updated = UpdateAccount::execute($user->id, $debit->id, [
+            'description' => null,
+        ]);
+
+        $this->assertNull($updated->description);
+    }
+
+    public function test_update_rejects_description_over_200_chars()
+    {
+        $user = $this->createUserWithBolsa();
+        $debit = Account::factory()->debit()->for($user)->create();
+
+        $this->expectException(\App\Domain\Finance\Exceptions\InvalidAccountType::class);
+
+        UpdateAccount::execute($user->id, $debit->id, [
+            'description' => str_repeat('a', 201),
+        ]);
+    }
 }

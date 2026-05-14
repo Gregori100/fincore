@@ -24,7 +24,7 @@ class DeleteAccount
     // imprecisión de float).
     private const ZERO_TOLERANCE = 0.005;
 
-    public static function execute(int $userId, int $accountId): void
+    public static function execute(string $userId, string $accountId): void
     {
         $account = Account::where('id', $accountId)
             ->where('user_id', $userId)

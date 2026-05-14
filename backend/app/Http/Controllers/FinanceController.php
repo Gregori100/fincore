@@ -39,14 +39,14 @@ class FinanceController extends Controller
     public function income(Request $request)
     {
         $data = $request->validate([
-            'account_id' => 'required|integer|exists:accounts,id',
+            'account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
         ]);
 
         $entry = RegisterIncome::execute(
             $request->user()->id,
-            (int) $data['account_id'],
+            $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
         );
@@ -57,14 +57,14 @@ class FinanceController extends Controller
     public function expense(Request $request)
     {
         $data = $request->validate([
-            'account_id' => 'required|integer|exists:accounts,id',
+            'account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
         ]);
 
         $entry = RegisterExpense::execute(
             $request->user()->id,
-            (int) $data['account_id'],
+            $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
         );
@@ -75,14 +75,14 @@ class FinanceController extends Controller
     public function creditExpense(Request $request)
     {
         $data = $request->validate([
-            'account_id' => 'required|integer|exists:accounts,id',
+            'account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
         ]);
 
         $entry = RegisterCreditExpense::execute(
             $request->user()->id,
-            (int) $data['account_id'],
+            $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
         );
@@ -93,16 +93,16 @@ class FinanceController extends Controller
     public function payCredit(Request $request)
     {
         $data = $request->validate([
-            'origin_id' => 'required|integer|exists:accounts,id',
-            'credit_account_id' => 'required|integer|exists:accounts,id',
+            'origin_id' => 'required|uuid|exists:accounts,id',
+            'credit_account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
         ]);
 
         $entry = PayCreditAccount::execute(
             $request->user()->id,
-            (int) $data['origin_id'],
-            (int) $data['credit_account_id'],
+            $data['origin_id'],
+            $data['credit_account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
         );
@@ -113,16 +113,16 @@ class FinanceController extends Controller
     public function transfer(Request $request)
     {
         $data = $request->validate([
-            'origin_id' => 'required|integer|exists:accounts,id',
-            'destination_id' => 'required|integer|exists:accounts,id',
+            'origin_id' => 'required|uuid|exists:accounts,id',
+            'destination_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
         ]);
 
         $entry = RegisterTransfer::execute(
             $request->user()->id,
-            (int) $data['origin_id'],
-            (int) $data['destination_id'],
+            $data['origin_id'],
+            $data['destination_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
         );
@@ -132,13 +132,18 @@ class FinanceController extends Controller
 
     public function listAccounts(Request $request)
     {
-        return response()->json(['accounts' => $this->service($request)->getAccounts()]);
+        $includeArchived = $request->boolean('include_archived');
+
+        return response()->json([
+            'accounts' => $this->service($request)->getAccounts($includeArchived),
+        ]);
     }
 
     public function createAccount(Request $request)
     {
         $data = $request->validate([
             'name' => 'required|string',
+            'description' => 'nullable|string|max:200',
             'type' => 'required|in:debit,credit',
             'credit_limit' => 'nullable|numeric|min:0',
             'closing_day' => 'nullable|integer|between:1,31',
@@ -156,15 +161,17 @@ class FinanceController extends Controller
             $data['name'],
             $data['type'],
             $creditMeta,
+            $data['description'] ?? null,
         );
 
         return response()->json(['account' => $account], 201);
     }
 
-    public function updateAccount(Request $request, int $id)
+    public function updateAccount(Request $request, string $id)
     {
         $data = $request->validate([
             'name' => 'sometimes|string',
+            'description' => 'sometimes|nullable|string|max:200',
             'credit_limit' => 'sometimes|nullable|numeric|min:0',
             'closing_day' => 'sometimes|nullable|integer|between:1,31',
             'payment_day' => 'sometimes|nullable|integer|between:1,31',
@@ -177,7 +184,7 @@ class FinanceController extends Controller
         return response()->json(['account' => $account]);
     }
 
-    public function deleteAccount(Request $request, int $id)
+    public function deleteAccount(Request $request, string $id)
     {
         DeleteAccount::execute($request->user()->id, $id);
 
@@ -187,7 +194,7 @@ class FinanceController extends Controller
     public function listEntries(Request $request)
     {
         $filters = $request->validate([
-            'account_id' => 'sometimes|integer|exists:accounts,id',
+            'account_id' => 'sometimes|uuid|exists:accounts,id',
             'kind' => 'sometimes|in:income,expense,credit_expense,debt_payment,transfer,adjustment',
             'from' => 'sometimes|date',
             'to' => 'sometimes|date',
@@ -199,7 +206,7 @@ class FinanceController extends Controller
             ->orderByDesc('occurred_at');
 
         if (isset($filters['account_id'])) {
-            $id = (int) $filters['account_id'];
+            $id = $filters['account_id'];
             $query->where(function ($q) use ($id) {
                 $q->where('account_origin_id', $id)
                     ->orWhere('account_destination_id', $id);

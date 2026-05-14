@@ -8,11 +8,11 @@ use Illuminate\Support\Collection;
 
 class FinancialStateService
 {
-    public function __construct(private int $userId)
+    public function __construct(private string $userId)
     {
     }
 
-    public function getAccountBalance(int $accountId): float
+    public function getAccountBalance(string $accountId): float
     {
         // withTrashed() porque DeleteAccount soft-deletea: las cuentas archivadas
         // siguen siendo referenciadas por journal_entries históricas y debemos
@@ -37,18 +37,24 @@ class FinancialStateService
             : $incoming - $outgoing;
     }
 
-    public function getAccounts(): Collection
+    public function getAccounts(bool $includeArchived = false): Collection
     {
-        return Account::where('user_id', $this->userId)
-            ->get()
-            ->map(function (Account $account) {
-                $balance = $this->getAccountBalance($account->id);
-                $account->balance = $balance;
-                if ($account->isCredit() && $account->credit_limit !== null) {
-                    $account->available_credit = (float) $account->credit_limit - $balance;
-                }
-                return $account;
-            });
+        // Por default sólo activas (compatible con dashboard, BO/DE/CR, etc.).
+        // includeArchived=true expone también las soft-deleteadas para la
+        // vista /accounts y /accounts/:uuid.
+        $query = Account::query()->where('user_id', $this->userId);
+        if ($includeArchived) {
+            $query->withTrashed();
+        }
+
+        return $query->get()->map(function (Account $account) {
+            $balance = $this->getAccountBalance($account->id);
+            $account->balance = $balance;
+            if ($account->isCredit() && $account->credit_limit !== null) {
+                $account->available_credit = (float) $account->credit_limit - $balance;
+            }
+            return $account;
+        });
     }
 
     public function getBO(): float

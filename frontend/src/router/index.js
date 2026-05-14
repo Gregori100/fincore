@@ -42,6 +42,18 @@ const routes = [
     component: () => import('@/views/app/EntriesView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/accounts',
+    name: 'accounts',
+    component: () => import('@/views/app/AccountsView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/accounts/:uuid',
+    name: 'account-detail',
+    component: () => import('@/views/app/AccountDetailView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/', redirect: { name: 'dashboard' } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
 ]

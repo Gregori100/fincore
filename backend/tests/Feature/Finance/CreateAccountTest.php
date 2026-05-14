@@ -9,6 +9,7 @@ use App\Domain\Finance\Exceptions\InvalidCreditLimit;
 use App\Domain\Finance\Exceptions\InvalidCreditMetadata;
 use App\Models\Account;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class CreateAccountTest extends TestCase
@@ -135,5 +136,60 @@ class CreateAccountTest extends TestCase
         $this->expectException(InvalidAccountType::class);
 
         CreateAccount::execute($user->id, 'Raro', 'savings');
+    }
+
+    public function test_user_and_account_ids_are_uuid_v4_or_v7()
+    {
+        $user = $this->createUserWithBolsa();
+        $account = CreateAccount::execute($user->id, 'Banamex', Account::TYPE_DEBIT);
+
+        $this->assertTrue(Str::isUuid($user->id), "user.id no es UUID: {$user->id}");
+        $this->assertTrue(Str::isUuid($account->id), "account.id no es UUID: {$account->id}");
+    }
+
+    public function test_description_persists_and_trims()
+    {
+        $user = $this->createUserWithBolsa();
+
+        $account = CreateAccount::execute(
+            $user->id,
+            'Banamex',
+            Account::TYPE_DEBIT,
+            [],
+            '  Tarjeta principal · alias 1234  ',
+        );
+
+        $this->assertSame('Tarjeta principal · alias 1234', $account->description);
+    }
+
+    public function test_empty_description_persists_as_null()
+    {
+        $user = $this->createUserWithBolsa();
+
+        $account = CreateAccount::execute(
+            $user->id,
+            'Banamex',
+            Account::TYPE_DEBIT,
+            [],
+            '   ',
+        );
+
+        $this->assertNull($account->description);
+    }
+
+    public function test_rejects_description_over_200_chars()
+    {
+        $user = $this->createUserWithBolsa();
+        $longDescription = str_repeat('a', 201);
+
+        $this->expectException(InvalidAccountType::class);
+
+        CreateAccount::execute(
+            $user->id,
+            'Banamex',
+            Account::TYPE_DEBIT,
+            [],
+            $longDescription,
+        );
     }
 }

@@ -2,7 +2,10 @@ import client from './client'
 
 export const financeApi = {
   state: () => client.get('/finance/state'),
-  accounts: () => client.get('/finance/accounts'),
+  accounts: ({ includeArchived = false } = {}) =>
+    client.get('/finance/accounts', {
+      params: includeArchived ? { include_archived: 1 } : {},
+    }),
   createAccount: (payload) => client.post('/finance/accounts', payload),
   updateAccount: (id, payload) => client.patch(`/finance/accounts/${id}`, payload),
   deleteAccount: (id) => client.delete(`/finance/accounts/${id}`),

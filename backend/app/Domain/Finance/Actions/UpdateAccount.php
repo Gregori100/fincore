@@ -14,6 +14,7 @@ class UpdateAccount
 {
     private const EDITABLE_FIELDS = [
         'name',
+        'description',
         'credit_limit',
         'closing_day',
         'payment_day',
@@ -23,7 +24,9 @@ class UpdateAccount
 
     private const MAX_NAME_LENGTH = 120;
 
-    public static function execute(int $userId, int $accountId, array $changes): Account
+    private const MAX_DESCRIPTION_LENGTH = 200;
+
+    public static function execute(string $userId, string $accountId, array $changes): Account
     {
         $account = Account::where('id', $accountId)
             ->where('user_id', $userId)
@@ -53,6 +56,19 @@ class UpdateAccount
                 ->exists();
             if ($duplicated) {
                 throw new DuplicateAccountName();
+            }
+        }
+
+        // Normalizar description. null o cadena vacía borran el campo.
+        if (array_key_exists('description', $update)) {
+            if ($update['description'] === null) {
+                $update['description'] = null;
+            } else {
+                $trimmed = trim((string) $update['description']);
+                if (mb_strlen($trimmed) > self::MAX_DESCRIPTION_LENGTH) {
+                    throw new InvalidAccountType('La descripción no puede exceder '.self::MAX_DESCRIPTION_LENGTH.' caracteres.');
+                }
+                $update['description'] = $trimmed !== '' ? $trimmed : null;
             }
         }
 

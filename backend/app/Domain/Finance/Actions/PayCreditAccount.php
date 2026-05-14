@@ -13,17 +13,19 @@ use Illuminate\Support\Facades\DB;
 class PayCreditAccount
 {
     public static function execute(
-        int $userId,
-        int $originAccountId,
-        int $creditAccountId,
+        string $userId,
+        string $originAccountId,
+        string $creditAccountId,
         float $amount,
         ?string $description = null,
     ): JournalEntry {
         return DB::transaction(function () use ($userId, $originAccountId, $creditAccountId, $amount, $description) {
-            // Bloqueamos las DOS cuentas. Importante: siempre adquirir en orden
-            // ascendente de id para evitar deadlocks entre transacciones
+            // Bloqueamos las DOS cuentas. Adquirimos en orden lexicográfico
+            // (strcmp) de id para evitar deadlocks entre transacciones
             // simultáneas que toquen el mismo par de cuentas en orden inverso.
-            [$firstId, $secondId] = $originAccountId < $creditAccountId
+            // El orden basta con ser determinista; con UUID usamos strcmp
+            // en lugar de comparación numérica.
+            [$firstId, $secondId] = strcmp($originAccountId, $creditAccountId) < 0
                 ? [$originAccountId, $creditAccountId]
                 : [$creditAccountId, $originAccountId];
 

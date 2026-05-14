@@ -12,9 +12,9 @@ use Illuminate\Support\Facades\DB;
 class RegisterTransfer
 {
     public static function execute(
-        int $userId,
-        int $originAccountId,
-        int $destinationAccountId,
+        string $userId,
+        string $originAccountId,
+        string $destinationAccountId,
         float $amount,
         ?string $description = null,
     ): JournalEntry {
@@ -23,10 +23,12 @@ class RegisterTransfer
         }
 
         return DB::transaction(function () use ($userId, $originAccountId, $destinationAccountId, $amount, $description) {
-            // Bloqueamos en orden ascendente de id para evitar deadlocks entre
-            // dos transferencias simultáneas que crucen las mismas cuentas en
-            // direcciones opuestas.
-            [$firstId, $secondId] = $originAccountId < $destinationAccountId
+            // Bloqueamos en orden lexicográfico (strcmp) de id para evitar
+            // deadlocks entre dos transferencias simultáneas que crucen las
+            // mismas cuentas en direcciones opuestas. Con UUID el orden no es
+            // numérico, pero strcmp basta porque solo necesitamos que sea
+            // determinista en ambas transacciones.
+            [$firstId, $secondId] = strcmp($originAccountId, $destinationAccountId) < 0
                 ? [$originAccountId, $destinationAccountId]
                 : [$destinationAccountId, $originAccountId];
 

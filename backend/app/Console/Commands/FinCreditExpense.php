@@ -21,7 +21,7 @@ class FinCreditExpense extends Command
 
             RegisterCreditExpense::execute(
                 $user->id,
-                (int) $this->argument('accountId'),
+                (string) $this->argument('accountId'),
                 (float) $this->argument('amount'),
                 $this->argument('description'),
             );

@@ -82,11 +82,15 @@ Everything is scoped by `User`. Each user has:
 - N additional `Account`s of type `debit` or `credit`.
 - M `JournalEntry`s connecting them.
 
+> **IDs**: `users.id`, `accounts.id` y `journal_entries.id` son **UUID v7** generados por `HasUuids` (Laravel 12), no seriales. La columna polimórfica `tokenable_id` de Sanctum también es UUID (via `uuidMorphs`). Las Actions, el `FinancialStateService` y `FinanceController` reciben `string $id`. El frontend trata los IDs como opacos.
+
 An **Account** (`app/Models/Account.php`) has one of three types:
 
 - `cash` — physical money/wallet. **Singleton per user** named "Bolsa", `is_protected=true`. Cannot be deleted or renamed.
 - `debit` — bank checking/debit accounts (N per user).
 - `credit` — credit cards with `credit_limit`, `closing_day`, `payment_day`, `interest_rate`, `minimum_payment_pct`. The metadata is stored but no alert/interest engine exists yet (Phase 2).
+
+Account también acepta un campo opcional `description` (texto libre, máx 200 caracteres). Es una anotación tipo "tarjeta principal · alias 1234"; se valida en `CreateAccount` / `UpdateAccount` (trim + max 200, cadena vacía → null) y se muestra en `/accounts/:uuid` del frontend.
 
 Each financial operation is a **JournalEntry** (`app/Models/JournalEntry.php`) with `account_origin_id` (where money leaves) and `account_destination_id` (where money lands). Either can be null:
 
@@ -186,7 +190,7 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | POST | `/auth/email/verification-notification` | sanctum | Resend verification email |
 | GET | `/finance/state` | sanctum + verified | BO/DE/CR + accounts + recent entries |
 | GET | `/finance/entries` | sanctum + verified | Paginated entries with filters |
-| GET | `/finance/accounts` | sanctum + verified | List accounts |
+| GET | `/finance/accounts` | sanctum + verified | List accounts (acepta `?include_archived=1` para incluir soft-deleted) |
 | POST | `/finance/accounts` | sanctum + verified | CreateAccount (debit/credit, cash forbidden) |
 | PATCH | `/finance/accounts/{id}` | sanctum + verified | UpdateAccount |
 | DELETE | `/finance/accounts/{id}` | sanctum + verified | DeleteAccount |
@@ -232,11 +236,11 @@ All commands accept `--user=email` (optional if there's exactly one user; requir
 ### Key design rules
 
 - All business logic lives in `Actions/`. Controllers only validate and delegate.
-- Every Action takes `int $userId` as its first parameter; all queries scope by `user_id` to enforce isolation.
-- `FinancialStateService` takes `int $userId` in its constructor. Both Actions (for validation) and `FinanceController` consume it.
+- Every Action takes `string $userId` (UUID) as its first parameter; all queries scope by `user_id` to enforce isolation.
+- `FinancialStateService` takes `string $userId` in its constructor. Both Actions (for validation) and `FinanceController` consume it. `getAccounts(bool $includeArchived = false)` permite cargar también las soft-deleteadas para `/accounts`.
 - Actions use `DB::transaction()` and throw domain exceptions on invalid state.
-- **Soft delete**: `Account` uses Laravel's `SoftDeletes` trait. `DeleteAccount` Action triggers soft delete (sets `deleted_at`), only allowed when `balance == 0`. Archived accounts don't appear in dashboard listings or BO/DE/CR aggregates, but their `journal_entries` remain visible in `/entries` with origin/destination relations loaded via `withTrashed()` to preserve historical names.
-- **Concurrency**: the 5 mutation Actions (`RegisterIncome`/`Expense`/`CreditExpense`/`PayCreditAccount`/`RegisterTransfer`) load their account(s) with `lockForUpdate()` inside `DB::transaction()`. This serializes simultaneous requests on the same account and prevents race conditions that could leave negative balances. Multi-account Actions (`PayCreditAccount`, `RegisterTransfer`) acquire locks in ascending `id` order to avoid deadlocks.
+- **Soft delete**: `Account` uses Laravel's `SoftDeletes` trait. `DeleteAccount` Action triggers soft delete (sets `deleted_at`), only allowed when `balance == 0`. Archived accounts don't appear in dashboard listings or BO/DE/CR aggregates, but their `journal_entries` remain visible in `/entries` with origin/destination relations loaded via `withTrashed()` to preserve historical names. **No existe reactivación**; las archivadas son read-only.
+- **Concurrency**: the 5 mutation Actions (`RegisterIncome`/`Expense`/`CreditExpense`/`PayCreditAccount`/`RegisterTransfer`) load their account(s) with `lockForUpdate()` inside `DB::transaction()`. This serializes simultaneous requests on the same account and prevents race conditions that could leave negative balances. Multi-account Actions (`PayCreditAccount`, `RegisterTransfer`) acquire locks in `strcmp`-ascending UUID order to avoid deadlocks.
 - The Bolsa account is created automatically by the `CreateUserBolsaAccount` listener when the `Registered` event fires. `DatabaseSeeder` is intentionally empty.
 - `tests/TestCase.php` exposes a `createUserWithBolsa()` helper that replicates what the listener does (creates user + Bolsa).
 
@@ -258,22 +262,24 @@ src/
 │   └── toast.js        # feedback global
 ├── router/             # rutas + beforeEach guard (requiresAuth/requiresGuest)
 ├── components/
-│   ├── layout/         # AppLayout (con topbar) + AuthLayout (card)
-│   ├── ui/             # BaseButton, BaseInput, BaseSelect, BaseModal, ToastList
-│   └── finance/        # StateSummary, AccountCard, AccountList, RecentEntries
+│   ├── layout/         # AppLayout (topbar con nav Dashboard/Cuentas/Movimientos) + AuthLayout (card)
+│   ├── ui/             # BaseButton, BaseInput, BaseTextarea, BaseSelect, BaseModal, ToastList
+│   └── finance/        # StateSummary, AccountCard, AccountList, RecentEntries, EntriesTable
 │                       # + 6 Forms (Account, Income, Expense, CreditExpense, PayCredit, Transfer)
 └── views/
-    ├── auth/           # LoginView, RegisterView, EmailVerifiedView
-    └── app/            # DashboardView
+    ├── auth/           # LoginView, RegisterView, EmailVerifiedView, ForgotPassword, ResetPassword
+    └── app/            # DashboardView, EntriesView, AccountsView, AccountDetailView
 ```
 
 **Patrones clave**:
 - Token persistido en `localStorage` vía `useStorage` de `@vueuse/core`.
 - Axios request interceptor lee el token del store; response interceptor dispara `auth.clear()` + redirect en 401.
 - El binding store ↔ client es **perezoso** (vía `bindAuth`/`bindRouter` en `main.js`) para evitar ciclo de imports.
-- Formularios viven en modales (`BaseModal` con Headless UI Dialog) abiertos desde el dashboard.
+- Formularios viven en modales (`BaseModal` con Headless UI Dialog) abiertos desde el dashboard o desde `/accounts`.
 - Tema oscuro único con CSS variables en `@theme` (Tailwind v4).
 - Vite proxy: `/api` → `http://api`.
+- `EntriesTable` es el componente reutilizable de tabla paginada de movimientos. `/entries` la usa sin filtro fijo; `/accounts/:uuid` la usa con `accountId` fijo.
+- IDs en rutas: `/accounts/:uuid` espera un UUID v7. El parámetro se trata como string opaco.
 
 ## Docker services (`compose.yaml`)
 

@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\DB;
 class RegisterExpense
 {
     public static function execute(
-        int $userId,
-        int $accountId,
+        string $userId,
+        string $accountId,
         float $amount,
         ?string $description = null,
     ): JournalEntry {

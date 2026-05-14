@@ -5,6 +5,8 @@ import { LockClosedIcon, PencilSquareIcon, ArchiveBoxXMarkIcon } from '@heroicon
 const props = defineProps({
   account: { type: Object, required: true },
   highlighted: { type: Boolean, default: false },
+  // Si true, toda la card es un link a /accounts/:uuid (overlay absoluto).
+  linkable: { type: Boolean, default: false },
 })
 
 defineEmits(['edit', 'delete'])
@@ -33,21 +35,41 @@ const typeColor = computed(() => {
   }[props.account.type] ?? ''
 })
 
-const editable = computed(() => !props.account.is_protected)
+const isArchived = computed(() => Boolean(props.account.deleted_at))
+// Las archivadas son read-only: ni editar ni archivar de nuevo.
+const editable = computed(() => !props.account.is_protected && !isArchived.value)
 </script>
 
 <template>
   <article
-    class="group bg-[color:var(--color-surface)] border rounded-xl p-4 transition-all duration-300 hover:border-[color:var(--color-accent)]/60"
-    :class="
+    class="group relative bg-[color:var(--color-surface)] border rounded-xl p-4 transition-all duration-300 hover:border-[color:var(--color-accent)]/60"
+    :class="[
       highlighted
         ? 'border-[color:var(--color-accent)] ring-2 ring-[color:var(--color-accent)]/40 shadow-lg shadow-[color:var(--color-accent)]/10'
-        : 'border-[color:var(--color-border)]'
-    "
+        : 'border-[color:var(--color-border)]',
+      isArchived && 'opacity-60',
+      linkable && 'cursor-pointer hover:bg-[color:var(--color-surface-elevated)]/30',
+    ]"
   >
+    <!--
+      Overlay invisible: cubre toda la card y captura el click navegacional.
+      Los botones internos (editar/archivar) tienen `relative z-10`, lo que los
+      coloca por encima del overlay y reciben sus propios clicks sin tener que
+      hacer stop-propagation manual.
+    -->
+    <RouterLink
+      v-if="linkable"
+      :to="{ name: 'account-detail', params: { uuid: account.id } }"
+      class="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)]"
+      :aria-label="`Ver detalle de ${account.name}`"
+    />
+
     <header class="flex items-start justify-between gap-2 mb-3">
       <div class="min-w-0">
-        <h3 class="font-medium truncate flex items-center gap-1.5">
+        <h3
+          class="font-medium truncate flex items-center gap-1.5"
+          :class="linkable && 'group-hover:text-[color:var(--color-accent)] transition-colors'"
+        >
           {{ account.name }}
           <LockClosedIcon
             v-if="account.is_protected"
@@ -55,14 +77,20 @@ const editable = computed(() => !props.account.is_protected)
             :title="'Cuenta protegida'"
           />
         </h3>
-        <p class="text-[10px] mt-0.5 uppercase tracking-[0.08em] font-semibold" :class="typeColor">
+        <p class="text-[10px] mt-0.5 uppercase tracking-[0.08em] font-semibold flex items-center gap-1.5" :class="typeColor">
           {{ typeLabel }}
+          <span
+            v-if="isArchived"
+            class="ml-1 text-[10px] font-medium tracking-normal text-[color:var(--color-text-subtle)] bg-[color:var(--color-surface-elevated)] px-1.5 py-0.5 rounded"
+          >
+            archivada
+          </span>
         </p>
       </div>
 
       <div
         v-if="editable"
-        class="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition"
+        class="relative z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition"
       >
         <button
           type="button"

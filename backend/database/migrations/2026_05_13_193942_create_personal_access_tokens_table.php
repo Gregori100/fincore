@@ -13,7 +13,11 @@ return new class extends Migration
     {
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
-            $table->morphs('tokenable');
+            // tokenable es polimórfico. Los users tienen UUID como PK, así que
+            // tokenable_id debe ser UUID (no el unsignedBigInteger que crea
+            // ->morphs() por default). uuidMorphs crea (tokenable_type, tokenable_id)
+            // con tokenable_id de tipo UUID + índice compuesto.
+            $table->uuidMorphs('tokenable');
             $table->text('name');
             $table->string('token', 64)->unique();
             $table->text('abilities')->nullable();

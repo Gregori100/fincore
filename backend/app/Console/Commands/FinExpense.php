@@ -21,7 +21,7 @@ class FinExpense extends Command
 
             RegisterExpense::execute(
                 $user->id,
-                (int) $this->argument('accountId'),
+                (string) $this->argument('accountId'),
                 (float) $this->argument('amount'),
                 $this->argument('description'),
             );

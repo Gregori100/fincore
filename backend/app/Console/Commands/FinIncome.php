@@ -21,7 +21,7 @@ class FinIncome extends Command
 
             RegisterIncome::execute(
                 $user->id,
-                (int) $this->argument('accountId'),
+                (string) $this->argument('accountId'),
                 (float) $this->argument('amount'),
                 $this->argument('description'),
             );

@@ -12,11 +12,14 @@ class CreateAccount
 {
     private const MAX_NAME_LENGTH = 120;
 
+    private const MAX_DESCRIPTION_LENGTH = 200;
+
     public static function execute(
-        int $userId,
+        string $userId,
         string $name,
         string $type,
         array $creditMeta = [],
+        ?string $description = null,
     ): Account {
         $name = trim($name);
 
@@ -35,6 +38,16 @@ class CreateAccount
             throw new InvalidAccountType('La cuenta de efectivo (Bolsa) es única por usuario y se crea automáticamente al registrarse.');
         }
 
+        // Descripción opcional. Trim + max 200; cadena vacía se persiste como null.
+        $normalizedDescription = null;
+        if ($description !== null) {
+            $trimmed = trim($description);
+            if (mb_strlen($trimmed) > self::MAX_DESCRIPTION_LENGTH) {
+                throw new InvalidAccountType('La descripción no puede exceder '.self::MAX_DESCRIPTION_LENGTH.' caracteres.');
+            }
+            $normalizedDescription = $trimmed !== '' ? $trimmed : null;
+        }
+
         // Unicidad case-insensitive. withTrashed() para que un nombre archivado
         // siga ocupando el slot (evita que el user "reuse" un nombre de cuenta
         // anterior y se confunda al ver entries históricas).
@@ -49,6 +62,7 @@ class CreateAccount
         $attributes = [
             'user_id' => $userId,
             'name' => $name,
+            'description' => $normalizedDescription,
             'type' => $type,
             'is_protected' => false,
         ];
