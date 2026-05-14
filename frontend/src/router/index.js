@@ -20,9 +20,26 @@ const routes = [
     component: () => import('@/views/auth/EmailVerifiedView.vue'),
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('@/views/auth/ForgotPasswordView.vue'),
+    meta: { requiresGuest: true },
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('@/views/auth/ResetPasswordView.vue'),
+  },
+  {
     path: '/dashboard',
     name: 'dashboard',
     component: () => import('@/views/app/DashboardView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/entries',
+    name: 'entries',
+    component: () => import('@/views/app/EntriesView.vue'),
     meta: { requiresAuth: true },
   },
   { path: '/', redirect: { name: 'dashboard' } },

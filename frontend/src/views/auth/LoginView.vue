@@ -60,6 +60,15 @@ async function handleSubmit() {
         required
       />
 
+      <div class="flex justify-end -mt-2">
+        <RouterLink
+          :to="{ name: 'forgot-password' }"
+          class="text-xs text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] transition"
+        >
+          ¿Olvidaste tu contraseña?
+        </RouterLink>
+      </div>
+
       <BaseButton type="submit" :loading="submitting" block>
         Iniciar sesión
       </BaseButton>

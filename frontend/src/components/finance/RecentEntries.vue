@@ -44,7 +44,15 @@ function fmtDate(d) {
 
 <template>
   <section>
-    <h2 class="text-lg font-medium mb-4">Últimos movimientos</h2>
+    <header class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-medium">Últimos movimientos</h2>
+      <RouterLink
+        :to="{ name: 'entries' }"
+        class="text-sm text-[color:var(--color-text-muted)] hover:text-[color:var(--color-accent)] transition"
+      >
+        Ver historial →
+      </RouterLink>
+    </header>
 
     <div
       class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl overflow-hidden"
@@ -77,9 +85,25 @@ function fmtDate(d) {
             </td>
             <td class="px-4 py-3">
               <div class="text-sm">
-                <span class="text-[color:var(--color-text-muted)]">{{ e.origin?.name ?? '—' }}</span>
+                <span class="text-[color:var(--color-text-muted)]">
+                  {{ e.origin?.name ?? '—' }}
+                  <span
+                    v-if="e.origin?.deleted_at"
+                    class="text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)] ml-0.5"
+                  >
+                    (arch.)
+                  </span>
+                </span>
                 <span class="text-[color:var(--color-text-subtle)] mx-1.5">→</span>
-                <span class="text-[color:var(--color-text-muted)]">{{ e.destination?.name ?? '—' }}</span>
+                <span class="text-[color:var(--color-text-muted)]">
+                  {{ e.destination?.name ?? '—' }}
+                  <span
+                    v-if="e.destination?.deleted_at"
+                    class="text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)] ml-0.5"
+                  >
+                    (arch.)
+                  </span>
+                </span>
               </div>
               <p v-if="e.description" class="text-xs text-[color:var(--color-text-subtle)] mt-0.5 truncate">
                 {{ e.description }}
