@@ -82,8 +82,12 @@ Para `type=credit`, `credit_limit` es obligatorio.
 ```
 
 ### Errores
-- `422` con `code: invalid_account_type` si pasaste `type=cash` o un type desconocido.
-- `422` con `code: invalid_account_type` si `type=credit` sin `credit_limit`.
+- `422` con `code: invalid_account_type` si:
+    - Pasaste `type=cash` o un type desconocido.
+    - El nombre queda vacío tras `trim()` o excede 120 caracteres.
+- `422` con `code: invalid_credit_limit` si `type=credit` sin `credit_limit`.
+- `422` con `code: invalid_credit_metadata` si `type=credit` con `closing_day === payment_day`.
+- `422` con `code: duplicate_account_name` si ya tienes otra cuenta con ese nombre (case-insensitive, incluyendo archivadas).
 
 ## PATCH `/api/finance/accounts/{id}`
 
@@ -113,12 +117,22 @@ Los campos de tarjeta (`credit_limit`, etc.) solo aplican a cuentas `credit`; en
 ### Errores
 - `404` si el id no existe **o pertenece a otro usuario** (aislamiento estricto).
 - `409` con `code: protected_account` si intentas modificar la Bolsa.
+- `422` con `code: duplicate_account_name` si el nuevo nombre ya está usado por otra cuenta (case-insensitive, considerando archivadas).
+- `422` con `code: invalid_account_type` si el nombre queda vacío o > 120 caracteres tras `trim()`.
+- `422` con `code: invalid_credit_limit` si:
+    - En una tarjeta intentas setear `credit_limit = null`.
+    - Bajas `credit_limit` por debajo de la deuda actual (dejaría disponible negativo).
+- `422` con `code: invalid_credit_metadata` si `closing_day` y `payment_day` quedarían iguales tras el update.
 
 ## DELETE `/api/finance/accounts/{id}`
 
-Elimina una cuenta. Solo se permite si:
+**Archiva** una cuenta (soft delete: setea `deleted_at` en lugar de borrar la fila). Solo se permite si:
 - No es la Bolsa (`is_protected=false`).
-- No tiene pólizas asociadas (origen o destino).
+- Su `balance == 0`:
+    - **cash/debit**: sin saldo (transfiere o gasta todo antes).
+    - **credit**: sin deuda pendiente (paga todo antes).
+
+Las pólizas históricas que referenciaban a la cuenta **siguen siendo accesibles** en `/api/finance/entries`. Sus relaciones `origin` y `destination` cargan el modelo de cuenta archivado (con `deleted_at` poblado), lo que permite al frontend mostrar el nombre + badge `(archivada)`.
 
 ### Response 200
 ```json
@@ -127,9 +141,12 @@ Elimina una cuenta. Solo se permite si:
 
 ### Errores
 - `404` si no existe o pertenece a otro usuario.
-- `409` con `code: protected_account` si:
-    - Es la Bolsa.
-    - Tiene pólizas asociadas (en ese caso el mensaje será `"La cuenta tiene pólizas asociadas y no puede eliminarse."`).
+- `409` con `code: protected_account` si es la Bolsa.
+- `422` con `code: account_not_empty` si tiene saldo o deuda pendiente. El `error` describe la condición específica:
+    - cash/debit: `"Esta cuenta tiene saldo. Transfiérelo o gástalo todo antes de archivar."`
+    - credit: `"Esta tarjeta tiene una deuda pendiente. Págala completamente antes de archivar."`
+
+> **Nota**: el "nombre" de una cuenta archivada sigue ocupando su slot de unicidad. Si archivas "Banamex Débito", no podrás crear otra cuenta con el mismo nombre (case-insensitive). Esto evita confusión en `/entries`, donde pólizas históricas y nuevas se mezclarían.
 
 ## Aislamiento entre usuarios
 

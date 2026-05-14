@@ -64,6 +64,10 @@ Cuando una regla de negocio se viola (saldo insuficiente, sobre-pago, etc.):
 | `overpay_debt` | 422 | El pago excede la deuda actual |
 | `credit_limit_exceeded` | 422 | El cargo excede el límite de crédito |
 | `invalid_account_type` | 422 | Operación inválida para el tipo de cuenta |
+| `invalid_credit_limit` | 422 | Límite de crédito inválido (null en credit, o menor a la deuda actual) |
+| `invalid_credit_metadata` | 422 | `closing_day` y `payment_day` no pueden ser iguales |
+| `duplicate_account_name` | 422 | Ya tienes otra cuenta con ese nombre (case-insensitive, incluye archivadas) |
+| `account_not_empty` | 422 | No puedes archivar una cuenta con saldo o deuda pendiente |
 | `protected_account` | 409 | Cuenta protegida (la Bolsa no se puede modificar) |
 
 ### Autenticación faltante

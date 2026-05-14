@@ -141,6 +141,10 @@ app/
 │       ├── OverpayDebt.php                  # 422
 │       ├── CreditLimitExceeded.php          # 422
 │       ├── InvalidAccountType.php           # 422
+│       ├── InvalidCreditLimit.php           # 422: nuevo limit < deuda o null
+│       ├── InvalidCreditMetadata.php        # 422: closing_day == payment_day
+│       ├── DuplicateAccountName.php         # 422: nombre duplicado por user
+│       ├── AccountNotEmpty.php              # 422: archivar con saldo != 0
 │       └── ProtectedAccount.php             # 409
 ├── Listeners/
 │   └── CreateUserBolsaAccount.php           # On Registered: creates the user's Bolsa
@@ -204,6 +208,10 @@ Domain exceptions extend `Domain\Finance\Exceptions\DomainException`, which prov
 | `OverpayDebt` | 422 | `overpay_debt` |
 | `CreditLimitExceeded` | 422 | `credit_limit_exceeded` |
 | `InvalidAccountType` | 422 | `invalid_account_type` |
+| `InvalidCreditLimit` | 422 | `invalid_credit_limit` |
+| `InvalidCreditMetadata` | 422 | `invalid_credit_metadata` |
+| `DuplicateAccountName` | 422 | `duplicate_account_name` |
+| `AccountNotEmpty` | 422 | `account_not_empty` |
 | `ProtectedAccount` | 409 | `protected_account` |
 
 Validation errors from `$request->validate()` still produce the standard Laravel 422 payload with `errors` keyed by field.
@@ -227,6 +235,8 @@ All commands accept `--user=email` (optional if there's exactly one user; requir
 - Every Action takes `int $userId` as its first parameter; all queries scope by `user_id` to enforce isolation.
 - `FinancialStateService` takes `int $userId` in its constructor. Both Actions (for validation) and `FinanceController` consume it.
 - Actions use `DB::transaction()` and throw domain exceptions on invalid state.
+- **Soft delete**: `Account` uses Laravel's `SoftDeletes` trait. `DeleteAccount` Action triggers soft delete (sets `deleted_at`), only allowed when `balance == 0`. Archived accounts don't appear in dashboard listings or BO/DE/CR aggregates, but their `journal_entries` remain visible in `/entries` with origin/destination relations loaded via `withTrashed()` to preserve historical names.
+- **Concurrency**: the 5 mutation Actions (`RegisterIncome`/`Expense`/`CreditExpense`/`PayCreditAccount`/`RegisterTransfer`) load their account(s) with `lockForUpdate()` inside `DB::transaction()`. This serializes simultaneous requests on the same account and prevents race conditions that could leave negative balances. Multi-account Actions (`PayCreditAccount`, `RegisterTransfer`) acquire locks in ascending `id` order to avoid deadlocks.
 - The Bolsa account is created automatically by the `CreateUserBolsaAccount` listener when the `Registered` event fires. `DatabaseSeeder` is intentionally empty.
 - `tests/TestCase.php` exposes a `createUserWithBolsa()` helper that replicates what the listener does (creates user + Bolsa).
 
