@@ -71,3 +71,13 @@ export async function loginUI(page, { email, password }) {
   await page.getByRole('button', { name: /iniciar sesión|entrar|login/i }).click()
   await page.waitForURL('**/dashboard')
 }
+
+/**
+ * Atajo: registra + verifica + login. Termina con la sesión activa en el
+ * dashboard. Útil para specs cuyo foco no es la autenticación.
+ */
+export async function setupLoggedInUser(page, opts = {}) {
+  const user = await registerAndVerify(page, opts)
+  await loginUI(page, user)
+  return user
+}
