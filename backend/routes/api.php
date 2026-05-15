@@ -43,6 +43,7 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::get('/state', [FinanceController::class, 'state']);
     Route::get('/entries', [FinanceController::class, 'listEntries']);
     Route::patch('/entries/{id}', [FinanceController::class, 'updateEntry']);
+    Route::delete('/entries/{id}', [FinanceController::class, 'cancelEntry']);
 
     Route::get('/accounts', [FinanceController::class, 'listAccounts']);
     Route::post('/accounts', [FinanceController::class, 'createAccount']);

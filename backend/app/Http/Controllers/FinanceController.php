@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Finance\Actions\ArchiveCategory;
+use App\Domain\Finance\Actions\CancelJournalEntry;
 use App\Domain\Finance\Actions\CreateAccount;
 use App\Domain\Finance\Actions\CreateCategory;
 use App\Domain\Finance\Actions\DeleteAccount;
@@ -256,6 +257,13 @@ class FinanceController extends Controller
         $entry = UpdateJournalEntry::execute($request->user()->id, $id, $data);
 
         return response()->json(['entry' => $entry]);
+    }
+
+    public function cancelEntry(Request $request, string $id)
+    {
+        CancelJournalEntry::execute($request->user()->id, $id);
+
+        return response()->json(['message' => 'Movimiento cancelado']);
     }
 
     public function listCategories(Request $request)

@@ -1,15 +1,17 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
+import { useToastStore } from '@/stores/toast'
 import { financeApi } from '@/api/finance'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
+import BaseConfirm from '@/components/ui/BaseConfirm.vue'
 import CategoryBadge from '@/components/finance/CategoryBadge.vue'
 import EntryEditForm from '@/components/finance/EntryEditForm.vue'
-import { InboxIcon, ChevronLeftIcon, ChevronRightIcon, FunnelIcon, PencilSquareIcon } from '@heroicons/vue/24/outline'
+import { InboxIcon, ChevronLeftIcon, ChevronRightIcon, FunnelIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   // Si está presente, fija el filtro de cuenta a este id (UUID) y oculta el
@@ -21,6 +23,7 @@ const props = defineProps({
 })
 
 const finance = useFinanceStore()
+const toast = useToastStore()
 
 const KIND_LABELS = {
   income: 'Ingreso',
@@ -49,6 +52,8 @@ const filters = ref({
 })
 
 const editingEntry = ref(null)
+const cancellingEntry = ref(null)
+const cancellingState = ref(false)
 
 const page = ref(1)
 const data = ref({ data: [], current_page: 1, last_page: 1, total: 0, per_page: 25 })
@@ -148,6 +153,31 @@ function clearFilters() {
 
 async function onEditSuccess() {
   await fetchEntries()
+}
+
+async function confirmCancel() {
+  if (!cancellingEntry.value) return
+  const id = cancellingEntry.value.id
+  cancellingState.value = true
+  try {
+    await finance.cancelEntry(id)
+    toast.success('Movimiento cancelado')
+    cancellingEntry.value = null
+    await fetchEntries()
+  } catch (e) {
+    const status = e.response?.status
+    if (status === 404) {
+      // Otro tab ya lo canceló — sólo refrescamos.
+      toast.error('Ese movimiento ya no existe.')
+      cancellingEntry.value = null
+      await fetchEntries()
+    } else {
+      const payload = e.response?.data
+      toast.error(payload?.error ?? 'No se pudo cancelar el movimiento')
+    }
+  } finally {
+    cancellingState.value = false
+  }
 }
 
 function fmt(n) {
@@ -300,15 +330,26 @@ const hasActiveFilters = computed(
               {{ fmtDate(e.occurred_at) }}
             </td>
             <td class="px-2 py-3 text-right">
-              <button
-                type="button"
-                class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-accent)] hover:bg-[color:var(--color-surface-elevated)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] transition"
-                aria-label="Editar movimiento"
-                title="Editar categoría o descripción"
-                @click="editingEntry = e"
-              >
-                <PencilSquareIcon class="h-4 w-4" />
-              </button>
+              <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
+                <button
+                  type="button"
+                  class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-accent)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] transition"
+                  aria-label="Editar movimiento"
+                  title="Editar categoría o descripción"
+                  @click="editingEntry = e"
+                >
+                  <PencilSquareIcon class="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-negative)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-negative)] transition"
+                  aria-label="Cancelar movimiento"
+                  title="Cancelar este movimiento"
+                  @click="cancellingEntry = e"
+                >
+                  <TrashIcon class="h-4 w-4" />
+                </button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -360,5 +401,16 @@ const hasActiveFilters = computed(
         @success="onEditSuccess"
       />
     </BaseModal>
+
+    <BaseConfirm
+      :open="cancellingEntry !== null"
+      title="Cancelar movimiento"
+      message="El movimiento se eliminará del historial y el saldo de la cuenta se recalculará. Esta acción no se puede deshacer."
+      confirm-label="Cancelar movimiento"
+      variant="danger"
+      :loading="cancellingState"
+      @confirm="confirmCancel"
+      @cancel="cancellingEntry = null"
+    />
   </div>
 </template>

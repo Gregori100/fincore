@@ -12,6 +12,7 @@ export const financeApi = {
 
   entries: (params = {}) => client.get('/finance/entries', { params }),
   updateEntry: (id, payload) => client.patch(`/finance/entries/${id}`, payload),
+  cancelEntry: (id) => client.delete(`/finance/entries/${id}`),
 
   listCategories: ({ includeArchived = false, appliesTo = null } = {}) =>
     client.get('/finance/categories', {

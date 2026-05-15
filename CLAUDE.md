@@ -183,7 +183,7 @@ app/
 │   ├── User.php             # HasApiTokens, MustVerifyEmail, Notifiable; hasMany(Account)
 │   ├── Account.php          # constants TYPE_CASH/TYPE_DEBIT/TYPE_CREDIT + isCredit()/isCashLike()
 │   ├── Category.php         # APPLIES_INCOME/EXPENSE/BOTH; scopeForKind() + appliesToKind()
-│   └── JournalEntry.php     # KIND_* constants + relation category() (sin withTrashed)
+│   └── JournalEntry.php     # KIND_* constants + SoftDeletes + relation category() (sin withTrashed)
 └── Console/Commands/
     ├── Concerns/ResolvesUser.php            # Trait: resolves --user= flag for fin:* commands
     └── Fin*.php                             # All fin:* commands use the trait
@@ -218,6 +218,7 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | GET | `/finance/state` | sanctum + verified | BO/DE/CR + accounts + recent entries + categories |
 | GET | `/finance/entries` | sanctum + verified | Paginated entries (filtros `account_id`, `category_id`, `kind`, `from`, `to`) |
 | PATCH | `/finance/entries/{id}` | sanctum + verified | UpdateJournalEntry (sólo `category_id` y `description`) |
+| DELETE | `/finance/entries/{id}` | sanctum + verified | CancelJournalEntry (soft delete; sin reactivación; sin validación de negativos) |
 | GET | `/finance/accounts` | sanctum + verified | List accounts (acepta `?include_archived=1` para incluir soft-deleted) |
 | POST | `/finance/accounts` | sanctum + verified | CreateAccount (debit/credit, cash forbidden) |
 | PATCH | `/finance/accounts/{id}` | sanctum + verified | UpdateAccount |
@@ -277,6 +278,7 @@ All commands accept `--user=email` (optional if there's exactly one user; requir
 - `FinancialStateService` takes `string $userId` in its constructor. Both Actions (for validation) and `FinanceController` consume it. `getAccounts(bool $includeArchived = false)` permite cargar también las soft-deleteadas para `/accounts`.
 - Actions use `DB::transaction()` and throw domain exceptions on invalid state.
 - **Soft delete**: `Account` uses Laravel's `SoftDeletes` trait. `DeleteAccount` Action triggers soft delete (sets `deleted_at`), only allowed when `balance == 0`. Archived accounts don't appear in dashboard listings or BO/DE/CR aggregates, but their `journal_entries` remain visible in `/entries` with origin/destination relations loaded via `withTrashed()` to preserve historical names. **No existe reactivación**; las archivadas son read-only.
+- **Cancelación de movimientos**: `JournalEntry` también usa `SoftDeletes`. `CancelJournalEntry` Action marca `deleted_at`; el balance se ajusta automáticamente porque las queries de `FinancialStateService` respetan el scope global. Permite dejar saldos negativos (no se valida); el frontend muestra warning visual. Cancelar es terminal (sin reactivación) y bloquea futuras ediciones del entry (Eloquent lo oculta, `UpdateJournalEntry` lanza 404).
 - **Concurrency**: the 5 mutation Actions (`RegisterIncome`/`Expense`/`CreditExpense`/`PayCreditAccount`/`RegisterTransfer`) load their account(s) with `lockForUpdate()` inside `DB::transaction()`. This serializes simultaneous requests on the same account and prevents race conditions that could leave negative balances. Multi-account Actions (`PayCreditAccount`, `RegisterTransfer`) acquire locks in `strcmp`-ascending UUID order to avoid deadlocks.
 - The Bolsa account is created automatically by the `CreateUserBolsaAccount` listener when the `Registered` event fires. `DatabaseSeeder` is intentionally empty.
 - `tests/TestCase.php` exposes a `createUserWithBolsa()` helper that replicates what the listener does (creates user + Bolsa).

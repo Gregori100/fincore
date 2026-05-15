@@ -1,5 +1,7 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
   state: {
     type: Object,
     required: true,
@@ -13,6 +15,9 @@ function fmt(n) {
     maximumFractionDigits: 2,
   }).format(Number(n ?? 0))
 }
+
+// BO en rojo si está negativo: pasa cuando se cancela un ingreso ya gastado.
+const boIsNegative = computed(() => Number(props.state.bo) < 0)
 </script>
 
 <template>
@@ -23,11 +28,14 @@ function fmt(n) {
       <p class="text-[11px] font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]">
         Bolsa (BO)
       </p>
-      <p class="text-3xl font-semibold mt-2 tabular-nums tracking-tight text-[color:var(--color-positive)]">
+      <p
+        class="text-3xl font-semibold mt-2 tabular-nums tracking-tight"
+        :class="boIsNegative ? 'text-[color:var(--color-negative)]' : 'text-[color:var(--color-positive)]'"
+      >
         {{ fmt(state.bo) }}
       </p>
-      <p class="mt-1.5 text-xs text-[color:var(--color-text-muted)]">
-        Efectivo disponible
+      <p class="mt-1.5 text-xs" :class="boIsNegative ? 'text-[color:var(--color-negative)]' : 'text-[color:var(--color-text-muted)]'">
+        {{ boIsNegative ? 'Saldo negativo en alguna cuenta' : 'Efectivo disponible' }}
       </p>
     </article>
 

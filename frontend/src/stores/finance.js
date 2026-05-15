@@ -147,6 +147,11 @@ export const useFinanceStore = defineStore('finance', () => {
     await fetchState()
   }
 
+  async function cancelEntry(id) {
+    await financeApi.cancelEntry(id)
+    await fetchState()
+  }
+
   function reset() {
     state.value = { bo: 0, de: 0, cr: 0, burn_rate: 0, credit_usage_pct: 0 }
     accounts.value = []
@@ -183,6 +188,7 @@ export const useFinanceStore = defineStore('finance', () => {
     updateCategory,
     archiveCategory,
     updateEntry,
+    cancelEntry,
     reset,
   }
 })

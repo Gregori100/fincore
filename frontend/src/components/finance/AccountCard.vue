@@ -38,6 +38,10 @@ const typeColor = computed(() => {
 const isArchived = computed(() => Boolean(props.account.deleted_at))
 // Las archivadas son read-only: ni editar ni archivar de nuevo.
 const editable = computed(() => !props.account.is_protected && !isArchived.value)
+// Saldo negativo: en cash/debit indica que se gastó más de lo disponible
+// (usualmente porque se canceló un ingreso ya consumido). En credit, balance
+// negativo significa "pagaste de más" (overpaid), también raro pero se marca.
+const isNegative = computed(() => Number(props.account.balance ?? 0) < 0)
 </script>
 
 <template>
@@ -77,13 +81,19 @@ const editable = computed(() => !props.account.is_protected && !isArchived.value
             :title="'Cuenta protegida'"
           />
         </h3>
-        <p class="text-[10px] mt-0.5 uppercase tracking-[0.08em] font-semibold flex items-center gap-1.5" :class="typeColor">
+        <p class="text-[10px] mt-0.5 uppercase tracking-[0.08em] font-semibold flex items-center gap-1.5 flex-wrap" :class="typeColor">
           {{ typeLabel }}
           <span
             v-if="isArchived"
             class="ml-1 text-[10px] font-medium tracking-normal text-[color:var(--color-text-subtle)] bg-[color:var(--color-surface-elevated)] px-1.5 py-0.5 rounded"
           >
             archivada
+          </span>
+          <span
+            v-if="isNegative"
+            class="text-[10px] font-medium tracking-normal text-[color:var(--color-negative)] bg-[color:var(--color-negative)]/10 border border-[color:var(--color-negative)]/30 px-1.5 py-0.5 rounded normal-case"
+          >
+            saldo negativo
           </span>
         </p>
       </div>
@@ -113,7 +123,10 @@ const editable = computed(() => !props.account.is_protected && !isArchived.value
       </div>
     </header>
 
-    <p class="text-2xl font-semibold tabular-nums tracking-tight">
+    <p
+      class="text-2xl font-semibold tabular-nums tracking-tight"
+      :class="isNegative && 'text-[color:var(--color-negative)]'"
+    >
       {{ fmt(account.balance) }}
     </p>
 

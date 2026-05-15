@@ -141,4 +141,68 @@ test.describe('Movimientos', () => {
     await dialog.getByRole('button', { name: /pagar tarjeta/i }).click()
     await expect(page.locator('article').filter({ hasText: 'Deudas (DE)' })).toContainText('$500.00')
   })
+
+  test('cancelar un movimiento revierte el saldo', async ({ page }) => {
+    await setupLoggedInUser(page)
+
+    // Ingreso 5000 a Bolsa.
+    let dialog = await openDashboardForm(page, /^ingreso$/i)
+    await selectListbox(dialog, 'Cuenta destino', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('5000')
+    await dialog.getByRole('button', { name: /registrar ingreso/i }).click()
+
+    // Gasto 1500.
+    dialog = await openDashboardForm(page, /^gasto$/i)
+    await selectListbox(dialog, 'Cuenta origen', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('1500')
+    await dialog.getByLabel(/^descripción/i).fill('Compra a cancelar')
+    await dialog.getByRole('button', { name: /registrar gasto/i }).click()
+
+    await expect(page.locator('article').filter({ hasText: 'Bolsa (BO)' })).toContainText('$3,500.00')
+
+    // Ir a /entries y cancelar el gasto.
+    await page.goto('/entries')
+    const row = page.locator('tr', { hasText: 'Compra a cancelar' })
+    await row.hover()
+    await row.getByRole('button', { name: /cancelar movimiento/i }).click()
+
+    // Confirmar en el BaseConfirm (un botón "Cancelar movimiento" en el modal).
+    await page.getByRole('button', { name: /^cancelar movimiento$/i }).click()
+
+    // El gasto desapareció de la tabla.
+    await expect(page.getByText('Compra a cancelar')).toHaveCount(0)
+
+    // BO volvió a 5000.
+    await page.goto('/dashboard')
+    await expect(page.locator('article').filter({ hasText: 'Bolsa (BO)' })).toContainText('$5,000.00')
+  })
+
+  test('cancelar un ingreso ya gastado deja saldo negativo con badge', async ({ page }) => {
+    await setupLoggedInUser(page)
+
+    // Ingreso 1000 a Bolsa, gasto 500.
+    let dialog = await openDashboardForm(page, /^ingreso$/i)
+    await selectListbox(dialog, 'Cuenta destino', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('1000')
+    await dialog.getByLabel(/^descripción/i).fill('Ingreso a cancelar')
+    await dialog.getByRole('button', { name: /registrar ingreso/i }).click()
+
+    dialog = await openDashboardForm(page, /^gasto$/i)
+    await selectListbox(dialog, 'Cuenta origen', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('500')
+    await dialog.getByRole('button', { name: /registrar gasto/i }).click()
+
+    // Cancelar el ingreso.
+    await page.goto('/entries')
+    const row = page.locator('tr', { hasText: 'Ingreso a cancelar' })
+    await row.hover()
+    await row.getByRole('button', { name: /cancelar movimiento/i }).click()
+    await page.getByRole('button', { name: /^cancelar movimiento$/i }).click()
+
+    // En el dashboard, la Bolsa muestra balance negativo + badge.
+    await page.goto('/dashboard')
+    const bolsaCard = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Bolsa', level: 3 }) })
+    await expect(bolsaCard).toContainText('-$500.00')
+    await expect(bolsaCard.getByText(/saldo negativo/i)).toBeVisible()
+  })
 })
