@@ -20,4 +20,10 @@ Thumbs.db
 # Playwright MCP artefactos (snapshots, console logs de smoke tests)
 /.playwright-mcp/
 
+# Output de los E2E (test-results/, reportes HTML, traces). El código sí se commitea.
+/tests-e2e/test-results/
+/tests-e2e/playwright-report/
+/tests-e2e/blob-report/
+/tests-e2e/.playwright-cache/
+
 # Each subproject handles its own ignores via backend/.gitignore and frontend/.gitignore

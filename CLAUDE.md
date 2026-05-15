@@ -71,6 +71,21 @@ npm run dev       # http://localhost:5173
 npm run build
 ```
 
+### E2E tests (Playwright) — run from repo root
+
+Los tests E2E viven en `tests-e2e/` como tercer workspace npm. Apuntan al stack Docker en `localhost:5173` (frontend) + `localhost:83` (api) + `localhost:8025` (Mailpit) — **el stack tiene que estar arriba**.
+
+```bash
+npm install                           # instala Playwright vía workspaces
+cd tests-e2e && npx playwright install chromium   # solo la primera vez
+npm run test:e2e                      # corre toda la suite (workers=1)
+cd tests-e2e && npx playwright test --grep "logout"   # filtrar por nombre
+cd tests-e2e && npm run test:ui       # modo interactivo
+cd tests-e2e && npm run report        # abrir último reporte HTML
+```
+
+El `globalSetup` y un `beforeEach` por spec limpian el cache de Laravel (`php artisan cache:clear` vía `docker compose exec`) para evitar que `throttle:6,1` en `/auth/*` haga flaky a la suite. Cada test crea un usuario único con email `e2e-*@fincore.test` para no chocar con datos previos.
+
 ## Backend architecture (`backend/`)
 
 Full REST API reference in [`docs/api/`](./docs/api/README.md). This section gives the architectural overview.
