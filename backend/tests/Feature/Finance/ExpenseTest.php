@@ -2,14 +2,17 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Domain\Finance\Actions\CreateCategory;
 use App\Domain\Finance\Actions\PayCreditAccount;
 use App\Domain\Finance\Actions\RegisterCreditExpense;
 use App\Domain\Finance\Actions\RegisterExpense;
 use App\Domain\Finance\Actions\RegisterIncome;
 use App\Domain\Finance\Exceptions\InsufficientFunds;
+use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Domain\Finance\Exceptions\OverpayDebt;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
+use App\Models\Category;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -68,5 +71,29 @@ class ExpenseTest extends TestCase
 
         $this->assertEquals(0, $state->getBO());
         $this->assertEquals(0, $state->getAccountBalance($bolsa->id));
+    }
+
+    public function test_expense_with_expense_category_persists_link()
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $category = CreateCategory::execute($user->id, 'Comida X', Category::APPLIES_EXPENSE, 'orange', 'cake');
+
+        $entry = RegisterExpense::execute($user->id, $bolsa->id, 200, 'comida', $category->id);
+
+        $this->assertSame($category->id, $entry->category_id);
+    }
+
+    public function test_expense_rejects_income_only_category()
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $category = CreateCategory::execute($user->id, 'Salario X', Category::APPLIES_INCOME, 'green', 'briefcase');
+
+        $this->expectException(InvalidCategoryAppliesTo::class);
+
+        RegisterExpense::execute($user->id, $bolsa->id, 200, null, $category->id);
     }
 }

@@ -16,8 +16,9 @@ Flujo de auth detallado en [auth.md](./auth.md).
 |---------|------|-----|
 | **Auth** | `/api/auth/*` | [auth.md](./auth.md) |
 | **Accounts** | `/api/finance/accounts/*` | [accounts.md](./accounts.md) |
+| **Categories** | `/api/finance/categories/*` | [categories.md](./categories.md) |
 | **Finance operations** | `/api/finance/{income,expense,credit-expense,pay-credit,transfer}` | [finance.md](./finance.md) |
-| **Journal entries** | `/api/finance/entries` | [entries.md](./entries.md) |
+| **Journal entries** | `/api/finance/entries` (+ `PATCH /entries/{id}`) | [entries.md](./entries.md) |
 | **Estado financiero** | `/api/finance/state` | [finance.md](./finance.md#state) |
 
 ## Convenciones generales
@@ -69,6 +70,11 @@ Cuando una regla de negocio se viola (saldo insuficiente, sobre-pago, etc.):
 | `duplicate_account_name` | 422 | Ya tienes otra cuenta con ese nombre (case-insensitive, incluye archivadas) |
 | `account_not_empty` | 422 | No puedes archivar una cuenta con saldo o deuda pendiente |
 | `protected_account` | 409 | Cuenta protegida (la Bolsa no se puede modificar) |
+| `duplicate_category_name` | 422 | Ya tienes otra categoría con ese nombre |
+| `invalid_category_applies_to` | 422 | `applies_to` inválido, vacío, o incompatible con el `kind` del movimiento |
+| `invalid_color_slug` | 422 | Color fuera del catálogo permitido |
+| `invalid_icon_slug` | 422 | Icono fuera del catálogo permitido |
+| `immutable_journal_field` | 422 | Se intentó editar un campo no permitido en `PATCH /entries/{id}` |
 
 ### Autenticación faltante
 

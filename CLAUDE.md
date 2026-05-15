@@ -95,7 +95,8 @@ Full REST API reference in [`docs/api/`](./docs/api/README.md). This section giv
 Everything is scoped by `User`. Each user has:
 - One **Bolsa** (`Account` with `type=cash`, `is_protected=true`), created automatically at registration by the `CreateUserBolsaAccount` listener.
 - N additional `Account`s of type `debit` or `credit`.
-- M `JournalEntry`s connecting them.
+- N `Category`s (10 default creadas al registrarse por `CreateUserDefaultCategories`).
+- M `JournalEntry`s connecting them, opcionalmente categorizados.
 
 > **IDs**: `users.id`, `accounts.id` y `journal_entries.id` son **UUID v7** generados por `HasUuids` (Laravel 12), no seriales. La columna polimórfica `tokenable_id` de Sanctum también es UUID (via `uuidMorphs`). Las Actions, el `FinancialStateService` y `FinanceController` reciben `string $id`. El frontend trata los IDs como opacos.
 
@@ -106,6 +107,8 @@ An **Account** (`app/Models/Account.php`) has one of three types:
 - `credit` — credit cards with `credit_limit`, `closing_day`, `payment_day`, `interest_rate`, `minimum_payment_pct`. The metadata is stored but no alert/interest engine exists yet (Phase 2).
 
 Account también acepta un campo opcional `description` (texto libre, máx 200 caracteres). Es una anotación tipo "tarjeta principal · alias 1234"; se valida en `CreateAccount` / `UpdateAccount` (trim + max 200, cadena vacía → null) y se muestra en `/accounts/:uuid` del frontend.
+
+Una **Category** (`app/Models/Category.php`) tiene `name`, `applies_to` (`income` | `expense` | `both`), `color_slug` (1 de 10 colores curados) e `icon_slug` (1 de ~30 iconos curados). Usa `SoftDeletes` (archivable, sin reactivación). El catálogo de slugs vive en `app/Domain/Finance/Catalog/CategoryDefaults.php` — esos slugs son contrato compartido con el frontend (`frontend/src/constants/categoryCatalog.js`). Al archivar (soft delete) una categoría, los `JournalEntry` que la referencian conservan `category_id` en BD pero la relación `category()` devuelve null (no usa `withTrashed`), así el badge desaparece de la UI. Sólo `income`, `expense` y `credit_expense` aceptan categoría; `transfer` y `debt_payment` no.
 
 Each financial operation is a **JournalEntry** (`app/Models/JournalEntry.php`) with `account_origin_id` (where money leaves) and `account_destination_id` (where money lands). Either can be null:
 
@@ -154,6 +157,8 @@ app/
 │   │   ├── PayCreditAccount.php             # Validates funds at origin AND not overpaying credit
 │   │   └── RegisterTransfer.php             # cash/debit ↔ cash/debit only
 │   ├── Services/FinancialStateService.php   # Takes int $userId in constructor
+│   ├── Catalog/
+│   │   └── CategoryDefaults.php             # Slugs permitidos de COLORS/ICONS + lista DEFAULTS (10)
 │   └── Exceptions/
 │       ├── DomainException.php              # Base — renders to JSON {error, code}
 │       ├── InsufficientFunds.php            # 422
@@ -164,14 +169,21 @@ app/
 │       ├── InvalidCreditMetadata.php        # 422: closing_day == payment_day
 │       ├── DuplicateAccountName.php         # 422: nombre duplicado por user
 │       ├── AccountNotEmpty.php              # 422: archivar con saldo != 0
-│       └── ProtectedAccount.php             # 409
+│       ├── ProtectedAccount.php             # 409
+│       ├── DuplicateCategoryName.php        # 422: nombre duplicado de categoría
+│       ├── InvalidCategoryAppliesTo.php     # 422: applies_to inválido o incompatible con kind
+│       ├── InvalidColorSlug.php             # 422: color fuera del catálogo
+│       ├── InvalidIconSlug.php              # 422: icono fuera del catálogo
+│       └── ImmutableJournalField.php        # 422: campo no editable en PATCH /entries/{id}
 ├── Listeners/
-│   └── CreateUserBolsaAccount.php           # On Registered: creates the user's Bolsa
+│   ├── CreateUserBolsaAccount.php           # On Registered: creates the user's Bolsa
+│   └── CreateUserDefaultCategories.php      # On Registered: crea las 10 categorías default
 ├── Providers/AppServiceProvider.php          # Registers listener + custom reset URL
 ├── Models/
 │   ├── User.php             # HasApiTokens, MustVerifyEmail, Notifiable; hasMany(Account)
 │   ├── Account.php          # constants TYPE_CASH/TYPE_DEBIT/TYPE_CREDIT + isCredit()/isCashLike()
-│   └── JournalEntry.php     # KIND_* constants
+│   ├── Category.php         # APPLIES_INCOME/EXPENSE/BOTH; scopeForKind() + appliesToKind()
+│   └── JournalEntry.php     # KIND_* constants + relation category() (sin withTrashed)
 └── Console/Commands/
     ├── Concerns/ResolvesUser.php            # Trait: resolves --user= flag for fin:* commands
     └── Fin*.php                             # All fin:* commands use the trait
@@ -203,15 +215,20 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | POST | `/auth/logout` | sanctum | Revoke current token |
 | POST | `/auth/logout-all` | sanctum | Revoke all user tokens |
 | POST | `/auth/email/verification-notification` | sanctum | Resend verification email |
-| GET | `/finance/state` | sanctum + verified | BO/DE/CR + accounts + recent entries |
-| GET | `/finance/entries` | sanctum + verified | Paginated entries with filters |
+| GET | `/finance/state` | sanctum + verified | BO/DE/CR + accounts + recent entries + categories |
+| GET | `/finance/entries` | sanctum + verified | Paginated entries (filtros `account_id`, `category_id`, `kind`, `from`, `to`) |
+| PATCH | `/finance/entries/{id}` | sanctum + verified | UpdateJournalEntry (sólo `category_id` y `description`) |
 | GET | `/finance/accounts` | sanctum + verified | List accounts (acepta `?include_archived=1` para incluir soft-deleted) |
 | POST | `/finance/accounts` | sanctum + verified | CreateAccount (debit/credit, cash forbidden) |
 | PATCH | `/finance/accounts/{id}` | sanctum + verified | UpdateAccount |
 | DELETE | `/finance/accounts/{id}` | sanctum + verified | DeleteAccount |
-| POST | `/finance/income` | sanctum + verified | RegisterIncome |
-| POST | `/finance/expense` | sanctum + verified | RegisterExpense |
-| POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense |
+| GET | `/finance/categories` | sanctum + verified | List categories (acepta `?include_archived=1` y `?applies_to=income\|expense`) |
+| POST | `/finance/categories` | sanctum + verified | CreateCategory |
+| PATCH | `/finance/categories/{id}` | sanctum + verified | UpdateCategory |
+| DELETE | `/finance/categories/{id}` | sanctum + verified | ArchiveCategory (soft delete) |
+| POST | `/finance/income` | sanctum + verified | RegisterIncome (acepta `category_id` opcional) |
+| POST | `/finance/expense` | sanctum + verified | RegisterExpense (acepta `category_id` opcional) |
+| POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense (acepta `category_id` opcional) |
 | POST | `/finance/pay-credit` | sanctum + verified | PayCreditAccount |
 | POST | `/finance/transfer` | sanctum + verified | RegisterTransfer |
 
@@ -232,6 +249,11 @@ Domain exceptions extend `Domain\Finance\Exceptions\DomainException`, which prov
 | `DuplicateAccountName` | 422 | `duplicate_account_name` |
 | `AccountNotEmpty` | 422 | `account_not_empty` |
 | `ProtectedAccount` | 409 | `protected_account` |
+| `DuplicateCategoryName` | 422 | `duplicate_category_name` |
+| `InvalidCategoryAppliesTo` | 422 | `invalid_category_applies_to` |
+| `InvalidColorSlug` | 422 | `invalid_color_slug` |
+| `InvalidIconSlug` | 422 | `invalid_icon_slug` |
+| `ImmutableJournalField` | 422 | `immutable_journal_field` |
 
 Validation errors from `$request->validate()` still produce the standard Laravel 422 payload with `errors` keyed by field.
 
@@ -270,20 +292,25 @@ src/
 ├── api/
 │   ├── client.js       # Axios + interceptors (Bearer + 401 handler)
 │   ├── auth.js         # endpoints /api/auth/*
-│   └── finance.js      # endpoints /api/finance/*
+│   └── finance.js      # endpoints /api/finance/* (incluye categories + updateEntry)
 ├── stores/
 │   ├── auth.js         # token (useStorage), user, login/logout/register/fetchMe
-│   ├── finance.js      # state, accounts, recentEntries + mutaciones
+│   ├── finance.js      # state, accounts, recentEntries, categories + mutaciones + categoriesFor(kind)
 │   └── toast.js        # feedback global
+├── constants/
+│   └── categoryCatalog.js  # COLORS, ICONS (heroicons), iconBySlug, cssVarBySlug
 ├── router/             # rutas + beforeEach guard (requiresAuth/requiresGuest)
 ├── components/
-│   ├── layout/         # AppLayout (topbar con nav Dashboard/Cuentas/Movimientos) + AuthLayout (card)
-│   ├── ui/             # BaseButton, BaseInput, BaseTextarea, BaseSelect, BaseModal, ToastList
-│   └── finance/        # StateSummary, AccountCard, AccountList, RecentEntries, EntriesTable
-│                       # + 6 Forms (Account, Income, Expense, CreditExpense, PayCredit, Transfer)
+│   ├── layout/         # AppLayout (topbar Dashboard/Cuentas/Categorías/Movimientos) + AuthLayout
+│   ├── ui/             # BaseButton, BaseInput, BaseTextarea, BaseSelect, BaseModal, ToastList,
+│   │                   # BaseColorPicker, BaseIconPicker
+│   └── finance/        # StateSummary, AccountCard, AccountList, RecentEntries, EntriesTable,
+│                       # CategoryBadge, CategoryCard, EntryEditForm
+│                       # + Forms (Account, Income, Expense, CreditExpense, PayCredit, Transfer,
+│                       #          Category, CategoryEdit, AccountEdit)
 └── views/
     ├── auth/           # LoginView, RegisterView, EmailVerifiedView, ForgotPassword, ResetPassword
-    └── app/            # DashboardView, EntriesView, AccountsView, AccountDetailView
+    └── app/            # DashboardView, EntriesView, AccountsView, AccountDetailView, CategoriesView
 ```
 
 **Patrones clave**:

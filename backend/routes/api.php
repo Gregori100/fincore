@@ -42,11 +42,17 @@ Route::prefix('auth')->group(function () {
 Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(function () {
     Route::get('/state', [FinanceController::class, 'state']);
     Route::get('/entries', [FinanceController::class, 'listEntries']);
+    Route::patch('/entries/{id}', [FinanceController::class, 'updateEntry']);
 
     Route::get('/accounts', [FinanceController::class, 'listAccounts']);
     Route::post('/accounts', [FinanceController::class, 'createAccount']);
     Route::patch('/accounts/{id}', [FinanceController::class, 'updateAccount']);
     Route::delete('/accounts/{id}', [FinanceController::class, 'deleteAccount']);
+
+    Route::get('/categories', [FinanceController::class, 'listCategories']);
+    Route::post('/categories', [FinanceController::class, 'createCategory']);
+    Route::patch('/categories/{id}', [FinanceController::class, 'updateCategory']);
+    Route::delete('/categories/{id}', [FinanceController::class, 'archiveCategory']);
 
     Route::post('/income', [FinanceController::class, 'income']);
     Route::post('/expense', [FinanceController::class, 'expense']);

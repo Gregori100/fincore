@@ -43,6 +43,13 @@ async function handleLogout() {
               Mis cuentas
             </RouterLink>
             <RouterLink
+              :to="{ name: 'categories' }"
+              class="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition"
+              active-class="text-[color:var(--color-text-primary)]"
+            >
+              Categorías
+            </RouterLink>
+            <RouterLink
               :to="{ name: 'entries' }"
               class="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition"
               active-class="text-[color:var(--color-text-primary)]"

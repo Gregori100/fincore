@@ -15,11 +15,16 @@ const toast = useToastStore()
 const accountOptions = computed(() =>
   finance.cashAndDebitAccounts.map((a) => ({ value: a.id, label: a.name })),
 )
+const categoryOptions = computed(() => [
+  { value: null, label: 'Sin categorizar' },
+  ...finance.categoriesFor('income').map((c) => ({ value: c.id, label: c.name })),
+])
 
 const form = ref({
   account_id: accountOptions.value[0]?.value ?? null,
   amount: '',
   description: '',
+  category_id: null,
 })
 
 function validate() {
@@ -42,6 +47,7 @@ async function handleSubmit() {
       account_id: form.value.account_id,
       amount: Number(form.value.amount),
       description: form.value.description || null,
+      category_id: form.value.category_id,
     }),
   )
   if (result.ok) {
@@ -77,6 +83,11 @@ async function handleSubmit() {
       hint="Cantidad recibida (ej. sueldo, transferencia)"
       :error="errors.amount"
       required
+    />
+    <BaseSelect
+      v-model="form.category_id"
+      label="Categoría"
+      :options="categoryOptions"
     />
     <BaseInput
       v-model="form.description"

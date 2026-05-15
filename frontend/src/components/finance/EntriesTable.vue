@@ -6,7 +6,10 @@ import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
-import { InboxIcon, ChevronLeftIcon, ChevronRightIcon, FunnelIcon } from '@heroicons/vue/24/outline'
+import BaseModal from '@/components/ui/BaseModal.vue'
+import CategoryBadge from '@/components/finance/CategoryBadge.vue'
+import EntryEditForm from '@/components/finance/EntryEditForm.vue'
+import { InboxIcon, ChevronLeftIcon, ChevronRightIcon, FunnelIcon, PencilSquareIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
   // Si está presente, fija el filtro de cuenta a este id (UUID) y oculta el
@@ -39,10 +42,13 @@ const KIND_COLORS = {
 
 const filters = ref({
   account_id: null,
+  category_id: null,
   kind: null,
   from: '',
   to: '',
 })
+
+const editingEntry = ref(null)
 
 const page = ref(1)
 const data = ref({ data: [], current_page: 1, last_page: 1, total: 0, per_page: 25 })
@@ -58,6 +64,13 @@ const accountOptions = computed(() => [
   ...finance.accounts.map((a) => ({ value: a.id, label: a.name })),
 ])
 
+const categoryFilterOptions = computed(() => [
+  { value: null, label: 'Todas las categorías' },
+  ...finance.categories
+    .filter((c) => !c.deleted_at)
+    .map((c) => ({ value: c.id, label: c.name })),
+])
+
 const kindOptions = [
   { value: null, label: 'Todos los tipos' },
   ...Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label })),
@@ -71,6 +84,7 @@ async function fetchEntries() {
     // Si accountId está fijo (prop), prevalece sobre el filtro local.
     const effectiveAccountId = props.accountId ?? filters.value.account_id
     if (effectiveAccountId) params.account_id = effectiveAccountId
+    if (filters.value.category_id) params.category_id = filters.value.category_id
     if (filters.value.kind) params.kind = filters.value.kind
     if (filters.value.from) params.from = filters.value.from
     if (filters.value.to) params.to = filters.value.to
@@ -100,7 +114,13 @@ onMounted(async () => {
 
 // Reset a página 1 cada vez que cambia un filtro local.
 watch(
-  () => [filters.value.account_id, filters.value.kind, filters.value.from, filters.value.to],
+  () => [
+    filters.value.account_id,
+    filters.value.category_id,
+    filters.value.kind,
+    filters.value.from,
+    filters.value.to,
+  ],
   () => {
     page.value = 1
     fetchEntries()
@@ -123,7 +143,11 @@ function changePage(p) {
 }
 
 function clearFilters() {
-  filters.value = { account_id: null, kind: null, from: '', to: '' }
+  filters.value = { account_id: null, category_id: null, kind: null, from: '', to: '' }
+}
+
+async function onEditSuccess() {
+  await fetchEntries()
 }
 
 function fmt(n) {
@@ -148,6 +172,7 @@ function fmtDate(d) {
 const hasActiveFilters = computed(
   () =>
     filters.value.account_id !== null
+    || filters.value.category_id !== null
     || filters.value.kind !== null
     || filters.value.from
     || filters.value.to,
@@ -176,7 +201,7 @@ const hasActiveFilters = computed(
       </div>
       <div
         class="grid grid-cols-1 gap-3"
-        :class="showAccountSelector ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'"
+        :class="showAccountSelector ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-2 lg:grid-cols-4'"
       >
         <BaseSelect
           v-if="showAccountSelector"
@@ -184,6 +209,7 @@ const hasActiveFilters = computed(
           label="Cuenta"
           :options="accountOptions"
         />
+        <BaseSelect v-model="filters.category_id" label="Categoría" :options="categoryFilterOptions" />
         <BaseSelect v-model="filters.kind" label="Tipo" :options="kindOptions" />
         <BaseInput v-model="filters.from" type="date" label="Desde" />
         <BaseInput v-model="filters.to" type="date" label="Hasta" />
@@ -217,17 +243,19 @@ const hasActiveFilters = computed(
         <thead class="text-xs text-[color:var(--color-text-subtle)] uppercase tracking-[0.08em] border-b border-[color:var(--color-border)]">
           <tr>
             <th class="text-left px-4 py-3 font-semibold">Tipo</th>
+            <th class="text-left px-4 py-3 font-semibold hidden lg:table-cell">Categoría</th>
             <th class="text-left px-4 py-3 font-semibold">Movimiento</th>
             <th class="text-left px-4 py-3 font-semibold hidden md:table-cell">Descripción</th>
             <th class="text-right px-4 py-3 font-semibold">Monto</th>
             <th class="text-right px-4 py-3 font-semibold hidden sm:table-cell">Fecha</th>
+            <th class="w-10 px-2"></th>
           </tr>
         </thead>
         <tbody>
           <tr
             v-for="e in data.data"
             :key="e.id"
-            class="border-b border-[color:var(--color-border)] last:border-0 hover:bg-[color:var(--color-surface-elevated)]/40 transition-colors"
+            class="group border-b border-[color:var(--color-border)] last:border-0 hover:bg-[color:var(--color-surface-elevated)]/40 transition-colors"
           >
             <td class="px-4 py-3">
               <span
@@ -236,6 +264,10 @@ const hasActiveFilters = computed(
               >
                 {{ KIND_LABELS[e.kind] ?? e.kind }}
               </span>
+            </td>
+            <td class="px-4 py-3 hidden lg:table-cell">
+              <CategoryBadge v-if="e.category" :category="e.category" />
+              <span v-else class="text-[color:var(--color-text-subtle)]">—</span>
             </td>
             <td class="px-4 py-3">
               <span class="text-[color:var(--color-text-muted)]">
@@ -266,6 +298,17 @@ const hasActiveFilters = computed(
             </td>
             <td class="px-4 py-3 text-right text-xs text-[color:var(--color-text-subtle)] hidden sm:table-cell whitespace-nowrap">
               {{ fmtDate(e.occurred_at) }}
+            </td>
+            <td class="px-2 py-3 text-right">
+              <button
+                type="button"
+                class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-accent)] hover:bg-[color:var(--color-surface-elevated)] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] transition"
+                aria-label="Editar movimiento"
+                title="Editar categoría o descripción"
+                @click="editingEntry = e"
+              >
+                <PencilSquareIcon class="h-4 w-4" />
+              </button>
             </td>
           </tr>
         </tbody>
@@ -304,5 +347,18 @@ const hasActiveFilters = computed(
         </div>
       </footer>
     </section>
+
+    <BaseModal
+      :open="editingEntry !== null"
+      title="Editar movimiento"
+      @close="editingEntry = null"
+    >
+      <EntryEditForm
+        v-if="editingEntry"
+        :entry="editingEntry"
+        @close="editingEntry = null"
+        @success="onEditSuccess"
+      />
+    </BaseModal>
   </div>
 </template>

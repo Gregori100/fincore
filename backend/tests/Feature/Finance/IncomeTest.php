@@ -2,11 +2,14 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Domain\Finance\Actions\CreateCategory;
 use App\Domain\Finance\Actions\RegisterExpense;
 use App\Domain\Finance\Actions\RegisterIncome;
 use App\Domain\Finance\Exceptions\InsufficientFunds;
+use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
+use App\Models\Category;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -59,5 +62,38 @@ class IncomeTest extends TestCase
         $state = new FinancialStateService($user->id);
         $this->assertEquals(1500, $state->getAccountBalance($debit->id));
         $this->assertEquals(1500, $state->getBO());
+    }
+
+    public function test_income_with_income_category_persists_link()
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $category = CreateCategory::execute($user->id, 'Salario X', Category::APPLIES_INCOME, 'green', 'briefcase');
+
+        $entry = RegisterIncome::execute($user->id, $bolsa->id, 5000, 'Nómina', $category->id);
+
+        $this->assertSame($category->id, $entry->category_id);
+    }
+
+    public function test_income_rejects_expense_only_category()
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $category = CreateCategory::execute($user->id, 'Comida X', Category::APPLIES_EXPENSE, 'orange', 'cake');
+
+        $this->expectException(InvalidCategoryAppliesTo::class);
+
+        RegisterIncome::execute($user->id, $bolsa->id, 5000, null, $category->id);
+    }
+
+    public function test_income_accepts_both_category()
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $category = CreateCategory::execute($user->id, 'Reembolso X', Category::APPLIES_BOTH, 'indigo', 'credit-card');
+
+        $entry = RegisterIncome::execute($user->id, $bolsa->id, 300, null, $category->id);
+
+        $this->assertSame($category->id, $entry->category_id);
     }
 }

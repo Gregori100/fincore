@@ -12,6 +12,7 @@ export const useFinanceStore = defineStore('finance', () => {
   })
   const accounts = ref([])
   const recentEntries = ref([])
+  const categories = ref([])
   const loading = ref(false)
   // Mensaje de error de la última fetchState (red caída, 5xx, etc.).
   // 403/401 NO se guardan aquí: los maneja el interceptor / banner de email.
@@ -35,6 +36,17 @@ export const useFinanceStore = defineStore('finance', () => {
     accounts.value.filter((a) => a.type === 'credit'),
   )
 
+  /**
+   * Categorías compatibles con un kind (income | expense). Excluye archivadas.
+   * credit_expense usa el mismo set que expense.
+   */
+  function categoriesFor(kind) {
+    const semantic = kind === 'credit_expense' ? 'expense' : kind
+    return categories.value.filter(
+      (c) => !c.deleted_at && (c.applies_to === semantic || c.applies_to === 'both'),
+    )
+  }
+
   async function fetchState() {
     loading.value = true
     error.value = null
@@ -50,6 +62,7 @@ export const useFinanceStore = defineStore('finance', () => {
       }
       accounts.value = data.accounts ?? []
       recentEntries.value = data.recent_entries ?? []
+      categories.value = data.categories ?? []
     } catch (e) {
       errorStatus.value = e.response?.status ?? null
       // 401 lo maneja el interceptor (logout + redirect).
@@ -114,10 +127,31 @@ export const useFinanceStore = defineStore('finance', () => {
     markAffected([payload.origin_id, payload.destination_id])
   }
 
+  async function createCategory(payload) {
+    await financeApi.createCategory(payload)
+    await fetchState()
+  }
+
+  async function updateCategory(id, payload) {
+    await financeApi.updateCategory(id, payload)
+    await fetchState()
+  }
+
+  async function archiveCategory(id) {
+    await financeApi.archiveCategory(id)
+    await fetchState()
+  }
+
+  async function updateEntry(id, payload) {
+    await financeApi.updateEntry(id, payload)
+    await fetchState()
+  }
+
   function reset() {
     state.value = { bo: 0, de: 0, cr: 0, burn_rate: 0, credit_usage_pct: 0 }
     accounts.value = []
     recentEntries.value = []
+    categories.value = []
     error.value = null
     errorStatus.value = null
     lastAffectedAccountIds.value = new Set()
@@ -128,12 +162,14 @@ export const useFinanceStore = defineStore('finance', () => {
     state,
     accounts,
     recentEntries,
+    categories,
     loading,
     error,
     errorStatus,
     lastAffectedAccountIds,
     cashAndDebitAccounts,
     creditAccounts,
+    categoriesFor,
     fetchState,
     createAccount,
     updateAccount,
@@ -143,6 +179,10 @@ export const useFinanceStore = defineStore('finance', () => {
     registerCreditExpense,
     payCredit,
     transfer,
+    createCategory,
+    updateCategory,
+    archiveCategory,
+    updateEntry,
     reset,
   }
 })

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Finance\Actions\ArchiveCategory;
 use App\Domain\Finance\Actions\CreateAccount;
+use App\Domain\Finance\Actions\CreateCategory;
 use App\Domain\Finance\Actions\DeleteAccount;
 use App\Domain\Finance\Actions\PayCreditAccount;
 use App\Domain\Finance\Actions\RegisterCreditExpense;
@@ -10,6 +12,8 @@ use App\Domain\Finance\Actions\RegisterExpense;
 use App\Domain\Finance\Actions\RegisterIncome;
 use App\Domain\Finance\Actions\RegisterTransfer;
 use App\Domain\Finance\Actions\UpdateAccount;
+use App\Domain\Finance\Actions\UpdateCategory;
+use App\Domain\Finance\Actions\UpdateJournalEntry;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\JournalEntry;
 use Illuminate\Http\Request;
@@ -33,6 +37,7 @@ class FinanceController extends Controller
             'credit_usage_pct' => $state->getCreditUsagePercentage(),
             'accounts' => $state->getAccounts(),
             'recent_entries' => $state->getRecentEntries(),
+            'categories' => $state->getCategories(),
         ]);
     }
 
@@ -42,6 +47,7 @@ class FinanceController extends Controller
             'account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
+            'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
         ]);
 
         $entry = RegisterIncome::execute(
@@ -49,6 +55,7 @@ class FinanceController extends Controller
             $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
+            $data['category_id'] ?? null,
         );
 
         return response()->json(['message' => 'Ingreso registrado', 'entry' => $entry], 201);
@@ -60,6 +67,7 @@ class FinanceController extends Controller
             'account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
+            'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
         ]);
 
         $entry = RegisterExpense::execute(
@@ -67,6 +75,7 @@ class FinanceController extends Controller
             $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
+            $data['category_id'] ?? null,
         );
 
         return response()->json(['message' => 'Gasto registrado', 'entry' => $entry], 201);
@@ -78,6 +87,7 @@ class FinanceController extends Controller
             'account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
+            'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
         ]);
 
         $entry = RegisterCreditExpense::execute(
@@ -85,6 +95,7 @@ class FinanceController extends Controller
             $data['account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
+            $data['category_id'] ?? null,
         );
 
         return response()->json(['message' => 'Cargo a crédito registrado', 'entry' => $entry], 201);
@@ -195,13 +206,14 @@ class FinanceController extends Controller
     {
         $filters = $request->validate([
             'account_id' => 'sometimes|uuid|exists:accounts,id',
+            'category_id' => 'sometimes|uuid|exists:categories,id',
             'kind' => 'sometimes|in:income,expense,credit_expense,debt_payment,transfer,adjustment',
             'from' => 'sometimes|date',
             'to' => 'sometimes|date',
             'per_page' => 'sometimes|integer|min:1|max:200',
         ]);
 
-        $query = JournalEntry::with(['origin', 'destination'])
+        $query = JournalEntry::with(['origin', 'destination', 'category'])
             ->where('user_id', $request->user()->id)
             ->orderByDesc('occurred_at');
 
@@ -211,6 +223,10 @@ class FinanceController extends Controller
                 $q->where('account_origin_id', $id)
                     ->orWhere('account_destination_id', $id);
             });
+        }
+
+        if (isset($filters['category_id'])) {
+            $query->where('category_id', $filters['category_id']);
         }
 
         if (isset($filters['kind'])) {
@@ -228,5 +244,74 @@ class FinanceController extends Controller
         $perPage = (int) ($filters['per_page'] ?? 25);
 
         return response()->json($query->paginate($perPage));
+    }
+
+    public function updateEntry(Request $request, string $id)
+    {
+        $data = $request->validate([
+            'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
+            'description' => 'sometimes|nullable|string|max:200',
+        ]);
+
+        $entry = UpdateJournalEntry::execute($request->user()->id, $id, $data);
+
+        return response()->json(['entry' => $entry]);
+    }
+
+    public function listCategories(Request $request)
+    {
+        $includeArchived = $request->boolean('include_archived');
+        $appliesTo = $request->query('applies_to');
+
+        $categories = $this->service($request)->getCategories($includeArchived);
+
+        if ($appliesTo && in_array($appliesTo, ['income', 'expense'], true)) {
+            $categories = $categories->filter(
+                fn ($c) => $c->applies_to === $appliesTo || $c->applies_to === 'both',
+            )->values();
+        }
+
+        return response()->json(['categories' => $categories]);
+    }
+
+    public function createCategory(Request $request)
+    {
+        $data = $request->validate([
+            'name' => 'required|string|max:80',
+            'applies_to' => 'required|in:income,expense,both',
+            'color_slug' => 'required|string|max:30',
+            'icon_slug' => 'required|string|max:40',
+        ]);
+
+        $category = CreateCategory::execute(
+            $request->user()->id,
+            $data['name'],
+            $data['applies_to'],
+            $data['color_slug'],
+            $data['icon_slug'],
+        );
+
+        return response()->json(['category' => $category], 201);
+    }
+
+    public function updateCategory(Request $request, string $id)
+    {
+        $data = $request->validate([
+            'name' => 'sometimes|string|max:80',
+            'applies_to' => 'sometimes|in:income,expense,both',
+            'color_slug' => 'sometimes|string|max:30',
+            'icon_slug' => 'sometimes|string|max:40',
+        ]);
+
+        $category = UpdateCategory::execute($request->user()->id, $id, $data);
+
+        return response()->json(['category' => $category]);
+    }
+
+    public function archiveCategory(Request $request, string $id)
+    {
+        ArchiveCategory::execute($request->user()->id, $id);
+
+        return response()->json(['message' => 'Categoría archivada']);
     }
 }

@@ -26,6 +26,7 @@ class JournalEntry extends Model
         'account_origin_id',
         'account_destination_id',
         'description',
+        'category_id',
         'occurred_at',
     ];
 
@@ -53,5 +54,15 @@ class JournalEntry extends Model
     public function destination(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'account_destination_id')->withTrashed();
+    }
+
+    /**
+     * No usamos withTrashed: si la categoría se archiva, el badge desaparece de
+     * las tablas (el entry queda como "Sin categorizar" visualmente). El
+     * category_id sigue persistido por si la categoría se reactiva en el futuro.
+     */
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(Category::class);
     }
 }

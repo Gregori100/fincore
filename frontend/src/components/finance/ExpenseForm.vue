@@ -26,11 +26,16 @@ const accountOptions = computed(() =>
     sublabel: `Saldo: ${fmt(a.balance)}`,
   })),
 )
+const categoryOptions = computed(() => [
+  { value: null, label: 'Sin categorizar' },
+  ...finance.categoriesFor('expense').map((c) => ({ value: c.id, label: c.name })),
+])
 
 const form = ref({
   account_id: accountOptions.value[0]?.value ?? null,
   amount: '',
   description: '',
+  category_id: null,
 })
 
 const selectedAccount = computed(() =>
@@ -60,6 +65,7 @@ async function handleSubmit() {
       account_id: form.value.account_id,
       amount: Number(form.value.amount),
       description: form.value.description || null,
+      category_id: form.value.category_id,
     }),
   )
   if (result.ok) {
@@ -95,6 +101,11 @@ async function handleSubmit() {
       :hint="selectedAccount ? `Disponible: ${fmt(sourceBalance)}` : ''"
       :error="errors.amount"
       required
+    />
+    <BaseSelect
+      v-model="form.category_id"
+      label="Categoría"
+      :options="categoryOptions"
     />
     <BaseInput
       v-model="form.description"

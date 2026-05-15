@@ -1,5 +1,6 @@
 <script setup>
 import { InboxIcon } from '@heroicons/vue/24/outline'
+import CategoryBadge from '@/components/finance/CategoryBadge.vue'
 
 const KIND_LABELS = {
   income: 'Ingreso',
@@ -82,6 +83,11 @@ function fmtDate(d) {
               >
                 {{ KIND_LABELS[e.kind] ?? e.kind }}
               </span>
+              <CategoryBadge
+                v-if="e.category"
+                :category="e.category"
+                class="mt-1 max-w-full"
+              />
             </td>
             <td class="px-4 py-3">
               <div class="text-sm">

@@ -4,8 +4,10 @@ namespace App\Domain\Finance\Actions;
 
 use App\Domain\Finance\Exceptions\CreditLimitExceeded;
 use App\Domain\Finance\Exceptions\InvalidAccountType;
+use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
+use App\Models\Category;
 use App\Models\JournalEntry;
 use Illuminate\Support\Facades\DB;
 
@@ -16,8 +18,9 @@ class RegisterCreditExpense
         string $accountId,
         float $amount,
         ?string $description = null,
+        ?string $categoryId = null,
     ): JournalEntry {
-        return DB::transaction(function () use ($userId, $accountId, $amount, $description) {
+        return DB::transaction(function () use ($userId, $accountId, $amount, $description, $categoryId) {
             // lockForUpdate previene que dos cargos simultáneos sumen y excedan
             // el límite de crédito por race condition.
             $account = Account::where('id', $accountId)
@@ -37,6 +40,20 @@ class RegisterCreditExpense
                 throw new CreditLimitExceeded();
             }
 
+            // credit_expense semánticamente es un "gasto" — usa categorías de
+            // expense o both. Income no aplica.
+            if ($categoryId !== null) {
+                $category = Category::where('id', $categoryId)
+                    ->where('user_id', $userId)
+                    ->first();
+                if (! $category) {
+                    throw new InvalidCategoryAppliesTo('La categoría no existe o no te pertenece.');
+                }
+                if (! $category->appliesToKind(JournalEntry::KIND_EXPENSE)) {
+                    throw new InvalidCategoryAppliesTo();
+                }
+            }
+
             return JournalEntry::create([
                 'user_id' => $userId,
                 'kind' => JournalEntry::KIND_CREDIT_EXPENSE,
@@ -44,6 +61,7 @@ class RegisterCreditExpense
                 'account_origin_id' => $account->id,
                 'account_destination_id' => null,
                 'description' => $description,
+                'category_id' => $categoryId,
                 'occurred_at' => now(),
             ]);
         });

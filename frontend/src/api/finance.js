@@ -11,6 +11,18 @@ export const financeApi = {
   deleteAccount: (id) => client.delete(`/finance/accounts/${id}`),
 
   entries: (params = {}) => client.get('/finance/entries', { params }),
+  updateEntry: (id, payload) => client.patch(`/finance/entries/${id}`, payload),
+
+  listCategories: ({ includeArchived = false, appliesTo = null } = {}) =>
+    client.get('/finance/categories', {
+      params: {
+        ...(includeArchived ? { include_archived: 1 } : {}),
+        ...(appliesTo ? { applies_to: appliesTo } : {}),
+      },
+    }),
+  createCategory: (payload) => client.post('/finance/categories', payload),
+  updateCategory: (id, payload) => client.patch(`/finance/categories/${id}`, payload),
+  archiveCategory: (id) => client.delete(`/finance/categories/${id}`),
 
   income: (payload) => client.post('/finance/income', payload),
   expense: (payload) => client.post('/finance/expense', payload),

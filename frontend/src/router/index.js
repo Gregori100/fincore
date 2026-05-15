@@ -54,6 +54,12 @@ const routes = [
     component: () => import('@/views/app/AccountDetailView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/categories',
+    name: 'categories',
+    component: () => import('@/views/app/CategoriesView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/', redirect: { name: 'dashboard' } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
 ]

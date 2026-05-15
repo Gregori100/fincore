@@ -3,6 +3,7 @@
 namespace App\Domain\Finance\Services;
 
 use App\Models\Account;
+use App\Models\Category;
 use App\Models\JournalEntry;
 use Illuminate\Support\Collection;
 
@@ -87,10 +88,24 @@ class FinancialStateService
     public function getRecentEntries(int $limit = 10): Collection
     {
         return JournalEntry::where('user_id', $this->userId)
-            ->with(['origin', 'destination'])
+            ->with(['origin', 'destination', 'category'])
             ->orderByDesc('occurred_at')
             ->limit($limit)
             ->get();
+    }
+
+    /**
+     * Categorías del usuario. Por default sólo activas; includeArchived=true
+     * incluye soft-deleteadas para la vista /categories.
+     */
+    public function getCategories(bool $includeArchived = false): Collection
+    {
+        $query = Category::query()->where('user_id', $this->userId)->orderBy('name');
+        if ($includeArchived) {
+            $query->withTrashed();
+        }
+
+        return $query->get();
     }
 
     public function getMonthlyBurnRate(): float

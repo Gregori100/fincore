@@ -26,11 +26,17 @@ const accountOptions = computed(() =>
     sublabel: `Disponible: ${fmt(a.available_credit)}`,
   })),
 )
+// credit_expense semánticamente es un gasto: reusa categorías de expense + both.
+const categoryOptions = computed(() => [
+  { value: null, label: 'Sin categorizar' },
+  ...finance.categoriesFor('credit_expense').map((c) => ({ value: c.id, label: c.name })),
+])
 
 const form = ref({
   account_id: accountOptions.value[0]?.value ?? null,
   amount: '',
   description: '',
+  category_id: null,
 })
 
 const selectedCard = computed(() =>
@@ -62,6 +68,7 @@ async function handleSubmit() {
       account_id: form.value.account_id,
       amount: Number(form.value.amount),
       description: form.value.description || null,
+      category_id: form.value.category_id,
     }),
   )
   if (result.ok) {
@@ -103,6 +110,11 @@ async function handleSubmit() {
         :hint="selectedCard ? `Disponible: ${fmt(availableCredit)}` : ''"
         :error="errors.amount"
         required
+      />
+      <BaseSelect
+        v-model="form.category_id"
+        label="Categoría"
+        :options="categoryOptions"
       />
       <BaseInput
         v-model="form.description"
