@@ -207,4 +207,39 @@ test.describe('Reportes', () => {
     await expect(expenseTile).toContainText('$1,500.00')
     await expect(netTile).toContainText('$2,500.00')
   })
+
+  test('reporte de tarjetas muestra la deuda y el % usado tras un cargo', async ({ page }) => {
+    await setupLoggedInUser(page)
+
+    // Crear una tarjeta de crédito.
+    await page.goto('/accounts')
+    await page.getByRole('button', { name: /nueva cuenta/i }).click()
+    const acctDialog = page.getByRole('dialog')
+    await acctDialog.getByLabel(/^nombre/i).fill('Visa Oro')
+    await selectListbox(acctDialog, 'Tipo', /crédito/i)
+    await acctDialog.getByLabel(/^límite/i).fill('10000')
+    await acctDialog.getByRole('button', { name: /^crear cuenta$/i }).click()
+    await expect(page.getByRole('heading', { name: 'Visa Oro', level: 3 })).toBeVisible()
+
+    // Registrar un cargo de $2000 → utilization 20%.
+    await page.goto('/dashboard')
+    const dialog = await openDashboardForm(page, /^cargo crédito$/i)
+    await selectListbox(dialog, 'Tarjeta', /visa oro/i)
+    await dialog.getByLabel(/^monto/i).fill('2000')
+    await dialog.getByRole('button', { name: /cargar a tarjeta/i }).click()
+
+    // Ir al reporte de tarjetas.
+    await page.goto('/reports/credit-cards')
+    const card = page.locator('article').filter({ has: page.getByRole('heading', { name: 'Visa Oro' }) })
+    await expect(card).toContainText('$2,000.00')
+    await expect(card).toContainText('20.0%')
+  })
+
+  test('empty state cuando el user no tiene tarjetas', async ({ page }) => {
+    await setupLoggedInUser(page)
+    await page.goto('/reports/credit-cards')
+
+    await expect(page.getByText(/aún no tienes tarjetas/i)).toBeVisible()
+    await expect(page.getByRole('link', { name: /ir a mis cuentas/i })).toBeVisible()
+  })
 })

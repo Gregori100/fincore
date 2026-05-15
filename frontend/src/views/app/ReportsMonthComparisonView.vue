@@ -134,6 +134,13 @@ onMounted(async () => {
         >
           Comparativo
         </RouterLink>
+        <RouterLink
+          :to="{ name: 'reports-credit-cards' }"
+          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
+          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
+        >
+          Tarjetas
+        </RouterLink>
       </nav>
 
       <!-- Filtros -->

@@ -58,6 +58,7 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::get('/reports/by-category', [FinanceController::class, 'reportByCategory']);
     Route::get('/reports/cashflow-monthly', [FinanceController::class, 'reportCashflowMonthly']);
     Route::get('/reports/month-comparison', [FinanceController::class, 'reportMonthComparison']);
+    Route::get('/reports/credit-cards', [FinanceController::class, 'reportCreditCards']);
 
     Route::post('/income', [FinanceController::class, 'income']);
     Route::post('/expense', [FinanceController::class, 'expense']);

@@ -17,6 +17,7 @@ use App\Domain\Finance\Actions\UpdateCategory;
 use App\Domain\Finance\Actions\UpdateJournalEntry;
 use App\Domain\Finance\Reports\CashflowMonthlyReport;
 use App\Domain\Finance\Reports\CategoryBreakdownReport;
+use App\Domain\Finance\Reports\CreditCardsReport;
 use App\Domain\Finance\Reports\MonthlyComparisonReport;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\JournalEntry;
@@ -375,6 +376,13 @@ class FinanceController extends Controller
             $data['account_id'] ?? null,
             $data['month'],
         );
+
+        return response()->json($report);
+    }
+
+    public function reportCreditCards(Request $request)
+    {
+        $report = (new CreditCardsReport($request->user()->id))->generate();
 
         return response()->json($report);
     }

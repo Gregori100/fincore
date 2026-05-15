@@ -162,7 +162,8 @@ app/
 │   ├── Reports/
 │   │   ├── CategoryBreakdownReport.php      # Agrupa entries por category_id (con bucket "Sin categorizar")
 │   │   ├── CashflowMonthlyReport.php        # Ingresos vs egresos por mes (excluye transfer + debt_payment)
-│   │   └── MonthlyComparisonReport.php      # Compara mes actual vs anterior por categoría (reusa CategoryBreakdownReport)
+│   │   ├── MonthlyComparisonReport.php      # Compara mes actual vs anterior por categoría (reusa CategoryBreakdownReport)
+│   │   └── CreditCardsReport.php            # Estado actual por tarjeta: deuda, % usado, ciclos, pago mínimo estimado
 │   └── Exceptions/
 │       ├── DomainException.php              # Base — renders to JSON {error, code}
 │       ├── InsufficientFunds.php            # 422
@@ -234,6 +235,7 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | GET | `/finance/reports/by-category` | sanctum + verified | CategoryBreakdownReport (kind, from, to, account_id opcional) |
 | GET | `/finance/reports/cashflow-monthly` | sanctum + verified | CashflowMonthlyReport (from, to, account_id opcional). Sólo meses con actividad; el frontend rellena el resto. |
 | GET | `/finance/reports/month-comparison` | sanctum + verified | MonthlyComparisonReport (kind, month=YYYY-MM, account_id opcional). Devuelve buckets por categoría con delta y delta_pct (null si previous=0). |
+| GET | `/finance/reports/credit-cards` | sanctum + verified | CreditCardsReport. Sin parámetros. Devuelve por tarjeta: deuda, % usado, próximas fechas, ciclos y pago mínimo estimado. |
 | POST | `/finance/income` | sanctum + verified | RegisterIncome (acepta `category_id` opcional) |
 | POST | `/finance/expense` | sanctum + verified | RegisterExpense (acepta `category_id` opcional) |
 | POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense (acepta `category_id` opcional) |
@@ -320,7 +322,8 @@ src/
 └── views/
     ├── auth/           # LoginView, RegisterView, EmailVerifiedView, ForgotPassword, ResetPassword
     └── app/            # DashboardView, EntriesView, AccountsView, AccountDetailView, CategoriesView,
-                        # ReportsByCategoryView, ReportsCashflowView, ReportsMonthComparisonView (todas lazy-loaded)
+                        # ReportsByCategoryView, ReportsCashflowView, ReportsMonthComparisonView,
+                        # ReportsCreditCardsView (todas lazy-loaded)
 ```
 
 Los reportes viven en sub-rutas de `/reports/*` con un subnav inline (replicado en cada vista). Cada reporte es una vista independiente con su componente de chart correspondiente. La estructura backend en `Domain/Finance/Reports/` y el subnav del frontend permiten añadir nuevos reportes (tarjetas, proyecciones) replicando el patrón sin refactorizar.

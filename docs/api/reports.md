@@ -203,3 +203,76 @@ Se monta sobre `CategoryBreakdownReport`: hereda el comportamiento de `kind=expe
 curl "http://localhost/api/finance/reports/month-comparison?kind=expense&month=2026-05" \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+---
+
+## GET `/api/finance/reports/credit-cards`
+
+Devuelve el estado actual de cada tarjeta de crédito activa del usuario: deuda, % de utilización, próximas fechas de corte/pago y totales del ciclo en curso y del último ciclo cerrado.
+
+Pensado como **stepping stone hacia la Fase 2** (motor real de intereses y notificaciones). Los cálculos centrales viven aquí; el motor completo de saldo arrastrado e intereses moratorios queda para esa fase.
+
+### Query parameters
+
+Sin parámetros. La respuesta cubre siempre todas las tarjetas activas del usuario autenticado.
+
+### Response 200
+
+```json
+{
+  "cards": [
+    {
+      "id": "019e2899-...",
+      "name": "Visa Oro",
+      "balance": 4000.00,
+      "credit_limit": 30000.00,
+      "available": 26000.00,
+      "utilization_pct": 13.33,
+      "closing_day": 15,
+      "payment_day": 5,
+      "interest_rate": 0.0367,
+      "minimum_payment_pct": 0.05,
+      "next_closing_date": "2026-06-15",
+      "days_to_closing": 24,
+      "next_payment_date": "2026-06-05",
+      "days_to_payment": 14,
+      "current_cycle": {
+        "from": "2026-05-16",
+        "to": "2026-05-22",
+        "charges_total": 500.00,
+        "charges_count": 1
+      },
+      "last_cycle": {
+        "from": "2026-04-16",
+        "to": "2026-05-15",
+        "charges_total": 1000.00,
+        "charges_count": 2
+      },
+      "minimum_payment_estimated": 50.00
+    }
+  ]
+}
+```
+
+### Comportamiento clave
+
+- **Orden**: cards ordenadas por `utilization_pct` descendente (las más comprometidas arriba). Empate por nombre.
+- **Tarjetas archivadas** quedan fuera.
+- **Cargos cancelados** quedan fuera (scope global de `SoftDeletes`).
+- **Definición del ciclo**: si hoy ya pasó el `closing_day` del mes, el ciclo en curso empieza al día siguiente del corte de este mes; si aún no llega, empieza al día siguiente del corte del mes anterior. El último ciclo cerrado termina justo en el `closing_day` previo al inicio del ciclo en curso.
+- **Pago mínimo estimado** = total de cargos del **último ciclo cerrado** × `minimum_payment_pct`. Aproximación; no incluye saldo arrastrado ni intereses.
+
+### Edge cases — metadatos incompletos
+
+- `closing_day = null` → `next_closing_date`, `days_to_closing`, `current_cycle`, `last_cycle` y `minimum_payment_estimated` son `null`.
+- `payment_day = null` → `next_payment_date` y `days_to_payment` son `null`.
+- `minimum_payment_pct = null` → `minimum_payment_estimated` es `null`.
+
+El frontend renderiza estos campos como "no configurado" con CTA al detalle de la cuenta para editar.
+
+### Ejemplo
+
+```bash
+curl "http://localhost/api/finance/reports/credit-cards" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
