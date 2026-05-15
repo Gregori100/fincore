@@ -57,6 +57,20 @@ export function formatYearMonth(ym) {
   return `${SHORT_MONTHS_ES[m - 1]} ${String(y).slice(-2)}`
 }
 
+/** Devuelve `YYYY-MM` del mes actual. */
+export function currentYearMonth() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** Devuelve el `YYYY-MM` del mes inmediato anterior al ym pasado. */
+export function previousYearMonth(ym) {
+  const [y, m] = ym.split('-').map((s) => parseInt(s, 10))
+  // m - 1 (índice 0) - 1 (mes anterior) = m - 2. Date normaliza overflow.
+  const date = new Date(y, m - 2, 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 /**
  * Rellena con ceros los meses faltantes entre `from` y `to`. Recibe los rows
  * del backend (sólo meses con actividad) y devuelve la serie continua para

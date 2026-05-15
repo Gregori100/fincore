@@ -137,6 +137,13 @@ onMounted(async () => {
         >
           Cashflow
         </RouterLink>
+        <RouterLink
+          :to="{ name: 'reports-month-comparison' }"
+          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
+          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
+        >
+          Comparativo
+        </RouterLink>
       </nav>
 
       <!-- Toolbar de filtros -->

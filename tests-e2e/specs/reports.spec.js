@@ -143,6 +143,45 @@ test.describe('Reportes', () => {
     await expect(page).toHaveURL(/\/reports\/by-category/)
   })
 
+  test('subnav navega a /reports/month-comparison', async ({ page }) => {
+    await setupLoggedInUser(page)
+    await page.goto('/reports')
+
+    await page.getByRole('link', { name: /^comparativo$/i }).click()
+    await expect(page).toHaveURL(/\/reports\/month-comparison/)
+    await expect(page.getByRole('heading', { name: 'Reportes' })).toBeVisible()
+  })
+
+  test('comparativo muestra delta entre mes actual y mes pasado', async ({ page }) => {
+    await setupLoggedInUser(page)
+
+    // Sólo registramos en el mes actual; el pasado queda en 0.
+    let dialog = await openDashboardForm(page, /^ingreso$/i)
+    await selectListbox(dialog, 'Cuenta destino', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('3000')
+    await dialog.getByRole('button', { name: /registrar ingreso/i }).click()
+
+    dialog = await openDashboardForm(page, /^gasto$/i)
+    await selectListbox(dialog, 'Cuenta origen', /bolsa/i)
+    await selectListbox(dialog, 'Categoría', /comida/i)
+    await dialog.getByLabel(/^monto/i).fill('500')
+    await dialog.getByRole('button', { name: /registrar gasto/i }).click()
+
+    await page.goto('/reports/month-comparison')
+
+    // El delta refleja el total del mes actual (mes pasado = 0).
+    // Hay dos tiles que contienen "Delta": el de monto absoluto y el de "Cambio"
+    // que también dice "vs ...". Usamos exact match en el h2/p del label.
+    const deltaTile = page.locator('article', {
+      has: page.getByText('Delta', { exact: true }),
+    })
+    await expect(deltaTile).toContainText('+$500.00')
+
+    // La categoría "Comida" aparece como nueva (sin previous).
+    await expect(page.getByText('Comida').first()).toBeVisible()
+    await expect(page.getByText(/nueva/i).first()).toBeVisible()
+  })
+
   test('cashflow muestra totales del mes con ingreso y egreso', async ({ page }) => {
     await setupLoggedInUser(page)
 

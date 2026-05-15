@@ -17,6 +17,7 @@ use App\Domain\Finance\Actions\UpdateCategory;
 use App\Domain\Finance\Actions\UpdateJournalEntry;
 use App\Domain\Finance\Reports\CashflowMonthlyReport;
 use App\Domain\Finance\Reports\CategoryBreakdownReport;
+use App\Domain\Finance\Reports\MonthlyComparisonReport;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\JournalEntry;
 use Illuminate\Http\Request;
@@ -356,6 +357,23 @@ class FinanceController extends Controller
             $data['from'],
             $data['to'],
             $data['account_id'] ?? null,
+        );
+
+        return response()->json($report);
+    }
+
+    public function reportMonthComparison(Request $request)
+    {
+        $data = $request->validate([
+            'kind' => 'required|in:income,expense',
+            'month' => ['required', 'regex:/^\d{4}-\d{2}$/'],
+            'account_id' => 'sometimes|nullable|uuid|exists:accounts,id',
+        ]);
+
+        $report = (new MonthlyComparisonReport($request->user()->id))->generate(
+            $data['kind'],
+            $data['account_id'] ?? null,
+            $data['month'],
         );
 
         return response()->json($report);

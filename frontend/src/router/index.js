@@ -76,6 +76,12 @@ const routes = [
     component: () => import('@/views/app/ReportsCashflowView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/reports/month-comparison',
+    name: 'reports-month-comparison',
+    component: () => import('@/views/app/ReportsMonthComparisonView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/', redirect: { name: 'dashboard' } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
 ]

@@ -122,3 +122,84 @@ Agrega ingresos vs egresos del usuario por mes dentro de un rango. Pensado para 
 curl "http://localhost/api/finance/reports/cashflow-monthly?from=2025-06-01&to=2026-05-31" \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+---
+
+## GET `/api/finance/reports/month-comparison`
+
+Compara totales y categorías del mes pedido contra el mes inmediato anterior. Devuelve para cada categoría que tuvo actividad en cualquiera de los dos meses los montos `current`, `previous`, y los deltas absoluto y porcentual.
+
+Se monta sobre `CategoryBreakdownReport`: hereda el comportamiento de `kind=expense` (incluye `expense + credit_expense`), bucket "Sin categorizar", scope per user, exclusión de cancelados, y nombres preservados de categorías archivadas.
+
+### Query parameters
+
+| Parámetro | Tipo | Required | Notas |
+|-----------|------|----------|-------|
+| `kind` | `expense` \| `income` | sí | Igual que en `/by-category`. |
+| `month` | string `YYYY-MM` | sí | Mes "actual" del comparativo. El backend calcula el anterior. |
+| `account_id` | UUID | no | Filtra al lado relevante según el kind (igual que `/by-category`). |
+
+### Response 200
+
+```json
+{
+  "current_month": "2026-05",
+  "previous_month": "2026-04",
+  "current_total": 2000.00,
+  "previous_total": 1600.00,
+  "delta": 400.00,
+  "delta_pct": 25.0,
+  "buckets": [
+    {
+      "category_id": "019e2899-aa11-...",
+      "name": "Comida",
+      "color_slug": "orange",
+      "icon_slug": "shopping-bag",
+      "current": 1200.00,
+      "previous": 1000.00,
+      "delta": 200.00,
+      "delta_pct": 20.0
+    },
+    {
+      "category_id": "019e2899-bb22-...",
+      "name": "Entretenimiento",
+      "color_slug": "purple",
+      "icon_slug": "film",
+      "current": 500.00,
+      "previous": 0,
+      "delta": 500.00,
+      "delta_pct": null
+    },
+    {
+      "category_id": "019e2899-cc33-...",
+      "name": "Salud",
+      "color_slug": "red",
+      "icon_slug": "heart",
+      "current": 0,
+      "previous": 200.00,
+      "delta": -200.00,
+      "delta_pct": -100.0
+    }
+  ]
+}
+```
+
+### Comportamiento clave
+
+- **`delta_pct = null`** cuando `previous = 0`. Matemáticamente indefinido; el frontend lo muestra como badge "nueva".
+- **`current = 0`** y `previous > 0`: la categoría "desapareció" este mes. El frontend muestra badge "sin actividad este mes".
+- Los buckets vienen ordenados por **|delta|** descendente: la categoría que más cambió aparece primero.
+- Si ambos meses están vacíos, `buckets` queda en `[]` y todos los totales en 0.
+
+### Errores
+
+| Status | Cuándo |
+|--------|--------|
+| 422 | `kind` inválido, `month` no cumple regex `YYYY-MM`, `account_id` inexistente |
+
+### Ejemplo
+
+```bash
+curl "http://localhost/api/finance/reports/month-comparison?kind=expense&month=2026-05" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
