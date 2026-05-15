@@ -17,6 +17,7 @@ Flujo de auth detallado en [auth.md](./auth.md).
 | **Auth** | `/api/auth/*` | [auth.md](./auth.md) |
 | **Accounts** | `/api/finance/accounts/*` | [accounts.md](./accounts.md) |
 | **Categories** | `/api/finance/categories/*` | [categories.md](./categories.md) |
+| **Reports** | `/api/finance/reports/*` | [reports.md](./reports.md) |
 | **Finance operations** | `/api/finance/{income,expense,credit-expense,pay-credit,transfer}` | [finance.md](./finance.md) |
 | **Journal entries** | `/api/finance/entries` (+ `PATCH /entries/{id}`) | [entries.md](./entries.md) |
 | **Estado financiero** | `/api/finance/state` | [finance.md](./finance.md#state) |

@@ -25,5 +25,8 @@ Thumbs.db
 /tests-e2e/playwright-report/
 /tests-e2e/blob-report/
 /tests-e2e/.playwright-cache/
+# Si por accidente Playwright se corre desde la raíz, crea test-results/ aquí.
+/test-results/
+/playwright-report/
 
 # Each subproject handles its own ignores via backend/.gitignore and frontend/.gitignore

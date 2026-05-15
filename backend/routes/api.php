@@ -55,6 +55,8 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::patch('/categories/{id}', [FinanceController::class, 'updateCategory']);
     Route::delete('/categories/{id}', [FinanceController::class, 'archiveCategory']);
 
+    Route::get('/reports/by-category', [FinanceController::class, 'reportByCategory']);
+
     Route::post('/income', [FinanceController::class, 'income']);
     Route::post('/expense', [FinanceController::class, 'expense']);
     Route::post('/credit-expense', [FinanceController::class, 'creditExpense']);

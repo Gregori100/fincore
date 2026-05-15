@@ -159,6 +159,8 @@ app/
 │   ├── Services/FinancialStateService.php   # Takes int $userId in constructor
 │   ├── Catalog/
 │   │   └── CategoryDefaults.php             # Slugs permitidos de COLORS/ICONS + lista DEFAULTS (10)
+│   ├── Reports/
+│   │   └── CategoryBreakdownReport.php      # Agrupa entries por category_id (con bucket "Sin categorizar")
 │   └── Exceptions/
 │       ├── DomainException.php              # Base — renders to JSON {error, code}
 │       ├── InsufficientFunds.php            # 422
@@ -227,6 +229,7 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | POST | `/finance/categories` | sanctum + verified | CreateCategory |
 | PATCH | `/finance/categories/{id}` | sanctum + verified | UpdateCategory |
 | DELETE | `/finance/categories/{id}` | sanctum + verified | ArchiveCategory (soft delete) |
+| GET | `/finance/reports/by-category` | sanctum + verified | CategoryBreakdownReport (kind, from, to, account_id opcional) |
 | POST | `/finance/income` | sanctum + verified | RegisterIncome (acepta `category_id` opcional) |
 | POST | `/finance/expense` | sanctum + verified | RegisterExpense (acepta `category_id` opcional) |
 | POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense (acepta `category_id` opcional) |
@@ -312,8 +315,11 @@ src/
 │                       #          Category, CategoryEdit, AccountEdit)
 └── views/
     ├── auth/           # LoginView, RegisterView, EmailVerifiedView, ForgotPassword, ResetPassword
-    └── app/            # DashboardView, EntriesView, AccountsView, AccountDetailView, CategoriesView
+    └── app/            # DashboardView, EntriesView, AccountsView, AccountDetailView, CategoriesView,
+                        # ReportsView (lazy-loaded, incluye chart.js)
 ```
+
+`ReportsView` está pensado para crecer: hoy contiene un solo reporte (gasto/ingreso por categoría) pero la estructura backend (`Domain/Finance/Reports/`) y la vista permiten añadir nuevos reportes (cashflow, tarjetas, proyecciones) sin reabrir.
 
 **Patrones clave**:
 - Token persistido en `localStorage` vía `useStorage` de `@vueuse/core`.

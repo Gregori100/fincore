@@ -15,6 +15,7 @@ use App\Domain\Finance\Actions\RegisterTransfer;
 use App\Domain\Finance\Actions\UpdateAccount;
 use App\Domain\Finance\Actions\UpdateCategory;
 use App\Domain\Finance\Actions\UpdateJournalEntry;
+use App\Domain\Finance\Reports\CategoryBreakdownReport;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\JournalEntry;
 use Illuminate\Http\Request;
@@ -321,5 +322,24 @@ class FinanceController extends Controller
         ArchiveCategory::execute($request->user()->id, $id);
 
         return response()->json(['message' => 'Categoría archivada']);
+    }
+
+    public function reportByCategory(Request $request)
+    {
+        $data = $request->validate([
+            'kind' => 'required|in:income,expense',
+            'from' => 'required|date',
+            'to' => 'required|date|after_or_equal:from',
+            'account_id' => 'sometimes|nullable|uuid|exists:accounts,id',
+        ]);
+
+        $report = (new CategoryBreakdownReport($request->user()->id))->generate(
+            $data['kind'],
+            $data['account_id'] ?? null,
+            $data['from'],
+            $data['to'],
+        );
+
+        return response()->json($report);
     }
 }

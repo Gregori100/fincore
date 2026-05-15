@@ -25,6 +25,8 @@ export const financeApi = {
   updateCategory: (id, payload) => client.patch(`/finance/categories/${id}`, payload),
   archiveCategory: (id) => client.delete(`/finance/categories/${id}`),
 
+  reportByCategory: (params) => client.get('/finance/reports/by-category', { params }),
+
   income: (payload) => client.post('/finance/income', payload),
   expense: (payload) => client.post('/finance/expense', payload),
   creditExpense: (payload) => client.post('/finance/credit-expense', payload),
