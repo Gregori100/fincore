@@ -43,7 +43,16 @@ client.interceptors.response.use(
     const isAuthRequest = url.includes('/auth/login') || url.includes('/auth/register')
 
     if (status === 401 && !isAuthRequest && authStoreFactory) {
+      // Capturamos si realmente había sesión antes del clear: distingue entre
+      // "el token expiró" (queremos avisar) y "request sin auth" (no hay nada que avisar).
+      const hadToken = !!authStoreFactory().token
       authStoreFactory().clear()
+      if (hadToken && toastStoreFactory) {
+        toastStoreFactory().error(
+          'Tu sesión expiró. Inicia sesión nuevamente.',
+          { timeout: 6000 },
+        )
+      }
       if (routerInstance) {
         routerInstance.push({ name: 'login' })
       }
