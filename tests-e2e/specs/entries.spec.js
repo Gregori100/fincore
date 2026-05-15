@@ -1,17 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { setupLoggedInUser } from '../fixtures/auth.js'
 import { clearLaravelCache } from '../helpers/backend.js'
-
-/**
- * Selecciona una opción de un BaseSelect (Headless UI Listbox).
- * Su <label> no tiene `for=`, por eso no podemos usar getByLabel — buscamos
- * el button cuya inmediato sibling es el label con el texto pedido.
- */
-async function selectListbox(scope, labelText, optionRegex) {
-  const labelEl = scope.getByText(labelText, { exact: false }).first()
-  await labelEl.locator('..').getByRole('button').first().click()
-  await scope.page().getByRole('option', { name: optionRegex }).first().click()
-}
+import { selectListbox } from '../helpers/locators.js'
 
 /**
  * Abre el modal del dashboard correspondiente al kind y devuelve su locator.

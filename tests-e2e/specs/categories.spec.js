@@ -1,17 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { setupLoggedInUser } from '../fixtures/auth.js'
 import { clearLaravelCache } from '../helpers/backend.js'
-
-/**
- * Helper para seleccionar de un BaseSelect (Headless UI Listbox) por label.
- * El <label> no usa `for=`, así que buscamos el div contenedor con el texto
- * exacto del label y disparamos el button.
- */
-async function selectListbox(scope, labelText, optionRegex) {
-  const labelEl = scope.getByText(labelText, { exact: false }).first()
-  await labelEl.locator('..').getByRole('button').first().click()
-  await scope.page().getByRole('option', { name: optionRegex }).first().click()
-}
+import { selectListbox } from '../helpers/locators.js'
 
 test.describe('Categorías', () => {
   test.beforeEach(() => {

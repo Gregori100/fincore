@@ -1,17 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { setupLoggedInUser } from '../fixtures/auth.js'
 import { clearLaravelCache } from '../helpers/backend.js'
-
-async function selectListbox(scope, labelText, optionRegex) {
-  // Boundary regex para evitar matchear textos como "Mis cuentas" del topbar
-  // cuando buscamos "Cuenta". Acepta "Cuenta" o "Cuenta *" (required).
-  const labelRegex = new RegExp(`^\\s*${labelText}(\\s*\\*)?\\s*$`)
-  const labelEl = scope.getByText(labelRegex).first()
-  await labelEl.locator('..').getByRole('button').first().click()
-  // scope puede ser Page o Locator. Page no tiene .page(); Locator sí.
-  const page = typeof scope.page === 'function' ? scope.page() : scope
-  await page.getByRole('option', { name: optionRegex }).first().click()
-}
+import { selectListbox } from '../helpers/locators.js'
 
 async function openDashboardForm(page, buttonName) {
   await page.getByRole('button', { name: buttonName }).click()

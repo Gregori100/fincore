@@ -6,6 +6,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import MonthComparisonList from '@/components/finance/MonthComparisonList.vue'
+import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { currentYearMonth, formatYearMonth, previousYearMonth } from '@/utils/dates'
 import { ArrowsRightLeftIcon } from '@heroicons/vue/24/outline'
 
@@ -111,37 +112,7 @@ onMounted(async () => {
         </RouterLink>
       </header>
 
-      <!-- Subnav entre reportes (3 tabs) -->
-      <nav class="flex items-center gap-2 text-sm border-b border-[color:var(--color-border)] pb-2">
-        <RouterLink
-          :to="{ name: 'reports-by-category' }"
-          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
-        >
-          Por categoría
-        </RouterLink>
-        <RouterLink
-          :to="{ name: 'reports-cashflow' }"
-          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
-        >
-          Cashflow
-        </RouterLink>
-        <RouterLink
-          :to="{ name: 'reports-month-comparison' }"
-          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
-        >
-          Comparativo
-        </RouterLink>
-        <RouterLink
-          :to="{ name: 'reports-credit-cards' }"
-          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
-          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
-        >
-          Tarjetas
-        </RouterLink>
-      </nav>
+      <ReportsSubnav />
 
       <!-- Filtros -->
       <section class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-4 space-y-4">
