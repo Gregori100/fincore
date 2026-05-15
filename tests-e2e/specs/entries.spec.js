@@ -177,6 +177,30 @@ test.describe('Movimientos', () => {
     await expect(page.locator('article').filter({ hasText: 'Bolsa (BO)' })).toContainText('$5,000.00')
   })
 
+  test('se puede registrar un movimiento desde /entries usando el menú', async ({ page }) => {
+    await setupLoggedInUser(page)
+
+    // Fondear desde el dashboard primero.
+    let dialog = await openDashboardForm(page, /^ingreso$/i)
+    await selectListbox(dialog, 'Cuenta destino', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('2000')
+    await dialog.getByRole('button', { name: /registrar ingreso/i }).click()
+
+    // Ir a /entries y registrar un gasto desde el menú "Nuevo movimiento".
+    await page.goto('/entries')
+    await page.getByRole('button', { name: /nuevo movimiento/i }).click()
+    await page.getByRole('menuitem', { name: /^gasto$/i }).click()
+
+    dialog = page.getByRole('dialog')
+    await selectListbox(dialog, 'Cuenta origen', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('350')
+    await dialog.getByLabel(/^descripción/i).fill('Compra desde entries')
+    await dialog.getByRole('button', { name: /registrar gasto/i }).click()
+
+    // La nueva entry aparece en la tabla sin recargar.
+    await expect(page.getByText('Compra desde entries')).toBeVisible()
+  })
+
   test('cancelar un ingreso ya gastado deja saldo negativo con badge', async ({ page }) => {
     await setupLoggedInUser(page)
 
