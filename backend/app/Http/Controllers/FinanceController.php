@@ -15,6 +15,7 @@ use App\Domain\Finance\Actions\RegisterTransfer;
 use App\Domain\Finance\Actions\UpdateAccount;
 use App\Domain\Finance\Actions\UpdateCategory;
 use App\Domain\Finance\Actions\UpdateJournalEntry;
+use App\Domain\Finance\Reports\CashflowMonthlyReport;
 use App\Domain\Finance\Reports\CategoryBreakdownReport;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\JournalEntry;
@@ -338,6 +339,23 @@ class FinanceController extends Controller
             $data['account_id'] ?? null,
             $data['from'],
             $data['to'],
+        );
+
+        return response()->json($report);
+    }
+
+    public function reportCashflowMonthly(Request $request)
+    {
+        $data = $request->validate([
+            'from' => 'required|date',
+            'to' => 'required|date|after_or_equal:from',
+            'account_id' => 'sometimes|nullable|uuid|exists:accounts,id',
+        ]);
+
+        $report = (new CashflowMonthlyReport($request->user()->id))->generate(
+            $data['from'],
+            $data['to'],
+            $data['account_id'] ?? null,
         );
 
         return response()->json($report);

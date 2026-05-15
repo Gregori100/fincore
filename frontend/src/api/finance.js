@@ -26,6 +26,7 @@ export const financeApi = {
   archiveCategory: (id) => client.delete(`/finance/categories/${id}`),
 
   reportByCategory: (params) => client.get('/finance/reports/by-category', { params }),
+  reportCashflowMonthly: (params) => client.get('/finance/reports/cashflow-monthly', { params }),
 
   income: (payload) => client.post('/finance/income', payload),
   expense: (payload) => client.post('/finance/expense', payload),

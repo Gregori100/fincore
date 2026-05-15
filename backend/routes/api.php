@@ -56,6 +56,7 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::delete('/categories/{id}', [FinanceController::class, 'archiveCategory']);
 
     Route::get('/reports/by-category', [FinanceController::class, 'reportByCategory']);
+    Route::get('/reports/cashflow-monthly', [FinanceController::class, 'reportCashflowMonthly']);
 
     Route::post('/income', [FinanceController::class, 'income']);
     Route::post('/expense', [FinanceController::class, 'expense']);

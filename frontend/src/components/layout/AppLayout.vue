@@ -50,7 +50,7 @@ async function handleLogout() {
               Categorías
             </RouterLink>
             <RouterLink
-              :to="{ name: 'reports' }"
+              :to="{ name: 'reports-by-category' }"
               class="text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)] transition"
               active-class="text-[color:var(--color-text-primary)]"
             >

@@ -62,8 +62,18 @@ const routes = [
   },
   {
     path: '/reports',
-    name: 'reports',
-    component: () => import('@/views/app/ReportsView.vue'),
+    redirect: { name: 'reports-by-category' },
+  },
+  {
+    path: '/reports/by-category',
+    name: 'reports-by-category',
+    component: () => import('@/views/app/ReportsByCategoryView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/reports/cashflow',
+    name: 'reports-cashflow',
+    component: () => import('@/views/app/ReportsCashflowView.vue'),
     meta: { requiresAuth: true },
   },
   { path: '/', redirect: { name: 'dashboard' } },

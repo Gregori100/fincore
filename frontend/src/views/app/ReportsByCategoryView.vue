@@ -106,11 +106,11 @@ onMounted(async () => {
 <template>
   <AppLayout>
     <div class="space-y-6">
-      <header class="flex items-center justify-between">
+      <header class="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 class="text-xl font-semibold tracking-tight">Reportes</h2>
           <p class="text-sm text-[color:var(--color-text-muted)] mt-0.5">
-            Análisis por categoría en un rango configurable
+            Distribución de gastos o ingresos por categoría
           </p>
         </div>
         <RouterLink
@@ -120,6 +120,24 @@ onMounted(async () => {
           ← Dashboard
         </RouterLink>
       </header>
+
+      <!-- Subnav entre reportes -->
+      <nav class="flex items-center gap-2 text-sm border-b border-[color:var(--color-border)] pb-2">
+        <RouterLink
+          :to="{ name: 'reports-by-category' }"
+          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
+          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
+        >
+          Por categoría
+        </RouterLink>
+        <RouterLink
+          :to="{ name: 'reports-cashflow' }"
+          class="px-3 py-1.5 rounded-md transition text-[color:var(--color-text-muted)] hover:text-[color:var(--color-text-primary)]"
+          active-class="bg-[color:var(--color-surface-elevated)] text-[color:var(--color-text-primary)]"
+        >
+          Cashflow
+        </RouterLink>
+      </nav>
 
       <!-- Toolbar de filtros -->
       <section class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-4 space-y-4">

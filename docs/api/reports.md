@@ -71,3 +71,54 @@ Agrupa los movimientos del usuario por categoría dentro de un rango de fechas. 
 curl "http://localhost/api/finance/reports/by-category?kind=expense&from=2026-05-01&to=2026-05-31" \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+---
+
+## GET `/api/finance/reports/cashflow-monthly`
+
+Agrega ingresos vs egresos del usuario por mes dentro de un rango. Pensado para alimentar un gráfico de barras pareadas + línea de ahorro neto.
+
+### Query parameters
+
+| Parámetro | Tipo | Required | Notas |
+|-----------|------|----------|-------|
+| `from` | date `YYYY-MM-DD` | sí | Inclusivo. |
+| `to` | date `YYYY-MM-DD` | sí | Inclusivo (compara hasta `to 23:59:59`). Debe ser `>= from`. |
+| `account_id` | UUID | no | Filtra entries donde la cuenta sea origen O destino (cubre ambos lados del flujo). |
+
+### Response 200
+
+```json
+{
+  "months": [
+    { "year_month": "2026-03", "income": 5000.00, "expense": 2100.00, "net": 2900.00 },
+    { "year_month": "2026-04", "income": 5200.00, "expense": 1850.00, "net": 3350.00 },
+    { "year_month": "2026-05", "income": 4000.00, "expense": 1500.00, "net": 2500.00 }
+  ],
+  "total_income": 14200.00,
+  "total_expense": 5450.00,
+  "total_net": 8750.00
+}
+```
+
+### Comportamiento
+
+- **Solo meses con actividad** se devuelven en `months`. El frontend rellena los meses vacíos con `{ income: 0, expense: 0, net: 0 }` para mantener una serie continua de N elementos.
+- **`income`** = `SUM(amount)` donde `kind = 'income'`.
+- **`expense`** = `SUM(amount)` donde `kind IN ('expense', 'credit_expense')`. El cargo a tarjeta cuenta como egreso aunque sea diferido.
+- **`transfer` y `debt_payment` se excluyen**: son flujos internos entre cuentas propias y no afectan el patrimonio neto del usuario.
+- **Entries cancelados** quedan fuera (scope global de `SoftDeletes`).
+- **Scope**: sólo entries del usuario autenticado.
+
+### Errores
+
+| Status | Cuándo |
+|--------|--------|
+| 422 | Fechas mal formadas, `to < from`, o `account_id` inexistente |
+
+### Ejemplo
+
+```bash
+curl "http://localhost/api/finance/reports/cashflow-monthly?from=2025-06-01&to=2026-05-31" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```

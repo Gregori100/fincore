@@ -125,4 +125,47 @@ test.describe('Reportes', () => {
     await selectListbox(page, 'Cuenta', /bolsa/i)
     await expect(totalTile).toContainText('$400.00')
   })
+
+  test('navegación entre tabs by-category y cashflow', async ({ page }) => {
+    await setupLoggedInUser(page)
+    await page.goto('/reports')
+
+    // Default redirige a /reports/by-category.
+    await expect(page).toHaveURL(/\/reports\/by-category/)
+
+    // Click en la tab "Cashflow" cambia la URL.
+    await page.getByRole('link', { name: /^cashflow$/i }).click()
+    await expect(page).toHaveURL(/\/reports\/cashflow/)
+    await expect(page.getByRole('heading', { name: 'Reportes' })).toBeVisible()
+
+    // Volver a "Por categoría".
+    await page.getByRole('link', { name: /^por categor/i }).click()
+    await expect(page).toHaveURL(/\/reports\/by-category/)
+  })
+
+  test('cashflow muestra totales del mes con ingreso y egreso', async ({ page }) => {
+    await setupLoggedInUser(page)
+
+    // Ingreso 4000 + gasto 1500 en el mes actual.
+    let dialog = await openDashboardForm(page, /^ingreso$/i)
+    await selectListbox(dialog, 'Cuenta destino', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('4000')
+    await dialog.getByRole('button', { name: /registrar ingreso/i }).click()
+
+    dialog = await openDashboardForm(page, /^gasto$/i)
+    await selectListbox(dialog, 'Cuenta origen', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('1500')
+    await dialog.getByRole('button', { name: /registrar gasto/i }).click()
+
+    await page.goto('/reports/cashflow')
+
+    // Hero refleja los totales agregados de los últimos 12 meses.
+    const incomeTile = page.locator('article').filter({ hasText: 'Total ingresos' })
+    const expenseTile = page.locator('article').filter({ hasText: 'Total egresos' })
+    const netTile = page.locator('article').filter({ hasText: 'Ahorro neto' })
+
+    await expect(incomeTile).toContainText('$4,000.00')
+    await expect(expenseTile).toContainText('$1,500.00')
+    await expect(netTile).toContainText('$2,500.00')
+  })
 })
