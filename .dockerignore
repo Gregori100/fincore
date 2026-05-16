@@ -1,0 +1,55 @@
+# El build context se envía al daemon de Docker — recortar lo que no usa la imagen
+# final acelera builds y evita filtrar archivos locales (env, caches, IDE).
+
+# Dependencias instaladas (las stages las generan desde scratch).
+**/node_modules
+**/vendor
+
+# Outputs locales que el stage de build regenera.
+frontend/dist
+backend/public/build
+backend/public/hot
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+!backend/storage/framework/cache/.gitignore
+!backend/storage/framework/sessions/.gitignore
+!backend/storage/framework/views/.gitignore
+!backend/storage/logs/.gitignore
+
+# Variables locales — los secrets entran vía `fly secrets`, no dentro de la imagen.
+.env
+.env.*
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+!**/.env.example
+!**/.env.production.example
+
+# Caches y artefactos de tests/CI que no aportan al runtime.
+.git
+.gitignore
+.github
+.vscode
+.idea
+.zed
+.fleet
+.editorconfig
+.gitattributes
+.phpunit.result.cache
+backend/.phpunit.result.cache
+test-results
+tests-e2e
+playwright-report
+.playwright-mcp
+
+# Sail / dev-only.
+backend/Dockerfile.dev
+backend/docker
+
+# Docs no necesarias en runtime; las dejo afuera para builds chicos.
+docs
+README.md
+CLAUDE.md

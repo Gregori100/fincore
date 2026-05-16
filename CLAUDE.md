@@ -356,3 +356,15 @@ Backend uses Sail's default entrypoint (`start-container` → `supervisord` as r
 - `backend/.env` — Laravel runtime config inside the container (APP_KEY, mail, cache, etc.). Template: `backend/.env.example`.
 
 `scripts/install.sh` bootstraps both files and autodetects free host ports — if `APP_PORT=80`, `FORWARD_DB_PORT=5432`, etc., are already in use, it writes the next free port instead. `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` are duplicated on purpose between the two `.env` files: the root one is used by the Postgres container at init time, the backend one is what Laravel uses to connect — they must match.
+
+## Deploy a producción (Fly.io)
+
+Guía completa en [`docs/deploy.md`](./docs/deploy.md). Resumen del setup:
+
+- **Una sola app Fly** (`fincore`) sirve SPA + API desde el mismo origen vía `Dockerfile` multi-stage (Node frontend → Composer vendor → `serversideup/php:8.4-fpm-nginx-alpine`). nginx rutea `/api` y `/up` a PHP-FPM; el resto cae al SPA con fallback a `index.html`. Cero CORS.
+- **Postgres en otra app Fly** (`fincore-db`) sin puertos públicos; se accede por `fincore-db.internal` desde la red 6PN privada. Config en `db/fly.toml`.
+- **Sin Redis en prod**: `SESSION_DRIVER=database` (tabla `sessions`), `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`. Una infra menos que mantener.
+- **SMTP**: Resend (`smtp.resend.com:465`). API key en `MAIL_PASSWORD` (secret).
+- **TrustProxies** activo en `bootstrap/app.php` para respetar los `X-Forwarded-*` que inyecta el proxy de Fly y generar URLs HTTPS correctas.
+- **Build local de la imagen**: `docker build -t fincore:test .` desde la raíz (usa `.dockerignore` para no inflar el contexto).
+- **Deploy**: `fly deploy` desde local (~2 min con cache); el `docker/entrypoint.sh` corre `migrate --force` antes de levantar nginx.

@@ -1,0 +1,83 @@
+# fly.toml — App principal de FinCore (backend Laravel + SPA Vue servidos por
+# el mismo contenedor, vía nginx + php-fpm).
+#
+# Reemplazar `app` con el slug real que asigna `fly launch`. Los valores en
+# [env] son no-secretos; los sensibles (APP_KEY, DB creds, MAIL_PASSWORD)
+# entran con `fly secrets set` y NO viven en este archivo.
+
+app = "fincore"
+primary_region = "qro"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_NAME = "fincore"
+  APP_ENV = "production"
+  APP_DEBUG = "false"
+  APP_URL = "https://fincore.fly.dev"
+  FRONTEND_URL = "https://fincore.fly.dev"
+  APP_LOCALE = "en"
+  APP_FALLBACK_LOCALE = "en"
+  APP_MAINTENANCE_DRIVER = "file"
+  LOG_CHANNEL = "stderr"
+  LOG_LEVEL = "info"
+  BCRYPT_ROUNDS = "12"
+
+  # Sin Redis en producción: sessions a Postgres, cache a disco, queue sync.
+  SESSION_DRIVER = "database"
+  SESSION_LIFETIME = "120"
+  SESSION_ENCRYPT = "false"
+  SESSION_PATH = "/"
+  CACHE_STORE = "file"
+  QUEUE_CONNECTION = "sync"
+  BROADCAST_CONNECTION = "log"
+  FILESYSTEM_DISK = "local"
+
+  # Postgres en otra app de Fly (db/fly.toml). El host .internal resuelve por
+  # DNS interno de la red 6PN; no hace falta abrir puertos a internet.
+  DB_CONNECTION = "pgsql"
+  DB_HOST = "fincore-db.internal"
+  DB_PORT = "5432"
+  DB_DATABASE = "fincore"
+
+  # SMTP de Resend. El relay habla TLS implícito en :465.
+  MAIL_MAILER = "smtp"
+  MAIL_HOST = "smtp.resend.com"
+  MAIL_PORT = "465"
+  MAIL_ENCRYPTION = "ssl"
+  MAIL_USERNAME = "resend"
+  MAIL_FROM_ADDRESS = "noreply@fincore.fly.dev"
+  MAIL_FROM_NAME = "fincore"
+
+# Storage persistente: Laravel escribe logs, cache compilado y eventualmente
+# uploads del usuario aquí. Si la VM se reinicia, los datos sobreviven.
+[[mounts]]
+  source = "fincore_storage"
+  destination = "/var/www/html/storage"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 200
+    soft_limit = 100
+
+# Healthcheck contra /up que ya expone Laravel via `health: '/up'` en
+# bootstrap/app.php. Le da a Fly una señal limpia de "la app responde".
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/up"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
