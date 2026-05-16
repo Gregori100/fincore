@@ -11,6 +11,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseConfirm from '@/components/ui/BaseConfirm.vue'
 import CategoryBadge from '@/components/finance/CategoryBadge.vue'
 import EntryEditForm from '@/components/finance/EntryEditForm.vue'
+import { firstDayOfMonth, lastDayOfMonth } from '@/utils/dates'
 import { InboxIcon, ChevronLeftIcon, ChevronRightIcon, FunnelIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -43,12 +44,17 @@ const KIND_COLORS = {
   adjustment: 'text-[color:var(--color-text-muted)] bg-[color:var(--color-surface-elevated)]',
 }
 
+// Rango por default: mes en curso. El usuario rara vez quiere "toda la historia"
+// como punto de partida; ver el mes actual es lo más común y se ajusta a mano.
+const DEFAULT_FROM = firstDayOfMonth()
+const DEFAULT_TO = lastDayOfMonth()
+
 const filters = ref({
   account_id: null,
   category_id: null,
   kind: null,
-  from: '',
-  to: '',
+  from: DEFAULT_FROM,
+  to: DEFAULT_TO,
 })
 
 const editingEntry = ref(null)
@@ -148,7 +154,15 @@ function changePage(p) {
 }
 
 function clearFilters() {
-  filters.value = { account_id: null, category_id: null, kind: null, from: '', to: '' }
+  // "Limpiar" vuelve al rango default (mes en curso), no a vacío. Si el usuario
+  // realmente quiere ver toda la historia, borra a mano los inputs de fecha.
+  filters.value = {
+    account_id: null,
+    category_id: null,
+    kind: null,
+    from: DEFAULT_FROM,
+    to: DEFAULT_TO,
+  }
 }
 
 async function onEditSuccess() {
@@ -204,8 +218,8 @@ const hasActiveFilters = computed(
     filters.value.account_id !== null
     || filters.value.category_id !== null
     || filters.value.kind !== null
-    || filters.value.from
-    || filters.value.to,
+    || filters.value.from !== DEFAULT_FROM
+    || filters.value.to !== DEFAULT_TO,
 )
 </script>
 
