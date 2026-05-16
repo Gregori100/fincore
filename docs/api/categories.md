@@ -16,6 +16,7 @@ Cada usuario recibe **10 categorías default** al registrarse (creadas por el li
 | `applies_to` | enum: `income` \| `expense` \| `both` | Filtra los formularios donde aparece |
 | `color_slug` | string | 1 de 10 colores curados (ver abajo) |
 | `icon_slug` | string | 1 de ~30 iconos curados (ver abajo) |
+| `monthly_limit` | decimal(12,2) \| null | Tope mensual de gasto (opcional). Sólo aplica a `expense`/`both`; en `income` se persiste pero no se usa en reportes. Ver [reports.md](./reports.md#get-apifinancereportsbudgets). |
 | `deleted_at` | timestamp \| null | Soft delete (sin reactivación) |
 | `created_at`, `updated_at` | timestamp | — |
 

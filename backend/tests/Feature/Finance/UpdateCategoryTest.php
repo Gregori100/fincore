@@ -114,4 +114,36 @@ class UpdateCategoryTest extends TestCase
         $this->assertSame('Editada', $updated->name);
         $this->assertSame($user->id, $updated->user_id);
     }
+
+    public function test_updates_monthly_limit(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $category = CreateCategory::execute($user->id, 'Comida X', Category::APPLIES_EXPENSE, 'orange', 'cake');
+
+        $updated = UpdateCategory::execute($user->id, $category->id, ['monthly_limit' => 2000]);
+
+        $this->assertEquals(2000, (float) $updated->monthly_limit);
+    }
+
+    public function test_can_clear_monthly_limit_with_null(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $category = CreateCategory::execute(
+            $user->id, 'Comida X', Category::APPLIES_EXPENSE, 'orange', 'cake', 1500
+        );
+
+        $updated = UpdateCategory::execute($user->id, $category->id, ['monthly_limit' => null]);
+
+        $this->assertNull($updated->monthly_limit);
+    }
+
+    public function test_rejects_negative_monthly_limit_on_update(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $category = CreateCategory::execute($user->id, 'X', Category::APPLIES_EXPENSE, 'orange', 'cake');
+
+        $this->expectException(InvalidCategoryAppliesTo::class);
+
+        UpdateCategory::execute($user->id, $category->id, ['monthly_limit' => -50]);
+    }
 }

@@ -107,4 +107,33 @@ class CreateCategoryTest extends TestCase
 
         CreateCategory::execute($user->id, 'X', Category::APPLIES_EXPENSE, 'orange', 'rocket-ship');
     }
+
+    public function test_persists_monthly_limit_when_provided(): void
+    {
+        $user = $this->createUserWithBolsa();
+
+        $category = CreateCategory::execute(
+            $user->id, 'Comida X', Category::APPLIES_EXPENSE, 'orange', 'cake', 2500.50
+        );
+
+        $this->assertEquals(2500.50, (float) $category->monthly_limit);
+    }
+
+    public function test_monthly_limit_is_null_by_default(): void
+    {
+        $user = $this->createUserWithBolsa();
+
+        $category = CreateCategory::execute($user->id, 'X', Category::APPLIES_EXPENSE, 'orange', 'cake');
+
+        $this->assertNull($category->monthly_limit);
+    }
+
+    public function test_rejects_negative_monthly_limit(): void
+    {
+        $user = $this->createUserWithBolsa();
+
+        $this->expectException(InvalidCategoryAppliesTo::class);
+
+        CreateCategory::execute($user->id, 'X', Category::APPLIES_EXPENSE, 'orange', 'cake', -100);
+    }
 }

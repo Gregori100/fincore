@@ -10,6 +10,7 @@ const tabs = [
   { name: 'reports-cashflow', label: 'Cashflow' },
   { name: 'reports-month-comparison', label: 'Comparativo' },
   { name: 'reports-credit-cards', label: 'Tarjetas' },
+  { name: 'reports-budgets', label: 'Presupuestos' },
 ]
 </script>
 

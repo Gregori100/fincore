@@ -232,4 +232,55 @@ test.describe('Reportes', () => {
     await expect(page.getByText(/aún no tienes tarjetas/i)).toBeVisible()
     await expect(page.getByRole('link', { name: /ir a mis cuentas/i })).toBeVisible()
   })
+
+  test('presupuestos: configurar límite y ver progreso tras gastos', async ({ page }) => {
+    await setupLoggedInUser(page)
+
+    // Fondear Bolsa para que los gastos no fallen por saldo.
+    await page.goto('/dashboard')
+    let dialog = await openDashboardForm(page, /^ingreso$/i)
+    await selectListbox(dialog, 'Cuenta destino', /bolsa/i)
+    await dialog.getByLabel(/^monto/i).fill('10000')
+    await dialog.getByRole('button', { name: /registrar ingreso/i }).click()
+
+    // Editar "Comida" para añadirle un límite mensual.
+    await page.goto('/categories')
+    const comidaCard = page.locator('article').filter({
+      has: page.getByRole('heading', { name: 'Comida' }),
+    })
+    await comidaCard.hover()
+    await comidaCard.getByRole('button', { name: /editar categoría/i }).click()
+
+    const editDialog = page.getByRole('dialog')
+    await editDialog.getByLabel(/^límite mensual/i).fill('1000')
+    await editDialog.getByRole('button', { name: /guardar cambios/i }).click()
+    // Esperamos a que el modal se cierre.
+    await expect(editDialog).toBeHidden()
+
+    // Registrar gastos: $500 en Comida (50%) → barra verde.
+    await page.goto('/dashboard')
+    dialog = await openDashboardForm(page, /^gasto$/i)
+    await selectListbox(dialog, 'Cuenta origen', /bolsa/i)
+    await selectListbox(dialog, 'Categoría', /comida/i)
+    await dialog.getByLabel(/^monto/i).fill('500')
+    await dialog.getByRole('button', { name: /registrar gasto/i }).click()
+
+    await page.goto('/reports/budgets')
+
+    // El bucket "Comida" muestra el monto gastado, % y "Te quedan".
+    const bucket = page.locator('li').filter({
+      has: page.getByRole('heading', { name: 'Comida' }),
+    })
+    await expect(bucket).toContainText('$500.00')
+    await expect(bucket).toContainText('50.0%')
+    await expect(bucket).toContainText('Te quedan')
+  })
+
+  test('presupuestos: empty state cuando ninguna categoría tiene límite', async ({ page }) => {
+    await setupLoggedInUser(page)
+    await page.goto('/reports/budgets')
+
+    await expect(page.getByText(/no tienes presupuestos configurados/i)).toBeVisible()
+    await expect(page.getByRole('link', { name: /ir a categorías/i })).toBeVisible()
+  })
 })

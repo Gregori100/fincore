@@ -25,6 +25,11 @@ class Category extends Model
         'applies_to',
         'color_slug',
         'icon_slug',
+        'monthly_limit',
+    ];
+
+    protected $casts = [
+        'monthly_limit' => 'decimal:2',
     ];
 
     public function user(): BelongsTo

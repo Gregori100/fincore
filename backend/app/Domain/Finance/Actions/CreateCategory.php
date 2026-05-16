@@ -19,6 +19,7 @@ class CreateCategory
         string $appliesTo,
         string $colorSlug,
         string $iconSlug,
+        ?float $monthlyLimit = null,
     ): Category {
         $name = trim($name);
 
@@ -44,6 +45,10 @@ class CreateCategory
             throw new InvalidIconSlug();
         }
 
+        if ($monthlyLimit !== null && $monthlyLimit < 0) {
+            throw new InvalidCategoryAppliesTo('El límite mensual debe ser cero o positivo.');
+        }
+
         // Unicidad case-insensitive del nombre, igual que en Account.
         // withTrashed() para que una archivada no permita un duplicado nuevo
         // — el user puede "reactivar" cambiando primero el nombre del archivado
@@ -62,6 +67,7 @@ class CreateCategory
             'applies_to' => $appliesTo,
             'color_slug' => $colorSlug,
             'icon_slug' => $iconSlug,
+            'monthly_limit' => $monthlyLimit,
         ]);
     }
 }

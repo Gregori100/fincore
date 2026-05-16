@@ -15,6 +15,7 @@ use App\Domain\Finance\Actions\RegisterTransfer;
 use App\Domain\Finance\Actions\UpdateAccount;
 use App\Domain\Finance\Actions\UpdateCategory;
 use App\Domain\Finance\Actions\UpdateJournalEntry;
+use App\Domain\Finance\Reports\BudgetsReport;
 use App\Domain\Finance\Reports\CashflowMonthlyReport;
 use App\Domain\Finance\Reports\CategoryBreakdownReport;
 use App\Domain\Finance\Reports\CreditCardsReport;
@@ -293,6 +294,7 @@ class FinanceController extends Controller
             'applies_to' => 'required|in:income,expense,both',
             'color_slug' => 'required|string|max:30',
             'icon_slug' => 'required|string|max:40',
+            'monthly_limit' => 'sometimes|nullable|numeric|min:0',
         ]);
 
         $category = CreateCategory::execute(
@@ -301,6 +303,7 @@ class FinanceController extends Controller
             $data['applies_to'],
             $data['color_slug'],
             $data['icon_slug'],
+            isset($data['monthly_limit']) ? (float) $data['monthly_limit'] : null,
         );
 
         return response()->json(['category' => $category], 201);
@@ -313,6 +316,7 @@ class FinanceController extends Controller
             'applies_to' => 'sometimes|in:income,expense,both',
             'color_slug' => 'sometimes|string|max:30',
             'icon_slug' => 'sometimes|string|max:40',
+            'monthly_limit' => 'sometimes|nullable|numeric|min:0',
         ]);
 
         $category = UpdateCategory::execute($request->user()->id, $id, $data);
@@ -383,6 +387,13 @@ class FinanceController extends Controller
     public function reportCreditCards(Request $request)
     {
         $report = (new CreditCardsReport($request->user()->id))->generate();
+
+        return response()->json($report);
+    }
+
+    public function reportBudgets(Request $request)
+    {
+        $report = (new BudgetsReport($request->user()->id))->generate();
 
         return response()->json($report);
     }

@@ -276,3 +276,82 @@ El frontend renderiza estos campos como "no configurado" con CTA al detalle de l
 curl "http://localhost/api/finance/reports/credit-cards" \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+---
+
+## GET `/api/finance/reports/budgets`
+
+Devuelve el progreso del mes en curso contra los presupuestos (`monthly_limit`) configurados por el usuario. Sólo considera categorías con `monthly_limit IS NOT NULL` y `applies_to ∈ {expense, both}`. El campo se persiste en `categories` cuando `applies_to=income`, pero **no se expone aquí** — se reserva para una fase futura donde "meta de ingreso" tenga su propia semántica visual.
+
+### Query parameters
+
+Sin parámetros. La respuesta cubre todas las categorías activas con presupuesto.
+
+### Response 200
+
+```json
+{
+  "month": "2026-05",
+  "total_limit": 4500.00,
+  "total_spent": 3100.00,
+  "total_pct": 68.89,
+  "buckets": [
+    {
+      "category_id": "019e2899-...",
+      "name": "Comida",
+      "color_slug": "orange",
+      "icon_slug": "shopping-bag",
+      "monthly_limit": 2000.00,
+      "spent": 1700.00,
+      "remaining": 300.00,
+      "pct_consumed": 85.00
+    },
+    {
+      "category_id": "019e2899-...",
+      "name": "Transporte",
+      "color_slug": "blue",
+      "icon_slug": "truck",
+      "monthly_limit": 1500.00,
+      "spent": 800.00,
+      "remaining": 700.00,
+      "pct_consumed": 53.33
+    },
+    {
+      "category_id": "019e2899-...",
+      "name": "Salud",
+      "color_slug": "red",
+      "icon_slug": "heart",
+      "monthly_limit": 1000.00,
+      "spent": 600.00,
+      "remaining": 400.00,
+      "pct_consumed": 60.0
+    }
+  ]
+}
+```
+
+### Comportamiento clave
+
+- **Mes en curso**: `occurred_at` entre el día 1 del mes y `hoy 23:59:59`. No mira meses anteriores.
+- **Gasto**: suma de `expense + credit_expense` con esa `category_id`. Cancelados quedan fuera por scope global de `SoftDeletes`.
+- **`remaining` puede ser negativo** si `spent > monthly_limit`. El frontend lo muestra como "Te pasaste".
+- **`pct_consumed`**:
+  - `monthly_limit > 0` → `(spent / monthly_limit) * 100`.
+  - `monthly_limit == 0` Y `spent > 0` → devuelve `999` (sentinel para color rojo en el frontend).
+  - `monthly_limit == 0` Y `spent == 0` → `0`.
+- **Orden**: buckets ordenados por `pct_consumed` desc.
+- **Categorías archivadas** quedan fuera.
+
+### Errores
+
+| Status | Cuándo |
+|--------|--------|
+| 401 | Sin token o expirado |
+| 403 | Email no verificado |
+
+### Ejemplo
+
+```bash
+curl "http://localhost/api/finance/reports/budgets" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```

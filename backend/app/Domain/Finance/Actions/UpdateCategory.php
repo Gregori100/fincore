@@ -11,7 +11,7 @@ use App\Models\Category;
 
 class UpdateCategory
 {
-    private const EDITABLE_FIELDS = ['name', 'applies_to', 'color_slug', 'icon_slug'];
+    private const EDITABLE_FIELDS = ['name', 'applies_to', 'color_slug', 'icon_slug', 'monthly_limit'];
 
     private const MAX_NAME_LENGTH = 80;
 
@@ -58,6 +58,12 @@ class UpdateCategory
         if (array_key_exists('icon_slug', $update)
             && ! CategoryDefaults::isValidIcon($update['icon_slug'])) {
             throw new InvalidIconSlug();
+        }
+
+        if (array_key_exists('monthly_limit', $update)
+            && $update['monthly_limit'] !== null
+            && (float) $update['monthly_limit'] < 0) {
+            throw new InvalidCategoryAppliesTo('El límite mensual debe ser cero o positivo.');
         }
 
         $category->update($update);
