@@ -5,6 +5,9 @@ import { cssVarBySlug, iconBySlug } from '@/constants/categoryCatalog'
 
 const props = defineProps({
   category: { type: Object, required: true },
+  // Progreso del mes en curso: { monthly_limit, spent, remaining, pct_consumed }.
+  // Si no se pasa o si la categoría no tiene monthly_limit, no se muestra el bloque.
+  budget: { type: Object, default: null },
 })
 
 defineEmits(['edit', 'archive'])
@@ -18,6 +21,30 @@ const appliesLabel = computed(() => ({
   expense: 'Gastos',
   both: 'Ambos',
 }[props.category.applies_to] ?? props.category.applies_to))
+
+// Mostramos el bloque sólo cuando hay datos del reporte para esta categoría.
+// El backend ya filtra para excluir income, así que basta con verificar budget.
+const showBudget = computed(() => !!props.budget && props.budget.monthly_limit !== null)
+
+function fmt(n) {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 2,
+  }).format(Number(n ?? 0))
+}
+
+const budgetBarCssVar = computed(() => {
+  const p = Number(props.budget?.pct_consumed ?? 0)
+  if (p < 70) return '--color-positive'
+  if (p <= 100) return '--color-warning'
+  return '--color-negative'
+})
+
+const budgetBarWidth = computed(() => {
+  const p = Number(props.budget?.pct_consumed ?? 0)
+  return Math.min(100, Math.max(0, p))
+})
 </script>
 
 <template>
@@ -74,5 +101,28 @@ const appliesLabel = computed(() => ({
         </button>
       </div>
     </header>
+
+    <div v-if="showBudget" class="mt-4">
+      <div class="flex items-center justify-between text-xs mb-1.5">
+        <span class="text-[color:var(--color-text-muted)] tabular-nums">
+          {{ fmt(budget.spent) }} / {{ fmt(budget.monthly_limit) }}
+        </span>
+        <span
+          class="tabular-nums font-medium"
+          :style="{ color: `var(${budgetBarCssVar})` }"
+        >
+          {{ Number(budget.pct_consumed).toFixed(1) }}%
+        </span>
+      </div>
+      <div class="h-1.5 rounded-full bg-[color:var(--color-surface-elevated)] overflow-hidden">
+        <div
+          class="h-full transition-all"
+          :style="{
+            width: `${budgetBarWidth}%`,
+            backgroundColor: `var(${budgetBarCssVar})`,
+          }"
+        />
+      </div>
+    </div>
   </article>
 </template>

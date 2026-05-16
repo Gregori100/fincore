@@ -20,6 +20,9 @@ const toast = useToastStore()
 
 // Lista local incluye archivadas (el store sólo trae activas).
 const allCategories = ref([])
+// Map id → bucket de presupuesto del mes en curso. Solo trae las categorías
+// con monthly_limit configurado (BudgetsReport ya filtra income).
+const budgetsByCategoryId = ref({})
 const loading = ref(false)
 const error = ref(null)
 const openModal = ref(null)
@@ -55,8 +58,18 @@ async function fetchAll() {
   loading.value = true
   error.value = null
   try {
-    const { data } = await financeApi.listCategories({ includeArchived: true })
-    allCategories.value = data.categories ?? []
+    // Categorías y progreso de presupuestos viajan en paralelo: el endpoint
+    // de budgets devuelve sólo las que tienen monthly_limit y aplica a expense,
+    // así que el lookup queda chico.
+    const [catsResp, budgetsResp] = await Promise.all([
+      financeApi.listCategories({ includeArchived: true }),
+      financeApi.reportBudgets(),
+    ])
+    allCategories.value = catsResp.data.categories ?? []
+    const buckets = budgetsResp.data.buckets ?? []
+    budgetsByCategoryId.value = Object.fromEntries(
+      buckets.map((b) => [b.category_id, b]),
+    )
   } catch (e) {
     error.value
       = e.response?.data?.message
@@ -188,6 +201,7 @@ onMounted(async () => {
               v-for="c in groups.expense"
               :key="c.id"
               :category="c"
+              :budget="budgetsByCategoryId[c.id] ?? null"
               @edit="handleEdit"
               @archive="handleArchive"
             />
@@ -218,6 +232,7 @@ onMounted(async () => {
               v-for="c in groups.both"
               :key="c.id"
               :category="c"
+              :budget="budgetsByCategoryId[c.id] ?? null"
               @edit="handleEdit"
               @archive="handleArchive"
             />
