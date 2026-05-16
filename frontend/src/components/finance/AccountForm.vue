@@ -154,7 +154,7 @@ async function handleSubmit() {
         :error="errors.credit_limit"
         required
       />
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <BaseInput
           v-model="form.closing_day"
           label="Día corte"
@@ -174,7 +174,7 @@ async function handleSubmit() {
           hint="1-31"
         />
       </div>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <BaseInput
           v-model="form.interest_rate"
           label="Tasa mensual"

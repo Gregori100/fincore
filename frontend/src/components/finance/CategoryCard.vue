@@ -79,7 +79,7 @@ const budgetBarWidth = computed(() => {
 
       <div
         v-if="!isArchived"
-        class="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition"
+        class="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition"
       >
         <button
           type="button"

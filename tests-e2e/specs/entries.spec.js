@@ -187,8 +187,12 @@ test.describe('Movimientos', () => {
     await dialog.getByLabel(/^descripción/i).fill('Compra desde entries')
     await dialog.getByRole('button', { name: /registrar gasto/i }).click()
 
+    // EntriesTable renderiza tanto la tabla desktop como la lista mobile (con
+    // visibilidad alternada por breakpoint). En el viewport del runner ambas
+    // existen en el DOM — verificamos que al menos una sea visible.
+
     // La nueva entry aparece en la tabla sin recargar.
-    await expect(page.getByText('Compra desde entries')).toBeVisible()
+    await expect(page.getByText('Compra desde entries').first()).toBeVisible()
   })
 
   test('cancelar un ingreso ya gastado deja saldo negativo con badge', async ({ page }) => {

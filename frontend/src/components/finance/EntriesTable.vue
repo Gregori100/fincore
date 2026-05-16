@@ -283,91 +283,169 @@ const hasActiveFilters = computed(
         </p>
       </div>
 
-      <table v-else class="w-full text-sm">
-        <thead class="text-xs text-[color:var(--color-text-subtle)] uppercase tracking-[0.08em] border-b border-[color:var(--color-border)]">
-          <tr>
-            <th class="text-left px-4 py-3 font-semibold">Tipo</th>
-            <th class="text-left px-4 py-3 font-semibold hidden lg:table-cell">Categoría</th>
-            <th class="text-left px-4 py-3 font-semibold">Movimiento</th>
-            <th class="text-left px-4 py-3 font-semibold hidden md:table-cell">Descripción</th>
-            <th class="text-right px-4 py-3 font-semibold">Monto</th>
-            <th class="text-right px-4 py-3 font-semibold hidden sm:table-cell">Fecha</th>
-            <th class="w-10 px-2"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
+      <template v-else>
+        <!-- Tabla densa: tablets en horizontal y desktop. -->
+        <table class="hidden md:table w-full text-sm">
+          <thead class="text-xs text-[color:var(--color-text-subtle)] uppercase tracking-[0.08em] border-b border-[color:var(--color-border)]">
+            <tr>
+              <th class="text-left px-4 py-3 font-semibold">Tipo</th>
+              <th class="text-left px-4 py-3 font-semibold hidden lg:table-cell">Categoría</th>
+              <th class="text-left px-4 py-3 font-semibold">Movimiento</th>
+              <th class="text-left px-4 py-3 font-semibold hidden md:table-cell">Descripción</th>
+              <th class="text-right px-4 py-3 font-semibold">Monto</th>
+              <th class="text-right px-4 py-3 font-semibold hidden sm:table-cell">Fecha</th>
+              <th class="w-10 px-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="e in data.data"
+              :key="e.id"
+              class="group border-b border-[color:var(--color-border)] last:border-0 hover:bg-[color:var(--color-surface-elevated)]/40 transition-colors"
+            >
+              <td class="px-4 py-3">
+                <span
+                  class="inline-block px-2 py-0.5 rounded text-xs font-medium"
+                  :class="KIND_COLORS[e.kind]"
+                >
+                  {{ KIND_LABELS[e.kind] ?? e.kind }}
+                </span>
+              </td>
+              <td class="px-4 py-3 hidden lg:table-cell">
+                <CategoryBadge v-if="e.category" :category="e.category" />
+                <span v-else class="text-[color:var(--color-text-subtle)]">—</span>
+              </td>
+              <td class="px-4 py-3">
+                <span class="text-[color:var(--color-text-muted)]">
+                  {{ e.origin?.name ?? '—' }}
+                  <span
+                    v-if="e.origin?.deleted_at"
+                    class="ml-1 text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]"
+                  >
+                    (archivada)
+                  </span>
+                </span>
+                <span class="text-[color:var(--color-text-subtle)] mx-1.5">→</span>
+                <span class="text-[color:var(--color-text-muted)]">
+                  {{ e.destination?.name ?? '—' }}
+                  <span
+                    v-if="e.destination?.deleted_at"
+                    class="ml-1 text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]"
+                  >
+                    (archivada)
+                  </span>
+                </span>
+              </td>
+              <td class="px-4 py-3 text-[color:var(--color-text-muted)] hidden md:table-cell max-w-xs truncate">
+                {{ e.description ?? '—' }}
+              </td>
+              <td class="px-4 py-3 text-right font-medium tabular-nums">
+                {{ fmt(e.amount) }}
+              </td>
+              <td class="px-4 py-3 text-right text-xs text-[color:var(--color-text-subtle)] hidden sm:table-cell whitespace-nowrap">
+                {{ fmtDate(e.occurred_at) }}
+              </td>
+              <td class="px-2 py-3 text-right">
+                <div class="flex items-center justify-end gap-1 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition">
+                  <button
+                    type="button"
+                    class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-accent)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] transition"
+                    aria-label="Editar movimiento"
+                    title="Editar categoría o descripción"
+                    @click="editingEntry = e"
+                  >
+                    <PencilSquareIcon class="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-negative)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-negative)] transition"
+                    aria-label="Cancelar movimiento"
+                    title="Cancelar este movimiento"
+                    @click="cancellingEntry = e"
+                  >
+                    <TrashIcon class="h-4 w-4" />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Cards verticales: mobile (<md). Cada entry es una card propia. -->
+        <ul class="md:hidden divide-y divide-[color:var(--color-border)]">
+          <li
             v-for="e in data.data"
             :key="e.id"
-            class="group border-b border-[color:var(--color-border)] last:border-0 hover:bg-[color:var(--color-surface-elevated)]/40 transition-colors"
+            class="px-4 py-3 space-y-2"
           >
-            <td class="px-4 py-3">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
               <span
                 class="inline-block px-2 py-0.5 rounded text-xs font-medium"
                 :class="KIND_COLORS[e.kind]"
               >
                 {{ KIND_LABELS[e.kind] ?? e.kind }}
               </span>
-            </td>
-            <td class="px-4 py-3 hidden lg:table-cell">
               <CategoryBadge v-if="e.category" :category="e.category" />
-              <span v-else class="text-[color:var(--color-text-subtle)]">—</span>
-            </td>
-            <td class="px-4 py-3">
-              <span class="text-[color:var(--color-text-muted)]">
+            </div>
+
+            <p class="text-sm text-[color:var(--color-text-muted)]">
+              <span>
                 {{ e.origin?.name ?? '—' }}
                 <span
                   v-if="e.origin?.deleted_at"
-                  class="ml-1 text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]"
+                  class="text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]"
                 >
-                  (archivada)
+                  (arch.)
                 </span>
               </span>
               <span class="text-[color:var(--color-text-subtle)] mx-1.5">→</span>
-              <span class="text-[color:var(--color-text-muted)]">
+              <span>
                 {{ e.destination?.name ?? '—' }}
                 <span
                   v-if="e.destination?.deleted_at"
-                  class="ml-1 text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]"
+                  class="text-[10px] uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)]"
                 >
-                  (archivada)
+                  (arch.)
                 </span>
               </span>
-            </td>
-            <td class="px-4 py-3 text-[color:var(--color-text-muted)] hidden md:table-cell max-w-xs truncate">
-              {{ e.description ?? '—' }}
-            </td>
-            <td class="px-4 py-3 text-right font-medium tabular-nums">
-              {{ fmt(e.amount) }}
-            </td>
-            <td class="px-4 py-3 text-right text-xs text-[color:var(--color-text-subtle)] hidden sm:table-cell whitespace-nowrap">
-              {{ fmtDate(e.occurred_at) }}
-            </td>
-            <td class="px-2 py-3 text-right">
-              <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition">
+            </p>
+
+            <p
+              v-if="e.description"
+              class="text-xs text-[color:var(--color-text-subtle)] truncate"
+            >
+              {{ e.description }}
+            </p>
+
+            <div class="flex items-end justify-between gap-2 pt-1">
+              <div>
+                <p class="text-base font-semibold tabular-nums">{{ fmt(e.amount) }}</p>
+                <p class="text-[11px] text-[color:var(--color-text-subtle)] mt-0.5 whitespace-nowrap">
+                  {{ fmtDate(e.occurred_at) }}
+                </p>
+              </div>
+              <div class="flex items-center gap-1">
                 <button
                   type="button"
-                  class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-accent)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] transition"
+                  class="p-1.5 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-accent)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-accent)] transition"
                   aria-label="Editar movimiento"
-                  title="Editar categoría o descripción"
                   @click="editingEntry = e"
                 >
                   <PencilSquareIcon class="h-4 w-4" />
                 </button>
                 <button
                   type="button"
-                  class="p-1 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-negative)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-negative)] transition"
+                  class="p-1.5 rounded text-[color:var(--color-text-subtle)] hover:text-[color:var(--color-negative)] hover:bg-[color:var(--color-surface-elevated)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--color-negative)] transition"
                   aria-label="Cancelar movimiento"
-                  title="Cancelar este movimiento"
                   @click="cancellingEntry = e"
                 >
                   <TrashIcon class="h-4 w-4" />
                 </button>
               </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+            </div>
+          </li>
+        </ul>
+      </template>
 
       <footer
         v-if="!loading && !error && data.data.length"

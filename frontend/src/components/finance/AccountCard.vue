@@ -100,7 +100,7 @@ const isNegative = computed(() => Number(props.account.balance ?? 0) < 0)
 
       <div
         v-if="editable"
-        class="relative z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition"
+        class="relative z-10 flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition"
       >
         <button
           type="button"
