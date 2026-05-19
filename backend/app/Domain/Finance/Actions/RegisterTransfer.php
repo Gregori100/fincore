@@ -7,6 +7,7 @@ use App\Domain\Finance\Exceptions\InvalidAccountType;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
 use App\Models\JournalEntry;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class RegisterTransfer
@@ -17,12 +18,13 @@ class RegisterTransfer
         string $destinationAccountId,
         float $amount,
         ?string $description = null,
+        ?string $occurredAt = null,
     ): JournalEntry {
         if ($originAccountId === $destinationAccountId) {
             throw new InvalidAccountType('La cuenta de origen y destino no pueden ser la misma.');
         }
 
-        return DB::transaction(function () use ($userId, $originAccountId, $destinationAccountId, $amount, $description) {
+        return DB::transaction(function () use ($userId, $originAccountId, $destinationAccountId, $amount, $description, $occurredAt) {
             // Bloqueamos en orden lexicográfico (strcmp) de id para evitar
             // deadlocks entre dos transferencias simultáneas que crucen las
             // mismas cuentas en direcciones opuestas. Con UUID el orden no es
@@ -64,7 +66,7 @@ class RegisterTransfer
                 'account_origin_id' => $origin->id,
                 'account_destination_id' => $destination->id,
                 'description' => $description,
-                'occurred_at' => now(),
+                'occurred_at' => $occurredAt !== null ? Carbon::parse($occurredAt) : now(),
             ]);
         });
     }

@@ -31,11 +31,19 @@ const categoryOptions = computed(() => [
   ...finance.categoriesFor('expense').map((c) => ({ value: c.id, label: c.name })),
 ])
 
+// Hoy en YYYY-MM-DD usando hora local (no UTC), para que un gasto registrado
+// a las 23:00 hora local no se "guarde como mañana".
+function todayInputDate() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const form = ref({
   account_id: accountOptions.value[0]?.value ?? null,
   amount: '',
   description: '',
   category_id: null,
+  occurred_at: todayInputDate(),
 })
 
 const selectedAccount = computed(() =>
@@ -54,6 +62,7 @@ function validate() {
   } else if (amount > sourceBalance.value) {
     e.amount = `Excede el saldo disponible (${fmt(sourceBalance.value)})`
   }
+  if (!form.value.occurred_at) e.occurred_at = 'Ingresa una fecha'
   return e
 }
 
@@ -66,6 +75,7 @@ async function handleSubmit() {
       amount: Number(form.value.amount),
       description: form.value.description || null,
       category_id: form.value.category_id,
+      occurred_at: form.value.occurred_at,
     }),
   )
   if (result.ok) {
@@ -100,6 +110,13 @@ async function handleSubmit() {
       placeholder="0.00"
       :hint="selectedAccount ? `Disponible: ${fmt(sourceBalance)}` : ''"
       :error="errors.amount"
+      required
+    />
+    <BaseInput
+      v-model="form.occurred_at"
+      type="date"
+      label="Fecha"
+      :error="errors.occurred_at"
       required
     />
     <BaseSelect

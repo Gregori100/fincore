@@ -54,6 +54,7 @@ class FinanceController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
             'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
+            'occurred_at' => 'sometimes|nullable|date',
         ]);
 
         $entry = RegisterIncome::execute(
@@ -62,6 +63,7 @@ class FinanceController extends Controller
             (float) $data['amount'],
             $data['description'] ?? null,
             $data['category_id'] ?? null,
+            $data['occurred_at'] ?? null,
         );
 
         return response()->json(['message' => 'Ingreso registrado', 'entry' => $entry], 201);
@@ -74,6 +76,7 @@ class FinanceController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
             'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
+            'occurred_at' => 'sometimes|nullable|date',
         ]);
 
         $entry = RegisterExpense::execute(
@@ -82,6 +85,7 @@ class FinanceController extends Controller
             (float) $data['amount'],
             $data['description'] ?? null,
             $data['category_id'] ?? null,
+            $data['occurred_at'] ?? null,
         );
 
         return response()->json(['message' => 'Gasto registrado', 'entry' => $entry], 201);
@@ -94,6 +98,7 @@ class FinanceController extends Controller
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
             'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
+            'occurred_at' => 'sometimes|nullable|date',
         ]);
 
         $entry = RegisterCreditExpense::execute(
@@ -102,6 +107,7 @@ class FinanceController extends Controller
             (float) $data['amount'],
             $data['description'] ?? null,
             $data['category_id'] ?? null,
+            $data['occurred_at'] ?? null,
         );
 
         return response()->json(['message' => 'Cargo a crédito registrado', 'entry' => $entry], 201);
@@ -114,6 +120,7 @@ class FinanceController extends Controller
             'credit_account_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
+            'occurred_at' => 'sometimes|nullable|date',
         ]);
 
         $entry = PayCreditAccount::execute(
@@ -122,6 +129,7 @@ class FinanceController extends Controller
             $data['credit_account_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
+            $data['occurred_at'] ?? null,
         );
 
         return response()->json(['message' => 'Pago aplicado', 'entry' => $entry], 201);
@@ -134,6 +142,7 @@ class FinanceController extends Controller
             'destination_id' => 'required|uuid|exists:accounts,id',
             'amount' => 'required|numeric|min:0.01',
             'description' => 'nullable|string',
+            'occurred_at' => 'sometimes|nullable|date',
         ]);
 
         $entry = RegisterTransfer::execute(
@@ -142,6 +151,7 @@ class FinanceController extends Controller
             $data['destination_id'],
             (float) $data['amount'],
             $data['description'] ?? null,
+            $data['occurred_at'] ?? null,
         );
 
         return response()->json(['message' => 'Transferencia registrada', 'entry' => $entry], 201);
@@ -258,6 +268,11 @@ class FinanceController extends Controller
             'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
             'description' => 'sometimes|nullable|string|max:200',
             'occurred_at' => 'sometimes|date',
+            // No verificamos exists: aquí porque la Action resuelve la cuenta
+            // dentro del scope del usuario y lanza un mensaje de dominio más claro.
+            'account_origin_id' => 'sometimes|nullable|uuid',
+            'account_destination_id' => 'sometimes|nullable|uuid',
+            'amount' => 'sometimes|numeric|gt:0',
         ]);
 
         $entry = UpdateJournalEntry::execute($request->user()->id, $id, $data);

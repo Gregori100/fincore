@@ -10,6 +10,7 @@ use App\Domain\Finance\Actions\RegisterIncome;
 use App\Domain\Finance\Actions\RegisterTransfer;
 use App\Domain\Finance\Actions\UpdateJournalEntry;
 use App\Domain\Finance\Exceptions\ImmutableJournalField;
+use App\Domain\Finance\Exceptions\InvalidAccountType;
 use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Models\Account;
 use App\Models\Category;
@@ -79,7 +80,7 @@ class UpdateJournalEntryTest extends TestCase
         RegisterIncome::execute($user->id, $bolsa->id, 1000);
         $entry = RegisterExpense::execute($user->id, $bolsa->id, 80);
 
-        foreach (['amount', 'kind', 'account_origin_id'] as $field) {
+        foreach (['kind'] as $field) {
             try {
                 UpdateJournalEntry::execute($user->id, $entry->id, [$field => 'cualquier-cosa']);
                 $this->fail("Esperaba ImmutableJournalField al editar {$field}");
@@ -237,6 +238,149 @@ class UpdateJournalEntryTest extends TestCase
         $this->expectException(InvalidCategoryAppliesTo::class);
 
         UpdateJournalEntry::execute($user->id, $entry->id, ['category_id' => $category->id]);
+    }
+
+    public function test_can_move_expense_origin_to_another_cash_account(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $debit = Account::factory()->debit()->for($user)->create();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        RegisterIncome::execute($user->id, $debit->id, 1000);
+        $entry = RegisterExpense::execute($user->id, $bolsa->id, 80, 'compra mal asignada');
+
+        $updated = UpdateJournalEntry::execute($user->id, $entry->id, [
+            'account_origin_id' => $debit->id,
+        ]);
+
+        $this->assertSame($debit->id, $updated->account_origin_id);
+        $this->assertNull($updated->account_destination_id);
+    }
+
+    public function test_can_move_credit_expense_to_another_credit_card(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $visa = Account::factory()->credit()->for($user)->create([
+            'credit_limit' => 10000,
+            'closing_day' => 5,
+            'payment_day' => 20,
+        ]);
+        $master = Account::factory()->credit()->for($user)->create([
+            'credit_limit' => 10000,
+            'closing_day' => 10,
+            'payment_day' => 25,
+        ]);
+        $entry = RegisterCreditExpense::execute($user->id, $visa->id, 500);
+
+        $updated = UpdateJournalEntry::execute($user->id, $entry->id, [
+            'account_origin_id' => $master->id,
+        ]);
+
+        $this->assertSame($master->id, $updated->account_origin_id);
+    }
+
+    public function test_can_swap_both_sides_of_a_transfer(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $banamex = Account::factory()->debit()->for($user)->create();
+        $santander = Account::factory()->debit()->for($user)->create();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $entry = RegisterTransfer::execute($user->id, $bolsa->id, $banamex->id, 200);
+
+        $updated = UpdateJournalEntry::execute($user->id, $entry->id, [
+            'account_origin_id' => $banamex->id,
+            'account_destination_id' => $santander->id,
+        ]);
+
+        $this->assertSame($banamex->id, $updated->account_origin_id);
+        $this->assertSame($santander->id, $updated->account_destination_id);
+    }
+
+    public function test_rejects_expense_pointing_to_credit_account(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $card = Account::factory()->credit()->for($user)->create([
+            'credit_limit' => 10000,
+            'closing_day' => 5,
+            'payment_day' => 20,
+        ]);
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $entry = RegisterExpense::execute($user->id, $bolsa->id, 80);
+
+        $this->expectException(InvalidAccountType::class);
+
+        UpdateJournalEntry::execute($user->id, $entry->id, [
+            'account_origin_id' => $card->id,
+        ]);
+    }
+
+    public function test_rejects_transfer_to_same_account(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $debit = Account::factory()->debit()->for($user)->create();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $entry = RegisterTransfer::execute($user->id, $bolsa->id, $debit->id, 200);
+
+        $this->expectException(InvalidAccountType::class);
+
+        UpdateJournalEntry::execute($user->id, $entry->id, [
+            'account_destination_id' => $bolsa->id,
+        ]);
+    }
+
+    public function test_rejects_assignment_to_account_of_other_user(): void
+    {
+        $userA = $this->createUserWithBolsa();
+        $userB = $this->createUserWithBolsa();
+        $bolsaA = $userA->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        $debitB = Account::factory()->debit()->for($userB)->create();
+        RegisterIncome::execute($userA->id, $bolsaA->id, 1000);
+        $entry = RegisterExpense::execute($userA->id, $bolsaA->id, 80);
+
+        $this->expectException(InvalidAccountType::class);
+
+        UpdateJournalEntry::execute($userA->id, $entry->id, [
+            'account_origin_id' => $debitB->id,
+        ]);
+    }
+
+    public function test_can_edit_amount(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $entry = RegisterExpense::execute($user->id, $bolsa->id, 80);
+
+        $updated = UpdateJournalEntry::execute($user->id, $entry->id, ['amount' => 120.50]);
+
+        $this->assertEquals(120.50, $updated->amount);
+    }
+
+    public function test_rejects_zero_amount(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $entry = RegisterExpense::execute($user->id, $bolsa->id, 80);
+
+        $this->expectException(ImmutableJournalField::class);
+
+        UpdateJournalEntry::execute($user->id, $entry->id, ['amount' => 0]);
+    }
+
+    public function test_rejects_negative_amount(): void
+    {
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
+        RegisterIncome::execute($user->id, $bolsa->id, 1000);
+        $entry = RegisterExpense::execute($user->id, $bolsa->id, 80);
+
+        $this->expectException(ImmutableJournalField::class);
+
+        UpdateJournalEntry::execute($user->id, $entry->id, ['amount' => -50]);
     }
 
     public function test_cannot_update_other_users_entry(): void

@@ -7,6 +7,7 @@ use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\JournalEntry;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class RegisterIncome
@@ -17,8 +18,9 @@ class RegisterIncome
         float $amount,
         ?string $description = null,
         ?string $categoryId = null,
+        ?string $occurredAt = null,
     ): JournalEntry {
-        return DB::transaction(function () use ($userId, $accountId, $amount, $description, $categoryId) {
+        return DB::transaction(function () use ($userId, $accountId, $amount, $description, $categoryId, $occurredAt) {
             // lockForUpdate serializa mutaciones concurrentes sobre la misma cuenta.
             // Aunque income no valida balance, mantenemos el patrón uniforme con
             // las demás Actions para que dos requests sobre la misma cuenta no se
@@ -52,7 +54,7 @@ class RegisterIncome
                 'account_destination_id' => $account->id,
                 'description' => $description,
                 'category_id' => $categoryId,
-                'occurred_at' => now(),
+                'occurred_at' => $occurredAt !== null ? Carbon::parse($occurredAt) : now(),
             ]);
         });
     }

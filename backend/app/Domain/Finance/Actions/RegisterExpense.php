@@ -9,6 +9,7 @@ use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\JournalEntry;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class RegisterExpense
@@ -19,8 +20,9 @@ class RegisterExpense
         float $amount,
         ?string $description = null,
         ?string $categoryId = null,
+        ?string $occurredAt = null,
     ): JournalEntry {
-        return DB::transaction(function () use ($userId, $accountId, $amount, $description, $categoryId) {
+        return DB::transaction(function () use ($userId, $accountId, $amount, $description, $categoryId, $occurredAt) {
             // lockForUpdate previene que dos gastos simultáneos lean el mismo
             // balance y ambos pasen la validación (race que dejaría saldo
             // negativo). El segundo espera al commit del primero.
@@ -58,7 +60,7 @@ class RegisterExpense
                 'account_destination_id' => null,
                 'description' => $description,
                 'category_id' => $categoryId,
-                'occurred_at' => now(),
+                'occurred_at' => $occurredAt !== null ? Carbon::parse($occurredAt) : now(),
             ]);
         });
     }

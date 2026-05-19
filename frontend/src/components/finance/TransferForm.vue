@@ -27,11 +27,17 @@ const baseOptions = computed(() =>
   })),
 )
 
+function todayInputDate() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const form = ref({
   origin_id: baseOptions.value[0]?.value ?? null,
   destination_id: baseOptions.value[1]?.value ?? null,
   amount: '',
   description: '',
+  occurred_at: todayInputDate(),
 })
 
 const origin = computed(() =>
@@ -64,6 +70,7 @@ function validate() {
   } else if (amount > originBalance.value) {
     e.amount = `Excede el saldo del origen (${fmt(originBalance.value)})`
   }
+  if (!form.value.occurred_at) e.occurred_at = 'Ingresa una fecha'
   return e
 }
 
@@ -76,6 +83,7 @@ async function handleSubmit() {
       destination_id: form.value.destination_id,
       amount: Number(form.value.amount),
       description: form.value.description || null,
+      occurred_at: form.value.occurred_at,
     }),
   )
   if (result.ok) {
@@ -123,6 +131,13 @@ async function handleSubmit() {
         placeholder="0.00"
         :hint="origin ? `Disponible: ${fmt(originBalance)}` : ''"
         :error="errors.amount"
+        required
+      />
+      <BaseInput
+        v-model="form.occurred_at"
+        type="date"
+        label="Fecha"
+        :error="errors.occurred_at"
         required
       />
       <BaseInput

@@ -112,6 +112,17 @@ class FinanceApiTest extends TestCase
             ->assertJsonValidationErrors(['account_id']);
     }
 
+    public function test_income_accepts_custom_occurred_at()
+    {
+        $this->postJson('/api/finance/income', [
+            'account_id' => $this->bolsa()->id,
+            'amount' => 1500,
+            'occurred_at' => '2025-01-15',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('entry.occurred_at', '2025-01-15T00:00:00.000000Z');
+    }
+
     public function test_expense_returns_422_insufficient_funds()
     {
         $this->postJson('/api/finance/expense', [

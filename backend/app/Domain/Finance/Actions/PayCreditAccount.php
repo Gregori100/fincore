@@ -8,6 +8,7 @@ use App\Domain\Finance\Exceptions\OverpayDebt;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
 use App\Models\JournalEntry;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class PayCreditAccount
@@ -18,8 +19,9 @@ class PayCreditAccount
         string $creditAccountId,
         float $amount,
         ?string $description = null,
+        ?string $occurredAt = null,
     ): JournalEntry {
-        return DB::transaction(function () use ($userId, $originAccountId, $creditAccountId, $amount, $description) {
+        return DB::transaction(function () use ($userId, $originAccountId, $creditAccountId, $amount, $description, $occurredAt) {
             // Bloqueamos las DOS cuentas. Adquirimos en orden lexicográfico
             // (strcmp) de id para evitar deadlocks entre transacciones
             // simultáneas que toquen el mismo par de cuentas en orden inverso.
@@ -70,7 +72,7 @@ class PayCreditAccount
                 'account_origin_id' => $origin->id,
                 'account_destination_id' => $credit->id,
                 'description' => $description,
-                'occurred_at' => now(),
+                'occurred_at' => $occurredAt !== null ? Carbon::parse($occurredAt) : now(),
             ]);
         });
     }
