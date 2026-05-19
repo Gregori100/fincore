@@ -223,7 +223,7 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | POST | `/auth/email/verification-notification` | sanctum | Resend verification email |
 | GET | `/finance/state` | sanctum + verified | BO/DE/CR + accounts + recent entries + categories |
 | GET | `/finance/entries` | sanctum + verified | Paginated entries (filtros `account_id`, `category_id`, `kind`, `from`, `to`) |
-| PATCH | `/finance/entries/{id}` | sanctum + verified | UpdateJournalEntry (sólo `category_id` y `description`) |
+| PATCH | `/finance/entries/{id}` | sanctum + verified | UpdateJournalEntry (sólo `category_id`, `description` y `occurred_at`). El monto, kind y cuentas siguen inmutables. |
 | DELETE | `/finance/entries/{id}` | sanctum + verified | CancelJournalEntry (soft delete; sin reactivación; sin validación de negativos) |
 | GET | `/finance/accounts` | sanctum + verified | List accounts (acepta `?include_archived=1` para incluir soft-deleted) |
 | POST | `/finance/accounts` | sanctum + verified | CreateAccount (debit/credit, cash forbidden) |

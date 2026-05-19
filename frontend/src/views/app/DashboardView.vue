@@ -195,7 +195,9 @@ onMounted(async () => {
 // la vista /accounts. El criterio:
 //   1. La Bolsa va siempre primero (el user siempre la tiene).
 //   2. Cuentas referenciadas en las últimas pólizas (origen o destino).
-//   3. Tope de MAX_FEATURED para mantener el dashboard compacto.
+//   3. Si todavía hay cupo, rellenar con las demás cuentas (orden del store)
+//      para que una cuenta recién creada sin movimientos aparezca de inmediato.
+//   4. Tope de MAX_FEATURED para mantener el dashboard compacto.
 // Si el usuario tiene más cuentas, mostramos un link "Ver todas →".
 const MAX_FEATURED = 5
 const featuredAccounts = computed(() => {
@@ -208,6 +210,11 @@ const featuredAccounts = computed(() => {
     if (entry.account_origin_id) ids.add(entry.account_origin_id)
     if (ids.size >= MAX_FEATURED) break
     if (entry.account_destination_id) ids.add(entry.account_destination_id)
+  }
+
+  for (const account of finance.accounts) {
+    if (ids.size >= MAX_FEATURED) break
+    ids.add(account.id)
   }
 
   return finance.accounts.filter((a) => ids.has(a.id))

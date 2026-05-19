@@ -6,15 +6,16 @@ use App\Domain\Finance\Exceptions\ImmutableJournalField;
 use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Models\Category;
 use App\Models\JournalEntry;
+use Illuminate\Support\Carbon;
 
 class UpdateJournalEntry
 {
     /**
-     * Solo se permiten editar `category_id` y `description`. El monto, las
-     * cuentas, el kind y la fecha del movimiento son inmutables — la pieza
-     * contable no debe cambiar después de registrarse.
+     * Campos editables retroactivamente. El monto, las cuentas y el kind quedan
+     * inmutables (cambiarlos rompería el balance derivado). La fecha sí se puede
+     * mover libre: la app es una libreta, no un libro contable bloqueante.
      */
-    private const EDITABLE_FIELDS = ['category_id', 'description'];
+    private const EDITABLE_FIELDS = ['category_id', 'description', 'occurred_at'];
 
     private const MAX_DESCRIPTION_LENGTH = 200;
 
@@ -39,15 +40,33 @@ class UpdateJournalEntry
             if ($update['category_id'] === null) {
                 // Permitido: limpia la categoría del entry.
             } else {
+                $categoryKind = $entry->categoryKind();
+                // transfer, debt_payment y adjustment no se categorizan.
+                if ($categoryKind === null) {
+                    throw new InvalidCategoryAppliesTo();
+                }
                 $category = Category::where('id', $update['category_id'])
                     ->where('user_id', $userId)
                     ->first();
                 if (! $category) {
                     throw new InvalidCategoryAppliesTo('La categoría no existe o no te pertenece.');
                 }
-                if (! $category->appliesToKind($entry->kind)) {
+                if (! $category->appliesToKind($categoryKind)) {
                     throw new InvalidCategoryAppliesTo();
                 }
+            }
+        }
+
+        // Normalizar occurred_at: aceptamos ISO 8601 / Y-m-d y lo guardamos como
+        // datetime. Sin restricción de pasado/futuro — la app es libreta libre.
+        if (array_key_exists('occurred_at', $update)) {
+            if ($update['occurred_at'] === null || $update['occurred_at'] === '') {
+                throw new ImmutableJournalField('La fecha del movimiento no puede vaciarse.');
+            }
+            try {
+                $update['occurred_at'] = Carbon::parse($update['occurred_at']);
+            } catch (\Exception $e) {
+                throw new ImmutableJournalField('Fecha inválida.');
             }
         }
 

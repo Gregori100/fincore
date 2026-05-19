@@ -257,6 +257,7 @@ class FinanceController extends Controller
         $data = $request->validate([
             'category_id' => 'sometimes|nullable|uuid|exists:categories,id',
             'description' => 'sometimes|nullable|string|max:200',
+            'occurred_at' => 'sometimes|date',
         ]);
 
         $entry = UpdateJournalEntry::execute($request->user()->id, $id, $data);

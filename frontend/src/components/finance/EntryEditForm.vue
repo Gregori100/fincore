@@ -42,9 +42,18 @@ const categoryOptions = computed(() => {
   return opts
 })
 
+// occurred_at puede llegar como ISO 8601 ("2026-05-10T14:35:00.000000Z"); el
+// input type=date espera YYYY-MM-DD. Cortamos al primer "T" para evitar tocar
+// timezone — la app no usa hora en ningún reporte, así que es seguro.
+function isoToInputDate(iso) {
+  if (!iso) return ''
+  return String(iso).slice(0, 10)
+}
+
 const form = ref({
   category_id: props.entry.category_id ?? null,
   description: props.entry.description ?? '',
+  occurred_at: isoToInputDate(props.entry.occurred_at),
 })
 
 function validate() {
@@ -52,18 +61,26 @@ function validate() {
   if (form.value.description && form.value.description.length > 200) {
     e.description = 'Máximo 200 caracteres'
   }
+  if (!form.value.occurred_at) {
+    e.occurred_at = 'Ingresa una fecha'
+  }
   return e
 }
 
 const { errors, submitting, submit } = useFormErrors(validate)
 
 async function handleSubmit() {
-  const result = await submit(() =>
-    finance.updateEntry(props.entry.id, {
-      category_id: form.value.category_id,
-      description: form.value.description?.trim() || null,
-    }),
-  )
+  const payload = {
+    category_id: form.value.category_id,
+    description: form.value.description?.trim() || null,
+  }
+  // Sólo mandamos occurred_at si cambió respecto al valor original, para no
+  // pisar el datetime original (con su hora exacta) cada vez que se edite otra cosa.
+  if (form.value.occurred_at !== isoToInputDate(props.entry.occurred_at)) {
+    payload.occurred_at = form.value.occurred_at
+  }
+
+  const result = await submit(() => finance.updateEntry(props.entry.id, payload))
   if (result.ok) {
     toast.success('Movimiento actualizado')
     emit('success')
@@ -90,6 +107,13 @@ async function handleSubmit() {
       v-model="form.category_id"
       label="Categoría"
       :options="categoryOptions"
+    />
+    <BaseInput
+      v-model="form.occurred_at"
+      type="date"
+      label="Fecha"
+      :error="errors.occurred_at"
+      required
     />
     <BaseInput
       v-model="form.description"

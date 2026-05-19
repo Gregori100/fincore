@@ -66,4 +66,19 @@ class JournalEntry extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+    /**
+     * Mapea el `kind` interno al "kind aplicable a categorías", que es lo que
+     * el catálogo de Category entiende (`income` | `expense`). credit_expense
+     * se categoriza con categorías de gasto. transfer / debt_payment / adjustment
+     * no se categorizan: devuelve null.
+     */
+    public function categoryKind(): ?string
+    {
+        return match ($this->kind) {
+            self::KIND_INCOME => Category::APPLIES_INCOME,
+            self::KIND_EXPENSE, self::KIND_CREDIT_EXPENSE => Category::APPLIES_EXPENSE,
+            default => null,
+        };
+    }
 }
