@@ -29,8 +29,9 @@ const navItems = [
   { name: 'dashboard', label: 'Dashboard' },
   { name: 'accounts', label: 'Mis cuentas' },
   { name: 'categories', label: 'Categorías' },
-  { name: 'reports-by-category', label: 'Reportes' },
   { name: 'entries', label: 'Movimientos' },
+  { name: 'reports-by-category', label: 'Reportes' },
+  { name: 'plan', label: 'Plan' },
 ]
 
 async function handleLogout() {

@@ -123,17 +123,18 @@ class FinanceApiTest extends TestCase
             ->assertJsonPath('entry.occurred_at', '2025-01-15T00:00:00.000000Z');
     }
 
-    public function test_expense_returns_422_insufficient_funds()
+    public function test_expense_without_funds_creates_negative_balance()
     {
+        // Libreta libre: el gasto se acepta aunque deje saldo negativo.
         $this->postJson('/api/finance/expense', [
             'account_id' => $this->bolsa()->id,
             'amount' => 100,
         ])
-            ->assertStatus(422)
-            ->assertJsonPath('code', 'insufficient_funds');
+            ->assertCreated()
+            ->assertJsonPath('entry.kind', 'expense');
     }
 
-    public function test_credit_expense_returns_422_when_limit_exceeded()
+    public function test_credit_expense_can_exceed_credit_limit()
     {
         $card = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 1000]);
 
@@ -141,8 +142,8 @@ class FinanceApiTest extends TestCase
             'account_id' => $card->id,
             'amount' => 2000,
         ])
-            ->assertStatus(422)
-            ->assertJsonPath('code', 'credit_limit_exceeded');
+            ->assertCreated()
+            ->assertJsonPath('entry.kind', 'credit_expense');
     }
 
     public function test_pay_credit_happy_path()

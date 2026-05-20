@@ -167,9 +167,9 @@ app/
 │   │   └── BudgetsReport.php                # Progreso del mes en curso contra `monthly_limit` por categoría
 │   └── Exceptions/
 │       ├── DomainException.php              # Base — renders to JSON {error, code}
-│       ├── InsufficientFunds.php            # 422
-│       ├── OverpayDebt.php                  # 422
-│       ├── CreditLimitExceeded.php          # 422
+│       ├── InsufficientFunds.php            # 422 — ya no se lanza (libreta libre)
+│       ├── OverpayDebt.php                  # 422 — único bloqueo que se mantiene en pagos a tarjeta
+│       ├── CreditLimitExceeded.php          # 422 — ya no se lanza (libreta libre)
 │       ├── InvalidAccountType.php           # 422
 │       ├── InvalidCreditLimit.php           # 422: nuevo limit < deuda o null
 │       ├── InvalidCreditMetadata.php        # 422: closing_day == payment_day
@@ -243,6 +243,15 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense (acepta `category_id` opcional) |
 | POST | `/finance/pay-credit` | sanctum + verified | PayCreditAccount |
 | POST | `/finance/transfer` | sanctum + verified | RegisterTransfer |
+| GET | `/finance/plan/events` | sanctum + verified | Lista eventos planeados del usuario |
+| DELETE | `/finance/plan/events` | sanctum + verified | ClearPlannedEvents — borra todos los eventos del usuario en cascada con sus overrides |
+| POST | `/finance/plan/events` | sanctum + verified | CreatePlannedEvent |
+| PATCH | `/finance/plan/events/{id}` | sanctum + verified | UpdatePlannedEvent (borra overrides huérfanos al cambiar recurrencia y devuelve `removed_overrides`) |
+| DELETE | `/finance/plan/events/{id}` | sanctum + verified | DeletePlannedEvent (cascada de overrides via FK) |
+| POST | `/finance/plan/events/{eventId}/overrides` | sanctum + verified | CreatePlannedEventOverride |
+| PATCH | `/finance/plan/overrides/{id}` | sanctum + verified | UpdatePlannedEventOverride |
+| DELETE | `/finance/plan/overrides/{id}` | sanctum + verified | DeletePlannedEventOverride |
+| GET | `/finance/plan/projection` | sanctum + verified | PlanProjectionService (horizonte HOY + 6 meses, sin caché) |
 
 Rate-limited (`throttle:6,1`): register, login, password forgot/reset, verification resend.
 
@@ -250,11 +259,13 @@ Rate-limited (`throttle:6,1`): register, login, password forgot/reset, verificat
 
 Domain exceptions extend `Domain\Finance\Exceptions\DomainException`, which provides a `render()` method that returns a JSON payload `{ "error": "...", "code": "..." }`:
 
+> **Libreta libre**: FinCore no bloquea movimientos por fondos ni por exceder el `credit_limit`. Los gastos, transfers y cargos a tarjeta se permiten siempre; cuando dejarían saldo negativo (o exceso de límite en una tarjeta) la UI lo marca con badge/warning pero la operación se acepta. **Única excepción**: `PayCreditAccount` sí valida `OverpayDebt` — pagar más de lo que se debe a una tarjeta deja saldo a favor, que no tiene sentido contable para la libreta personal.
+
 | Exception | HTTP status | `code` |
 |-----------|-------------|--------|
-| `InsufficientFunds` | 422 | `insufficient_funds` |
-| `OverpayDebt` | 422 | `overpay_debt` |
-| `CreditLimitExceeded` | 422 | `credit_limit_exceeded` |
+| `InsufficientFunds` | 422 | `insufficient_funds` (no se lanza hoy) |
+| `OverpayDebt` | 422 | `overpay_debt` — única validación bloqueante de creación |
+| `CreditLimitExceeded` | 422 | `credit_limit_exceeded` (no se lanza hoy) |
 | `InvalidAccountType` | 422 | `invalid_account_type` |
 | `InvalidCreditLimit` | 422 | `invalid_credit_limit` |
 | `InvalidCreditMetadata` | 422 | `invalid_credit_metadata` |
@@ -356,6 +367,22 @@ Backend uses Sail's default entrypoint (`start-container` → `supervisord` as r
 - `backend/.env` — Laravel runtime config inside the container (APP_KEY, mail, cache, etc.). Template: `backend/.env.example`.
 
 `scripts/install.sh` bootstraps both files and autodetects free host ports — if `APP_PORT=80`, `FORWARD_DB_PORT=5432`, etc., are already in use, it writes the next free port instead. `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` are duplicated on purpose between the two `.env` files: the root one is used by the Postgres container at init time, the backend one is what Laravel uses to connect — they must match.
+
+## Plan (proyección financiera a 6 meses)
+
+Subdominio nuevo en `backend/app/Domain/Finance/Plan/` paralelo a `Reports/`. Permite declarar eventos financieros futuros y simular cómo evolucionan los saldos por cuenta sin tocar `journal_entries` reales.
+
+- **Dos entidades nuevas**: `PlannedEvent` (regla recurrente o evento one-off) y `PlannedEventOverride` (modificación de monto o "saltada" sobre una ocurrencia específica). Ambas con UUID v7. FKs a `accounts` con `ON DELETE RESTRICT` (cuentas con eventos vivos no se pueden hard-delete; soft delete vía `Account` sí, y el motor marca esas ocurrencias como `archived_account`).
+- **Recurrencia**:
+  - `weekly` con `recurrence_day` 0..6 (ISO 8601: 0=lunes, 6=domingo).
+  - `monthly` con `recurrence_day` 1..31 (clamp al último día si el mes no lo tiene, ej. día 31 en febrero → 28/29).
+  - `one_off`: ocurrencia única en `start_date`.
+- **Overrides** identificados por `(planned_event_id, occurrence_date)` con unique constraint. Solo aplican a eventos `weekly`/`monthly`. La Action rechaza fechas que no caen en la regla (`override_on_non_occurrence`) y eventos `one_off` (`invalid_recurrence`).
+- **Helper compartido** `Domain/Finance/Support/JournalKindContract` que centraliza la validación tipo↔kind reusada por `UpdateJournalEntry` y por las Actions del Plan.
+- **Service** `PlanProjectionService` proyecta sobre el snapshot de `FinancialStateService`, sin caché, ventana fija HOY + 6 meses. Devuelve `{ horizon, accounts, series, events }` donde cada evento puede traer `warnings: ['overpay' | 'archived_account']` y flag `skipped`.
+- **Filosofía libreta libre en el carril simulado**: los saldos pueden cruzar 0 sin error; sobrepago en `debt_payment` se aplica y se marca `warning = "overpay"` (la única validación dura sigue siendo `OverpayDebt` al crear movimientos reales).
+- **Editar `recurrence_day`** en un evento borra los overrides cuyas `occurrence_date` ya no coinciden con la nueva regla; el PATCH devuelve `removed_overrides` y la UI confirma antes con `BaseConfirm`.
+- **Frontend**: vista `/plan` con hero (BO proyectado / DE proyectada / primera deuda en 0), lista CRUD de eventos, gráfica de líneas (Chart.js, una serie por cuenta) y tabla cronológica con edición inline de overrides. Store Pinia `plan.js` invalida + refetchea proyección tras cada mutación.
 
 ## Deploy a producción (Fly.io)
 

@@ -94,6 +94,12 @@ const routes = [
     component: () => import('@/views/app/ReportsBudgetsView.vue'),
     meta: { requiresAuth: true },
   },
+  {
+    path: '/plan',
+    name: 'plan',
+    component: () => import('@/views/app/PlanView.vue'),
+    meta: { requiresAuth: true },
+  },
   { path: '/', redirect: { name: 'dashboard' } },
   { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
 ]

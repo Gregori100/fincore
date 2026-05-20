@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\MeController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\FinanceController;
+use App\Http\Controllers\PlanController;
 use Illuminate\Support\Facades\Route;
 
 // --- Auth (públicos, con rate limit donde corresponde) ---
@@ -66,4 +67,14 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::post('/credit-expense', [FinanceController::class, 'creditExpense']);
     Route::post('/pay-credit', [FinanceController::class, 'payCredit']);
     Route::post('/transfer', [FinanceController::class, 'transfer']);
+
+    Route::get('/plan/events', [PlanController::class, 'listEvents']);
+    Route::delete('/plan/events', [PlanController::class, 'clearEvents']);
+    Route::post('/plan/events', [PlanController::class, 'createEvent']);
+    Route::patch('/plan/events/{id}', [PlanController::class, 'updateEvent']);
+    Route::delete('/plan/events/{id}', [PlanController::class, 'deleteEvent']);
+    Route::post('/plan/events/{eventId}/overrides', [PlanController::class, 'createOverride']);
+    Route::patch('/plan/overrides/{id}', [PlanController::class, 'updateOverride']);
+    Route::delete('/plan/overrides/{id}', [PlanController::class, 'deleteOverride']);
+    Route::get('/plan/projection', [PlanController::class, 'projection']);
 });
