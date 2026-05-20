@@ -5,7 +5,6 @@ namespace Tests\Feature\Finance;
 use App\Domain\Finance\Actions\CreateCategory;
 use App\Domain\Finance\Actions\RegisterExpense;
 use App\Domain\Finance\Actions\RegisterIncome;
-use App\Domain\Finance\Exceptions\InsufficientFunds;
 use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
@@ -40,16 +39,16 @@ class IncomeTest extends TestCase
         $this->assertEquals(3000, $state->getBO());
     }
 
-    public function test_cannot_spend_more_than_balance()
+    public function test_spending_more_than_balance_is_allowed_and_goes_negative()
     {
         $user = $this->createUserWithBolsa();
         $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
 
         RegisterIncome::execute($user->id, $bolsa->id, 1000);
-
-        $this->expectException(InsufficientFunds::class);
-
         RegisterExpense::execute($user->id, $bolsa->id, 2000);
+
+        $state = new FinancialStateService($user->id);
+        $this->assertEquals(-1000, $state->getAccountBalance($bolsa->id));
     }
 
     public function test_income_into_debit_account()

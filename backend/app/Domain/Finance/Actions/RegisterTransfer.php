@@ -2,9 +2,7 @@
 
 namespace App\Domain\Finance\Actions;
 
-use App\Domain\Finance\Exceptions\InsufficientFunds;
 use App\Domain\Finance\Exceptions\InvalidAccountType;
-use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
 use App\Models\JournalEntry;
 use Illuminate\Support\Carbon;
@@ -52,11 +50,6 @@ class RegisterTransfer
 
             if (! $origin->isCashLike() || ! $destination->isCashLike()) {
                 throw new InvalidAccountType('Las transferencias solo se permiten entre cuentas cash o debit. Usa pay-credit para pagar tarjetas.');
-            }
-
-            $state = new FinancialStateService($userId);
-            if ($amount > $state->getAccountBalance($origin->id)) {
-                throw new InsufficientFunds();
             }
 
             return JournalEntry::create([

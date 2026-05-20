@@ -7,7 +7,6 @@ use App\Domain\Finance\Actions\PayCreditAccount;
 use App\Domain\Finance\Actions\RegisterCreditExpense;
 use App\Domain\Finance\Actions\RegisterExpense;
 use App\Domain\Finance\Actions\RegisterIncome;
-use App\Domain\Finance\Exceptions\InsufficientFunds;
 use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Domain\Finance\Exceptions\OverpayDebt;
 use App\Domain\Finance\Services\FinancialStateService;
@@ -20,20 +19,24 @@ class ExpenseTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_cannot_spend_more_than_account_balance()
+    public function test_spending_more_than_balance_leaves_negative()
     {
+        // Libreta libre: el gasto se acepta y la cuenta queda con saldo negativo.
         $user = $this->createUserWithBolsa();
         $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
 
         RegisterIncome::execute($user->id, $bolsa->id, 1000);
-
-        $this->expectException(InsufficientFunds::class);
-
         RegisterExpense::execute($user->id, $bolsa->id, 1500);
+
+        $state = new FinancialStateService($user->id);
+        $this->assertEquals(-500, $state->getAccountBalance($bolsa->id));
+        $this->assertEquals(-500, $state->getBO());
     }
 
-    public function test_cannot_overpay_credit_account()
+    public function test_cannot_overpay_credit_card()
     {
+        // Sí queda bloqueado: pagar más que la deuda dejaría saldo a favor en
+        // la tarjeta, lo cual no tiene sentido contable para la libreta personal.
         $user = $this->createUserWithBolsa();
         $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
         $card = Account::factory()->credit()->for($user)->create(['credit_limit' => 10000]);
@@ -46,17 +49,18 @@ class ExpenseTest extends TestCase
         PayCreditAccount::execute($user->id, $bolsa->id, $card->id, 2000);
     }
 
-    public function test_cannot_pay_credit_account_without_funds()
+    public function test_paying_credit_without_funds_leaves_origin_negative()
     {
         $user = $this->createUserWithBolsa();
         $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
         $card = Account::factory()->credit()->for($user)->create(['credit_limit' => 10000]);
 
         RegisterCreditExpense::execute($user->id, $card->id, 1000);
-
-        $this->expectException(InsufficientFunds::class);
-
         PayCreditAccount::execute($user->id, $bolsa->id, $card->id, 500);
+
+        $state = new FinancialStateService($user->id);
+        $this->assertEquals(-500, $state->getAccountBalance($bolsa->id));
+        $this->assertEquals(500, $state->getAccountBalance($card->id));
     }
 
     public function test_account_balance_reaches_zero()

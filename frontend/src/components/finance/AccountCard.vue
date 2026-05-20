@@ -42,6 +42,11 @@ const editable = computed(() => !props.account.is_protected && !isArchived.value
 // (usualmente porque se canceló un ingreso ya consumido). En credit, balance
 // negativo significa "pagaste de más" (overpaid), también raro pero se marca.
 const isNegative = computed(() => Number(props.account.balance ?? 0) < 0)
+// Excedió el límite de crédito: bajo libreta libre se permiten cargos por
+// encima del credit_limit, y la UI lo marca aquí.
+const isOverLimit = computed(
+  () => props.account.type === 'credit' && Number(props.account.available_credit ?? 0) < 0,
+)
 </script>
 
 <template>
@@ -95,6 +100,12 @@ const isNegative = computed(() => Number(props.account.balance ?? 0) < 0)
           >
             saldo negativo
           </span>
+          <span
+            v-if="isOverLimit"
+            class="text-[10px] font-medium tracking-normal text-[color:var(--color-warning)] bg-[color:var(--color-warning)]/10 border border-[color:var(--color-warning)]/30 px-1.5 py-0.5 rounded normal-case"
+          >
+            excede límite
+          </span>
         </p>
       </div>
 
@@ -137,7 +148,10 @@ const isNegative = computed(() => Number(props.account.balance ?? 0) < 0)
       </div>
       <div class="flex justify-between">
         <span class="text-[color:var(--color-text-muted)]">Disponible</span>
-        <span class="tabular-nums text-[color:var(--color-accent)] font-medium">
+        <span
+          class="tabular-nums font-medium"
+          :class="isOverLimit ? 'text-[color:var(--color-warning)]' : 'text-[color:var(--color-accent)]'"
+        >
           {{ fmt(account.available_credit) }}
         </span>
       </div>

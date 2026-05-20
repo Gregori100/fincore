@@ -2,7 +2,6 @@
 
 namespace App\Domain\Finance\Actions;
 
-use App\Domain\Finance\Exceptions\InsufficientFunds;
 use App\Domain\Finance\Exceptions\InvalidAccountType;
 use App\Domain\Finance\Exceptions\OverpayDebt;
 use App\Domain\Finance\Services\FinancialStateService;
@@ -56,11 +55,11 @@ class PayCreditAccount
                 throw new InvalidAccountType('El destino del pago debe ser una cuenta de crédito.');
             }
 
+            // Sin validación de fondos en el origen: si no alcanza, la cuenta
+            // origen queda negativa (libreta libre). El overpay sí se valida:
+            // pagar más de la deuda dejaría saldo a favor en la tarjeta y eso
+            // no tiene sentido contable para la libreta personal.
             $state = new FinancialStateService($userId);
-
-            if ($amount > $state->getAccountBalance($origin->id)) {
-                throw new InsufficientFunds();
-            }
             if ($amount > $state->getAccountBalance($credit->id)) {
                 throw new OverpayDebt();
             }

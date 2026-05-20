@@ -2,10 +2,8 @@
 
 namespace App\Domain\Finance\Actions;
 
-use App\Domain\Finance\Exceptions\CreditLimitExceeded;
 use App\Domain\Finance\Exceptions\InvalidAccountType;
 use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
-use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\JournalEntry;
@@ -23,8 +21,9 @@ class RegisterCreditExpense
         ?string $occurredAt = null,
     ): JournalEntry {
         return DB::transaction(function () use ($userId, $accountId, $amount, $description, $categoryId, $occurredAt) {
-            // lockForUpdate previene que dos cargos simultáneos sumen y excedan
-            // el límite de crédito por race condition.
+            // lockForUpdate serializa cargos simultáneos sobre la misma tarjeta.
+            // Ya no validamos contra credit_limit: la app permite exceder el
+            // límite y la UI lo marca visualmente (libreta libre).
             $account = Account::where('id', $accountId)
                 ->where('user_id', $userId)
                 ->lockForUpdate()
@@ -32,14 +31,6 @@ class RegisterCreditExpense
 
             if (! $account->isCredit()) {
                 throw new InvalidAccountType('Solo se puede cargar a una cuenta de tipo credit.');
-            }
-
-            $state = new FinancialStateService($userId);
-            $newBalance = $state->getAccountBalance($account->id) + $amount;
-            $limit = (float) ($account->credit_limit ?? 0);
-
-            if ($newBalance > $limit) {
-                throw new CreditLimitExceeded();
             }
 
             // credit_expense semánticamente es un "gasto" — usa categorías de

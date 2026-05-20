@@ -4,7 +4,6 @@ namespace Tests\Feature\Finance;
 
 use App\Domain\Finance\Actions\CreateCategory;
 use App\Domain\Finance\Actions\RegisterCreditExpense;
-use App\Domain\Finance\Exceptions\CreditLimitExceeded;
 use App\Domain\Finance\Exceptions\InvalidAccountType;
 use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
 use App\Domain\Finance\Services\FinancialStateService;
@@ -29,14 +28,17 @@ class CreditExpenseTest extends TestCase
         $this->assertEquals(2000, $state->getDE());
     }
 
-    public function test_cannot_exceed_credit_limit()
+    public function test_can_exceed_credit_limit()
     {
+        // Libreta libre: la app permite cargos por encima del credit_limit;
+        // la UI muestra "Excede límite" como advertencia, sin bloquear.
         $user = $this->createUserWithBolsa();
         $card = Account::factory()->credit()->for($user)->create(['credit_limit' => 1000]);
 
-        $this->expectException(CreditLimitExceeded::class);
-
         RegisterCreditExpense::execute($user->id, $card->id, 2000);
+
+        $state = new FinancialStateService($user->id);
+        $this->assertEquals(2000, $state->getAccountBalance($card->id));
     }
 
     public function test_cannot_credit_expense_on_cash_or_debit_account()

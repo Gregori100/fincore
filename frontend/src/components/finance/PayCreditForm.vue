@@ -70,14 +70,25 @@ function validate() {
     e.amount = 'Ingresa un monto'
   } else if (Number.isNaN(amount) || amount <= 0) {
     e.amount = 'El monto debe ser mayor a 0'
-  } else if (amount > originBalance.value) {
-    e.amount = `Excede el saldo de la cuenta origen (${fmt(originBalance.value)})`
-  } else if (amount > creditDebt.value) {
+  } else if (credit.value && amount > creditDebt.value) {
+    // El sobrepago SÍ se bloquea: no tiene sentido pagar más de lo que se debe.
     e.amount = `Excede la deuda de la tarjeta (${fmt(creditDebt.value)})`
   }
   if (!form.value.occurred_at) e.occurred_at = 'Ingresa una fecha'
   return e
 }
+
+// Aviso no bloqueante: si el pago excede el saldo del origen, la cuenta queda
+// en negativo (libreta libre).
+const overdraftWarning = computed(() => {
+  const amount = Number(form.value.amount)
+  if (!form.value.amount || Number.isNaN(amount) || amount <= 0) return ''
+  if (!origin.value) return ''
+  if (amount > originBalance.value) {
+    return `Dejará el origen en negativo (excede ${fmt(originBalance.value)} disponibles).`
+  }
+  return ''
+})
 
 const { errors, submitting, submit } = useFormErrors(validate)
 
@@ -142,6 +153,12 @@ async function handleSubmit() {
         :error="errors.amount"
         required
       />
+      <p
+        v-if="overdraftWarning"
+        class="text-xs text-[color:var(--color-warning)] -mt-2"
+      >
+        ⚠ {{ overdraftWarning }}
+      </p>
       <BaseInput
         v-model="form.occurred_at"
         type="date"

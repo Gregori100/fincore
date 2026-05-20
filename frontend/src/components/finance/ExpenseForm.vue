@@ -59,12 +59,22 @@ function validate() {
     e.amount = 'Ingresa un monto'
   } else if (Number.isNaN(amount) || amount <= 0) {
     e.amount = 'El monto debe ser mayor a 0'
-  } else if (amount > sourceBalance.value) {
-    e.amount = `Excede el saldo disponible (${fmt(sourceBalance.value)})`
   }
   if (!form.value.occurred_at) e.occurred_at = 'Ingresa una fecha'
   return e
 }
+
+// Aviso (no bloqueo): si el gasto supera el saldo disponible, dejará la
+// cuenta en negativo. Coherente con la filosofía libreta libre.
+const overspendWarning = computed(() => {
+  const amount = Number(form.value.amount)
+  if (!form.value.amount || Number.isNaN(amount) || amount <= 0) return ''
+  if (!selectedAccount.value) return ''
+  if (amount > sourceBalance.value) {
+    return `Dejará saldo negativo (excede ${fmt(sourceBalance.value)} disponibles).`
+  }
+  return ''
+})
 
 const { errors, submitting, submit } = useFormErrors(validate)
 
@@ -112,6 +122,12 @@ async function handleSubmit() {
       :error="errors.amount"
       required
     />
+    <p
+      v-if="overspendWarning"
+      class="text-xs text-[color:var(--color-warning)] -mt-2"
+    >
+      ⚠ {{ overspendWarning }}
+    </p>
     <BaseInput
       v-model="form.occurred_at"
       type="date"

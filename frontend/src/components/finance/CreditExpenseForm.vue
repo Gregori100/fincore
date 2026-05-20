@@ -60,12 +60,23 @@ function validate() {
     e.amount = 'Ingresa un monto'
   } else if (Number.isNaN(amount) || amount <= 0) {
     e.amount = 'El monto debe ser mayor a 0'
-  } else if (amount > availableCredit.value) {
-    e.amount = `Excede el crédito disponible (${fmt(availableCredit.value)})`
   }
   if (!form.value.occurred_at) e.occurred_at = 'Ingresa una fecha'
   return e
 }
+
+// Aviso (no bloqueo): el cargo se permite incluso por encima del límite; la UI
+// marca el exceso aquí y en el card de la cuenta.
+const overLimitWarning = computed(() => {
+  const amount = Number(form.value.amount)
+  if (!form.value.amount || Number.isNaN(amount) || amount <= 0) return ''
+  if (!selectedCard.value) return ''
+  if (amount > availableCredit.value) {
+    const excess = amount - availableCredit.value
+    return `Excederá el crédito disponible por ${fmt(excess)}.`
+  }
+  return ''
+})
 
 const { errors, submitting, submit } = useFormErrors(validate)
 
@@ -119,6 +130,12 @@ async function handleSubmit() {
         :error="errors.amount"
         required
       />
+      <p
+        v-if="overLimitWarning"
+        class="text-xs text-[color:var(--color-warning)] -mt-2"
+      >
+        ⚠ {{ overLimitWarning }}
+      </p>
       <BaseInput
         v-model="form.occurred_at"
         type="date"

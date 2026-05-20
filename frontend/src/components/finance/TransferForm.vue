@@ -67,12 +67,21 @@ function validate() {
     e.amount = 'Ingresa un monto'
   } else if (Number.isNaN(amount) || amount <= 0) {
     e.amount = 'El monto debe ser mayor a 0'
-  } else if (amount > originBalance.value) {
-    e.amount = `Excede el saldo del origen (${fmt(originBalance.value)})`
   }
   if (!form.value.occurred_at) e.occurred_at = 'Ingresa una fecha'
   return e
 }
+
+// Aviso (no bloqueo): transferir más del saldo deja el origen negativo.
+const overdraftWarning = computed(() => {
+  const amount = Number(form.value.amount)
+  if (!form.value.amount || Number.isNaN(amount) || amount <= 0) return ''
+  if (!origin.value) return ''
+  if (amount > originBalance.value) {
+    return `Dejará el origen en negativo (excede ${fmt(originBalance.value)}).`
+  }
+  return ''
+})
 
 const { errors, submitting, submit } = useFormErrors(validate)
 
@@ -133,6 +142,12 @@ async function handleSubmit() {
         :error="errors.amount"
         required
       />
+      <p
+        v-if="overdraftWarning"
+        class="text-xs text-[color:var(--color-warning)] -mt-2"
+      >
+        ⚠ {{ overdraftWarning }}
+      </p>
       <BaseInput
         v-model="form.occurred_at"
         type="date"

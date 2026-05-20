@@ -2,10 +2,8 @@
 
 namespace App\Domain\Finance\Actions;
 
-use App\Domain\Finance\Exceptions\InsufficientFunds;
 use App\Domain\Finance\Exceptions\InvalidAccountType;
 use App\Domain\Finance\Exceptions\InvalidCategoryAppliesTo;
-use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\JournalEntry;
@@ -23,9 +21,10 @@ class RegisterExpense
         ?string $occurredAt = null,
     ): JournalEntry {
         return DB::transaction(function () use ($userId, $accountId, $amount, $description, $categoryId, $occurredAt) {
-            // lockForUpdate previene que dos gastos simultáneos lean el mismo
-            // balance y ambos pasen la validación (race que dejaría saldo
-            // negativo). El segundo espera al commit del primero.
+            // lockForUpdate serializa mutaciones concurrentes sobre la misma
+            // cuenta. Mantenemos el lock aunque ya no validamos fondos (libreta
+            // libre: saldos negativos son legales): evita ordenamiento raro de
+            // dos gastos simultáneos.
             $account = Account::where('id', $accountId)
                 ->where('user_id', $userId)
                 ->lockForUpdate()
@@ -33,11 +32,6 @@ class RegisterExpense
 
             if (! $account->isCashLike()) {
                 throw new InvalidAccountType('Un gasto en efectivo/débito solo puede salir de una cuenta cash o debit. Usa credit_expense para tarjetas de crédito.');
-            }
-
-            $state = new FinancialStateService($userId);
-            if ($amount > $state->getAccountBalance($account->id)) {
-                throw new InsufficientFunds();
             }
 
             if ($categoryId !== null) {

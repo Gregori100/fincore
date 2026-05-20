@@ -4,7 +4,6 @@ namespace Tests\Feature\Finance;
 
 use App\Domain\Finance\Actions\RegisterIncome;
 use App\Domain\Finance\Actions\RegisterTransfer;
-use App\Domain\Finance\Exceptions\InsufficientFunds;
 use App\Domain\Finance\Exceptions\InvalidAccountType;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\Account;
@@ -54,14 +53,16 @@ class TransferTest extends TestCase
         RegisterTransfer::execute($user->id, $bolsa->id, $card->id, 500);
     }
 
-    public function test_transfer_requires_sufficient_funds()
+    public function test_transfer_without_funds_leaves_origin_negative()
     {
         $user = $this->createUserWithBolsa();
         $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->firstOrFail();
         $banamex = Account::factory()->debit()->for($user)->create();
 
-        $this->expectException(InsufficientFunds::class);
-
         RegisterTransfer::execute($user->id, $bolsa->id, $banamex->id, 500);
+
+        $state = new FinancialStateService($user->id);
+        $this->assertEquals(-500, $state->getAccountBalance($bolsa->id));
+        $this->assertEquals(500, $state->getAccountBalance($banamex->id));
     }
 }
