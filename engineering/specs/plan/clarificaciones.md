@@ -20,3 +20,11 @@ Revisión final de los supuestos sensibles antes de planear. El usuario confirm�
   Impacto en spec: confirma Fuera de alcance y Riesgos.
 
 Estado de la spec al cierre: **Lista para planear**. Sin preguntas pendientes ni bloqueos.
+
+## 2026-05-20
+
+Cambio retroactivo al motor de proyección a pedido del usuario tras probar la v1:
+
+- Decisión: `debt_payment` planeado se **auto-ajusta** en la simulación para nunca dejar la tarjeta en negativo. Si el monto programado excede la deuda actual al momento de la ocurrencia, se recorta al monto exacto adeudado (`warning = "auto_adjusted"`). Si la deuda ya está en 0, la ocurrencia se salta entera (`warning = "debt_already_zero"`).
+  Impacto en spec: deroga el comportamiento anterior de aplicar el pago igual y marcar `warning = "overpay"`. Reglas de negocio (Simulación) y Casos borde actualizados. La filosofía libreta libre se preserva para cash/débito (saldos pueden ir negativos) y para cargos a tarjeta (pueden exceder credit_limit), pero NO para pagos planeados de tarjeta — porque sobrepagar es un caso sin uso real (motivo por el cual `OverpayDebt` también bloquea en la creación de movimientos reales).
+  Decisión técnica: el ajuste vive en `PlanProjectionService::project()` antes de aplicar el saldo, no en una flag por evento. Si en el futuro alguien quiere "sí pagar más para acumular saldo a favor" se agrega un flag opt-in.

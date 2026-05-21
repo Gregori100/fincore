@@ -65,7 +65,7 @@ class PlanProjectionService
             /** @var PlannedEvent $event */
             $event = $occurrence['event'];
             $date = $occurrence['date'];
-            $amount = $occurrence['amount'];
+            $amount = (float) $occurrence['amount'];
             $overrideId = $occurrence['override_id'];
             $source = $occurrence['source'];
             $skipped = $occurrence['skipped'];
@@ -84,15 +84,38 @@ class PlanProjectionService
                 }
             }
 
+            // Auto-ajuste de debt_payment: nunca dejar la tarjeta en negativo.
+            // Si la deuda ya está en 0, se salta la ocurrencia. Si el monto
+            // excede la deuda actual, se recorta al monto exacto adeudado.
+            if (! $skipped && $event->kind === JournalEntry::KIND_DEBT_PAYMENT && $destinationId !== null) {
+                $currentDebt = $balances[$destinationId];
+                if ($currentDebt <= 0) {
+                    $skipped = true;
+                    $warnings[] = 'debt_already_zero';
+                    $amount = 0.0;
+                } elseif ($amount > $currentDebt) {
+                    $amount = $currentDebt;
+                    $warnings[] = 'auto_adjusted';
+                }
+            }
+
             if (! $skipped) {
-                $this->applyToBalances($event, $amount, $balances, $accountTypes, $warnings);
+                $this->applyToBalances($event, $amount, $balances, $accountTypes);
                 $this->snapshotBalances($series, $balances, $date);
+            }
+
+            // No emitir las ocurrencias auto-saltadas por "tarjeta ya en cero":
+            // son ruido (no aportan información al usuario, solo serían "0 → 0").
+            // Las saltadas por archived_account o por override manual sí se emiten
+            // (son señales que el usuario debe ver).
+            if ($skipped && in_array('debt_already_zero', $warnings, true)) {
+                continue;
             }
 
             $events[] = [
                 'date' => $date->toDateString(),
                 'kind' => $event->kind,
-                'amount' => (float) $amount,
+                'amount' => $amount,
                 'account_origin_id' => $originId,
                 'account_destination_id' => $destinationId,
                 'planned_event_id' => $event->id,
@@ -182,7 +205,7 @@ class PlanProjectionService
         ])->values();
     }
 
-    private function applyToBalances(PlannedEvent $event, float $amount, array &$balances, array $accountTypes, array &$warnings): void
+    private function applyToBalances(PlannedEvent $event, float $amount, array &$balances, array $accountTypes): void
     {
         $originId = $event->account_origin_id;
         $destinationId = $event->account_destination_id;
@@ -199,14 +222,6 @@ class PlanProjectionService
             $balances[$destinationId] += ($accountTypes[$destinationId] === Account::TYPE_CREDIT)
                 ? -$amount
                 : $amount;
-        }
-
-        // Para debt_payment, si la tarjeta destino queda con balance negativo
-        // (sobrepago), advertir. Sólo aplica al kind donde tiene sentido.
-        if ($event->kind === JournalEntry::KIND_DEBT_PAYMENT
-            && $destinationId !== null
-            && $balances[$destinationId] < 0) {
-            $warnings[] = 'overpay';
         }
     }
 

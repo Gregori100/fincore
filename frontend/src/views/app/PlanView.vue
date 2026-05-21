@@ -222,6 +222,7 @@ function close() {
           v-if="tab === 'chart' && projection"
           :accounts="projection.accounts"
           :series="projection.series"
+          :events="projection.events"
         />
         <PlanProjectionTable
           v-if="tab === 'table' && projection"

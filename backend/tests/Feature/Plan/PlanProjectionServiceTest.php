@@ -179,8 +179,10 @@ class PlanProjectionServiceTest extends TestCase
         $this->assertNotNull($skippedEvent);
     }
 
-    public function test_overpay_marks_warning(): void
+    public function test_payment_caps_to_current_debt(): void
     {
+        // Si el pago supera la deuda actual, se recorta al monto exacto y se
+        // marca `auto_adjusted`. La tarjeta nunca queda en negativo.
         $user = $this->createUserWithBolsa();
         $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->first();
         $card = Account::factory()->credit()->for($user)->create();
@@ -197,7 +199,68 @@ class PlanProjectionServiceTest extends TestCase
 
         $projection = (new PlanProjectionService($user->id))->project();
         $event = collect($projection['events'])->first();
-        $this->assertContains('overpay', $event['warnings']);
+        $this->assertContains('auto_adjusted', $event['warnings']);
+        $this->assertEqualsWithDelta(500.0, $event['amount'], 0.001);
+        $cardSummary = collect($projection['accounts'])->firstWhere('id', $card->id);
+        $this->assertEqualsWithDelta(0.0, $cardSummary['final_balance'], 0.001);
+    }
+
+    public function test_payment_skipped_when_debt_already_zero(): void
+    {
+        // Si al momento de la ocurrencia la tarjeta ya está pagada, la ocurrencia
+        // se salta entera, NO se aplica al saldo origen y NO se emite en la lista
+        // de eventos (ruido: sería "0 → 0" sin valor informativo).
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->first();
+        $card = Account::factory()->credit()->for($user)->create();
+        RegisterIncome::execute($user->id, $bolsa->id, 50000);
+        // No hay deuda en la tarjeta.
+
+        CreatePlannedEvent::execute($user->id, [
+            'kind' => JournalEntry::KIND_DEBT_PAYMENT,
+            'amount' => 3000,
+            'account_origin_id' => $bolsa->id,
+            'account_destination_id' => $card->id,
+            'recurrence_type' => PlannedEvent::RECURRENCE_ONE_OFF,
+            'start_date' => Carbon::today()->addDays(3)->toDateString(),
+        ]);
+
+        $projection = (new PlanProjectionService($user->id))->project();
+        $this->assertSame([], $projection['events']);
+        $bolsaSummary = collect($projection['accounts'])->firstWhere('id', $bolsa->id);
+        $this->assertEqualsWithDelta(50000.0, $bolsaSummary['final_balance'], 0.001);
+    }
+
+    public function test_recurring_payment_amortizes_debt_without_overpaying(): void
+    {
+        // Caso completo: pago semanal de 3k contra deuda inicial de 7k.
+        // Tres viernes: 3k → 3k → 1k (recortado). Cuarto viernes: skip.
+        $user = $this->createUserWithBolsa();
+        $bolsa = $user->accounts()->where('type', Account::TYPE_CASH)->first();
+        $card = Account::factory()->credit()->for($user)->create();
+        RegisterIncome::execute($user->id, $bolsa->id, 50000);
+        RegisterCreditExpense::execute($user->id, $card->id, 7000);
+
+        CreatePlannedEvent::execute($user->id, [
+            'kind' => JournalEntry::KIND_DEBT_PAYMENT,
+            'amount' => 3000,
+            'account_origin_id' => $bolsa->id,
+            'account_destination_id' => $card->id,
+            'recurrence_type' => PlannedEvent::RECURRENCE_WEEKLY,
+            'recurrence_day' => Carbon::today()->dayOfWeekIso - 1,
+            'start_date' => Carbon::today()->toDateString(),
+            'end_date' => Carbon::today()->addWeeks(4)->toDateString(),
+        ]);
+
+        $projection = (new PlanProjectionService($user->id))->project();
+        $amounts = collect($projection['events'])->pluck('amount')->all();
+        // Las ocurrencias post-cero se filtran del array porque son ruido.
+        $this->assertSame([3000.0, 3000.0, 1000.0], $amounts);
+
+        $cardSummary = collect($projection['accounts'])->firstWhere('id', $card->id);
+        $this->assertEqualsWithDelta(0.0, $cardSummary['final_balance'], 0.001);
+        $bolsaSummary = collect($projection['accounts'])->firstWhere('id', $bolsa->id);
+        $this->assertEqualsWithDelta(43000.0, $bolsaSummary['final_balance'], 0.001);
     }
 
     public function test_event_for_archived_account_is_skipped(): void

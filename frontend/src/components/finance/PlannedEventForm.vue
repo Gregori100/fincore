@@ -50,6 +50,11 @@ function isoSlice(iso) {
 
 const isEdit = computed(() => !!props.event)
 
+// Modo del fin: 'indefinite' (sin fecha fin), 'date' (calendario), 'months' (N meses desde start).
+// Al editar un evento existente con end_date, se precarga en modo 'date' para
+// preservar el valor exacto; el usuario puede cambiar a 'months' si quiere recalcular.
+const initialEndMode = props.event?.end_date ? 'date' : 'indefinite'
+
 const form = ref({
   kind: props.event?.kind ?? 'expense',
   amount: props.event?.amount != null ? String(props.event.amount) : '',
@@ -61,7 +66,31 @@ const form = ref({
   recurrence_day: props.event?.recurrence_day ?? 4,
   start_date: isoSlice(props.event?.start_date) || todayInputDate(),
   end_date: isoSlice(props.event?.end_date) || '',
+  end_mode: initialEndMode,
+  end_months: 3,
 })
+
+const END_MODE_OPTIONS = [
+  { value: 'indefinite', label: 'Sin fecha fin (indefinido)' },
+  { value: 'date', label: 'En una fecha específica' },
+  { value: 'months', label: 'En N meses desde el inicio' },
+]
+const END_MONTH_OPTIONS = [1, 2, 3, 4, 5, 6].map((n) => ({
+  value: n,
+  label: n === 1 ? '1 mes' : `${n} meses`,
+}))
+
+// Calcula start_date + N meses preservando el día (con clamp al último día del mes).
+function addMonthsClamped(dateStr, months) {
+  if (!dateStr) return ''
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const target = new Date(y, m - 1 + months, d)
+  // Si JS desbordó (ej. 31 enero + 1 mes → 3 marzo), clampar al último día del mes destino.
+  if (target.getMonth() !== ((m - 1 + months) % 12 + 12) % 12) {
+    target.setDate(0) // último día del mes anterior
+  }
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`
+}
 
 const accountConfig = computed(() => {
   switch (form.value.kind) {
@@ -136,18 +165,43 @@ function validate() {
       e.recurrence_day = 'Día del mes 1-31'
     }
   }
-  if (
-    form.value.start_date && form.value.end_date
-    && form.value.end_date < form.value.start_date
-  ) {
-    e.end_date = 'No puede ser anterior a la fecha de inicio'
+  if (form.value.recurrence_type !== 'one_off' && form.value.end_mode === 'date') {
+    if (
+      form.value.start_date && form.value.end_date
+      && form.value.end_date < form.value.start_date
+    ) {
+      e.end_date = 'No puede ser anterior a la fecha de inicio'
+    }
+  }
+  if (form.value.recurrence_type !== 'one_off' && form.value.end_mode === 'months') {
+    const m = Number(form.value.end_months)
+    if (!Number.isInteger(m) || m < 1 || m > 6) {
+      e.end_months = 'Entre 1 y 6 meses'
+    }
   }
   return e
 }
 
+// Vista previa del end_date efectivo cuando el modo es "months".
+const monthsPreview = computed(() => {
+  if (form.value.end_mode !== 'months') return ''
+  const m = Number(form.value.end_months)
+  if (!form.value.start_date || !Number.isInteger(m) || m < 1 || m > 6) return ''
+  return addMonthsClamped(form.value.start_date, m)
+})
+
 const { errors, submitting, submit } = useFormErrors(validate)
 
 async function handleSubmit() {
+  let resolvedEndDate = null
+  if (form.value.recurrence_type !== 'one_off') {
+    if (form.value.end_mode === 'date') {
+      resolvedEndDate = form.value.end_date || null
+    } else if (form.value.end_mode === 'months') {
+      resolvedEndDate = addMonthsClamped(form.value.start_date, Number(form.value.end_months))
+    }
+  }
+
   const payload = {
     amount: Number(form.value.amount),
     account_origin_id: accountConfig.value.origin ? form.value.account_origin_id : null,
@@ -156,7 +210,7 @@ async function handleSubmit() {
     description: form.value.description?.trim() || null,
     recurrence_type: form.value.recurrence_type,
     start_date: form.value.start_date,
-    end_date: form.value.end_date || null,
+    end_date: resolvedEndDate,
   }
   if (form.value.recurrence_type !== 'one_off') {
     payload.recurrence_day = Number(form.value.recurrence_day)
@@ -255,14 +309,28 @@ async function handleSubmit() {
       :error="errors.start_date"
       required
     />
-    <BaseInput
-      v-if="form.recurrence_type !== 'one_off'"
-      v-model="form.end_date"
-      type="date"
-      label="Termina el (opcional)"
-      :error="errors.end_date"
-      hint="Dejar vacío para que continúe indefinidamente."
-    />
+    <template v-if="form.recurrence_type !== 'one_off'">
+      <BaseSelect
+        v-model="form.end_mode"
+        label="Termina"
+        :options="END_MODE_OPTIONS"
+      />
+      <BaseInput
+        v-if="form.end_mode === 'date'"
+        v-model="form.end_date"
+        type="date"
+        label="Fecha de fin"
+        :error="errors.end_date"
+      />
+      <BaseSelect
+        v-if="form.end_mode === 'months'"
+        v-model.number="form.end_months"
+        label="Duración"
+        :options="END_MONTH_OPTIONS"
+        :error="errors.end_months"
+        :hint="monthsPreview ? `Termina el ${monthsPreview}` : ''"
+      />
+    </template>
 
     <BaseSelect
       v-if="kindForCategories"

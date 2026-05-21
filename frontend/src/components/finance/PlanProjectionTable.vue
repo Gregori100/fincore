@@ -20,6 +20,12 @@ const KIND_COLOR = {
   credit_expense: 'bg-[color:var(--color-warning)]/15 text-[color:var(--color-warning)]',
   debt_payment: 'bg-[color:var(--color-accent)]/15 text-[color:var(--color-accent)]',
 }
+const WARNING_LABEL = {
+  overpay: 'sobrepago',
+  archived_account: 'cuenta archivada',
+  auto_adjusted: 'recortado al saldo',
+  debt_already_zero: 'tarjeta ya en cero',
+}
 
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', {
@@ -94,7 +100,7 @@ function onRowClick(e) {
               :key="w"
               class="inline-block mr-1 text-[10px] font-medium tracking-normal text-[color:var(--color-warning)] bg-[color:var(--color-warning)]/10 border border-[color:var(--color-warning)]/30 px-1.5 py-0.5 rounded"
             >
-              {{ w }}
+              {{ WARNING_LABEL[w] ?? w }}
             </span>
           </td>
         </tr>

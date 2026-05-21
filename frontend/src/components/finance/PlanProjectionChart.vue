@@ -23,9 +23,10 @@ ChartJS.register(
 )
 
 const props = defineProps({
-  // projection.accounts + projection.series del endpoint /projection.
+  // projection.accounts + projection.series + projection.events del endpoint /projection.
   accounts: { type: Array, default: () => [] },
   series: { type: Object, default: () => ({}) },
+  events: { type: Array, default: () => [] },
 })
 
 function resolveCss(name) {
@@ -41,9 +42,45 @@ const PALETTE = [
   '--color-text-muted',
 ]
 
-// Concatena todas las fechas únicas y las ordena cronológicamente. Las series
-// individuales pueden tener tamaños distintos según cuántos eventos las afectan;
-// las normalizamos al eje X común usando el último valor conocido.
+const fmtCurrency = new Intl.NumberFormat('es-MX', {
+  style: 'currency',
+  currency: 'MXN',
+  maximumFractionDigits: 0,
+})
+
+const KIND_LABEL = {
+  income: 'Ingreso',
+  expense: 'Gasto',
+  credit_expense: 'Cargo tarjeta',
+  debt_payment: 'Pago tarjeta',
+}
+
+// Mapa: por cada accountId, set de fechas donde hubo un evento que tocó esa cuenta.
+// Sirve para pintar puntos visibles solo en esos días.
+const eventDatesByAccount = computed(() => {
+  const map = new Map()
+  for (const ev of props.events) {
+    if (ev.skipped) continue
+    for (const id of [ev.account_origin_id, ev.account_destination_id]) {
+      if (!id) continue
+      if (!map.has(id)) map.set(id, new Set())
+      map.get(id).add(ev.date)
+    }
+  }
+  return map
+})
+
+// Mapa: fecha → lista de eventos del día. Sirve para enriquecer el tooltip.
+const eventsByDate = computed(() => {
+  const map = new Map()
+  for (const ev of props.events) {
+    if (ev.skipped) continue
+    if (!map.has(ev.date)) map.set(ev.date, [])
+    map.get(ev.date).push(ev)
+  }
+  return map
+})
+
 const chartData = computed(() => {
   if (!props.accounts.length) return { labels: [], datasets: [] }
 
@@ -65,20 +102,51 @@ const chartData = computed(() => {
       if (byDate.has(d)) last = byDate.get(d)
       return last
     })
+
+    // Puntos visibles SOLO donde hubo un evento que afectó esta cuenta.
+    const eventDates = eventDatesByAccount.value.get(acc.id) ?? new Set()
+    const pointRadius = labels.map((d) => (eventDates.has(d) ? 4 : 0))
+    const pointHoverRadius = labels.map((d) => (eventDates.has(d) ? 6 : 0))
+
     return {
       label: acc.name,
       data,
       borderColor: color,
       backgroundColor: color,
       tension: 0.15,
-      pointRadius: 0,
-      pointHoverRadius: 4,
+      pointRadius,
+      pointHoverRadius,
+      pointBackgroundColor: color,
       borderWidth: 2,
     }
   })
 
   return { labels, datasets }
 })
+
+// Plugin custom inline para dibujar una línea horizontal punteada en y=0 cuando
+// alguna serie cruza el cero. Útil para identificar visualmente saldos negativos
+// y deudas saldadas sin instalar `chartjs-plugin-annotation`.
+const zeroLinePlugin = {
+  id: 'zeroLine',
+  afterDraw(chart) {
+    const yScale = chart.scales.y
+    if (yScale.min > 0 || yScale.max < 0) return
+    const y = yScale.getPixelForValue(0)
+    const { left, right } = chart.chartArea
+    const ctx = chart.ctx
+    ctx.save()
+    ctx.strokeStyle = resolveCss('--color-text-subtle') || '#666'
+    ctx.globalAlpha = 0.5
+    ctx.setLineDash([4, 4])
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(left, y)
+    ctx.lineTo(right, y)
+    ctx.stroke()
+    ctx.restore()
+  },
+}
 
 const chartOptions = computed(() => ({
   responsive: true,
@@ -88,11 +156,7 @@ const chartOptions = computed(() => ({
     x: { ticks: { maxTicksLimit: 12, autoSkip: true } },
     y: {
       ticks: {
-        callback: (v) => new Intl.NumberFormat('es-MX', {
-          style: 'currency',
-          currency: 'MXN',
-          maximumFractionDigits: 0,
-        }).format(v),
+        callback: (v) => fmtCurrency.format(v),
       },
     },
   },
@@ -100,10 +164,19 @@ const chartOptions = computed(() => ({
     legend: { position: 'top' },
     tooltip: {
       callbacks: {
-        label: (ctx) => `${ctx.dataset.label}: ${new Intl.NumberFormat('es-MX', {
-          style: 'currency',
-          currency: 'MXN',
-        }).format(ctx.parsed.y)}`,
+        label: (ctx) => `${ctx.dataset.label}: ${fmtCurrency.format(ctx.parsed.y)}`,
+        afterBody: (items) => {
+          if (!items.length) return ''
+          const date = items[0].label
+          const events = eventsByDate.value.get(date) ?? []
+          if (!events.length) return ''
+          const lines = ['', 'Eventos de este día:']
+          for (const ev of events) {
+            const sign = ev.kind === 'income' ? '+' : '−'
+            lines.push(`  ${KIND_LABEL[ev.kind] ?? ev.kind}: ${sign}${fmtCurrency.format(Math.abs(ev.amount))}`)
+          }
+          return lines.join('\n')
+        },
       },
     },
   },
@@ -116,7 +189,7 @@ const chartOptions = computed(() => ({
       Sin cuentas activas para proyectar.
     </div>
     <div v-else class="relative h-64 sm:h-80">
-      <Line :data="chartData" :options="chartOptions" />
+      <Line :data="chartData" :options="chartOptions" :plugins="[zeroLinePlugin]" />
     </div>
   </div>
 </template>
