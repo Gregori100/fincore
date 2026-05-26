@@ -4,6 +4,7 @@ import { useFinanceStore } from '@/stores/finance'
 import { usePlanStore } from '@/stores/plan'
 import { useToastStore } from '@/stores/toast'
 import { useFormErrors } from '@/composables/useFormErrors'
+import { isWithinPlanDateRange } from '@/utils/dates'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -153,7 +154,11 @@ function validate() {
   if (accountConfig.value.destination && !form.value.account_destination_id) {
     e.account_destination_id = 'Selecciona una cuenta'
   }
-  if (!form.value.start_date) e.start_date = 'Fecha de inicio requerida'
+  if (!form.value.start_date) {
+    e.start_date = 'Fecha de inicio requerida'
+  } else if (!isWithinPlanDateRange(form.value.start_date)) {
+    e.start_date = 'La fecha debe estar entre 1 año atrás y 5 años adelante'
+  }
   if (form.value.recurrence_type === 'weekly') {
     if (form.value.recurrence_day == null || form.value.recurrence_day < 0 || form.value.recurrence_day > 6) {
       e.recurrence_day = 'Día de semana inválido'
@@ -171,6 +176,8 @@ function validate() {
       && form.value.end_date < form.value.start_date
     ) {
       e.end_date = 'No puede ser anterior a la fecha de inicio'
+    } else if (form.value.end_date && !isWithinPlanDateRange(form.value.end_date)) {
+      e.end_date = 'La fecha debe estar entre 1 año atrás y 5 años adelante'
     }
   }
   if (form.value.recurrence_type !== 'one_off' && form.value.end_mode === 'months') {
