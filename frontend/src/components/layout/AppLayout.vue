@@ -32,6 +32,7 @@ const navItems = [
   { name: 'entries', label: 'Movimientos' },
   { name: 'reports-by-category', label: 'Reportes' },
   { name: 'plan', label: 'Plan' },
+  { name: 'settings', label: 'Ajustes' },
 ]
 
 async function handleLogout() {

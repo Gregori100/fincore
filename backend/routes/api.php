@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
 // --- Auth (públicos, con rate limit donde corresponde) ---
@@ -77,4 +78,6 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::patch('/plan/overrides/{id}', [PlanController::class, 'updateOverride']);
     Route::delete('/plan/overrides/{id}', [PlanController::class, 'deleteOverride']);
     Route::get('/plan/projection', [PlanController::class, 'projection']);
+
+    Route::post('/reset', [SettingsController::class, 'hardReset']);
 });
