@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Finance\Actions\ExportUserData;
 use App\Domain\Finance\Actions\HardResetUserData;
+use App\Domain\Finance\Actions\ImportUserData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -34,6 +36,41 @@ class SettingsController extends Controller
 
         return response()->json([
             'message' => 'Cuenta restablecida',
+            ...$result,
+        ]);
+    }
+
+    /**
+     * Genera el respaldo del dominio financiero del usuario como JSON. El
+     * frontend lo convierte en un archivo descargable.
+     */
+    public function exportData(Request $request)
+    {
+        return response()->json(ExportUserData::execute($request->user()->id));
+    }
+
+    /**
+     * Aplica un respaldo en modo reemplazo total: vacía la cuenta y restaura el
+     * contenido del archivo. Acción destructiva → exige confirmar con la
+     * contraseña actual, igual que el hard reset.
+     */
+    public function importData(Request $request)
+    {
+        $data = $request->validate([
+            'password' => 'required|string',
+            'backup' => 'required|array',
+        ]);
+
+        if (! Hash::check($data['password'], $request->user()->password)) {
+            throw ValidationException::withMessages([
+                'password' => 'La contraseña no es correcta.',
+            ]);
+        }
+
+        $result = ImportUserData::execute($request->user()->id, $data['backup']);
+
+        return response()->json([
+            'message' => 'Respaldo aplicado',
             ...$result,
         ]);
     }

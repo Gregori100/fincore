@@ -80,4 +80,7 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::get('/plan/projection', [PlanController::class, 'projection']);
 
     Route::post('/reset', [SettingsController::class, 'hardReset']);
+
+    Route::get('/backup/export', [SettingsController::class, 'exportData']);
+    Route::post('/backup/import', [SettingsController::class, 'importData']);
 });

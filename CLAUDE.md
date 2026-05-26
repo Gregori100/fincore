@@ -252,6 +252,9 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | PATCH | `/finance/plan/overrides/{id}` | sanctum + verified | UpdatePlannedEventOverride |
 | DELETE | `/finance/plan/overrides/{id}` | sanctum + verified | DeletePlannedEventOverride |
 | GET | `/finance/plan/projection` | sanctum + verified | PlanProjectionService (horizonte HOY + 6 meses, sin caché) |
+| POST | `/finance/reset` | sanctum + verified | HardResetUserData. Borrado **físico** confirmado por contraseña. `mode=full` (default) borra movimientos + cuentas no protegidas + plan; `mode=movements` borra sólo movimientos y conserva cuentas/plan. Conserva siempre Bolsa y categorías. |
+| GET | `/finance/backup/export` | sanctum + verified | ExportUserData. JSON `version:1` con cuentas + categorías + movimientos activos (sin soft-deleted, sin plan). |
+| POST | `/finance/backup/import` | sanctum + verified | ImportUserData. Reemplazo total confirmado por contraseña: reusa el hard reset full y restaura el respaldo regenerando UUIDs + remapeando FKs. Reconcilia Bolsa (singleton) y categorías por nombre. Transaccional. |
 
 Rate-limited (`throttle:6,1`): register, login, password forgot/reset, verification resend.
 
