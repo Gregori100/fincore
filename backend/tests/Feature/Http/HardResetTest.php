@@ -80,6 +80,31 @@ class HardResetTest extends TestCase
         $this->assertSame($categoriesBefore, Category::where('user_id', $this->user->id)->count());
     }
 
+    public function test_movements_mode_keeps_accounts_and_plan(): void
+    {
+        $this->seedData();
+        $accountsBefore = Account::where('user_id', $this->user->id)->count();
+        $this->assertGreaterThan(1, $accountsBefore); // Bolsa + tarjeta
+
+        $this->postJson('/api/finance/reset', ['password' => 'secret-pass', 'mode' => 'movements'])
+            ->assertOk()
+            ->assertJsonPath('deleted_accounts', 0)
+            ->assertJsonPath('deleted_planned_events', 0)
+            ->assertJsonPath('deleted_entries', 2);
+
+        // Cuentas y plan se conservan; sólo se borran los movimientos.
+        $this->assertSame($accountsBefore, Account::where('user_id', $this->user->id)->count());
+        $this->assertSame(1, PlannedEvent::where('user_id', $this->user->id)->count());
+        $this->assertSame(0, JournalEntry::where('user_id', $this->user->id)->count());
+    }
+
+    public function test_rejects_invalid_mode(): void
+    {
+        $this->postJson('/api/finance/reset', ['password' => 'secret-pass', 'mode' => 'nope'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['mode']);
+    }
+
     public function test_hard_reset_force_deletes_soft_deleted_records(): void
     {
         $bolsa = $this->bolsa();

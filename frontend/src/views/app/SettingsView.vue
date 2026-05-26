@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ExclamationTriangleIcon } from '@heroicons/vue/24/outline'
 import { useFinanceStore } from '@/stores/finance'
@@ -17,8 +17,24 @@ const finance = useFinanceStore()
 const plan = usePlanStore()
 const toast = useToastStore()
 
-const showResetModal = ref(false)
+// mode: 'full' | 'movements' | null
+const resetMode = ref(null)
 const password = ref('')
+
+const MODE_COPY = {
+  full: {
+    title: 'Restablecer cuenta completa',
+    warning: 'Vas a borrar todo de forma permanente.',
+    detail: 'Movimientos, cuentas adicionales y plan. Tu Bolsa queda vacía y las categorías se conservan. No hay vuelta atrás.',
+  },
+  movements: {
+    title: 'Vaciar movimientos',
+    warning: 'Vas a borrar todos tus movimientos de forma permanente.',
+    detail: 'Se conservan tus cuentas (quedan en saldo 0), categorías y plan. Sólo se eliminan las transacciones. No hay vuelta atrás.',
+  },
+}
+
+const activeCopy = computed(() => MODE_COPY[resetMode.value] ?? MODE_COPY.full)
 
 function validate() {
   const e = {}
@@ -28,23 +44,29 @@ function validate() {
 
 const { errors, submitting, submit } = useFormErrors(validate)
 
-function openReset() {
+function openReset(mode) {
+  resetMode.value = mode
   password.value = ''
-  showResetModal.value = true
+}
+
+function closeReset() {
+  resetMode.value = null
+  password.value = ''
 }
 
 async function confirmReset() {
   let summary = {}
+  const mode = resetMode.value
   const result = await submit(async () => {
-    const { data } = await settingsApi.hardReset(password.value)
+    const { data } = await settingsApi.hardReset(password.value, mode)
     summary = data ?? {}
   })
   if (result.ok) {
-    toast.success(
-      `Cuenta restablecida: ${summary.deleted_entries ?? 0} movimientos y ${summary.deleted_accounts ?? 0} cuentas eliminados.`,
-    )
-    showResetModal.value = false
-    password.value = ''
+    const msg = mode === 'movements'
+      ? `Movimientos eliminados: ${summary.deleted_entries ?? 0}. Tus cuentas quedaron en cero.`
+      : `Cuenta restablecida: ${summary.deleted_entries ?? 0} movimientos y ${summary.deleted_accounts ?? 0} cuentas eliminados.`
+    toast.success(msg)
+    closeReset()
     plan.reset()
     await finance.fetchState().catch(() => {})
     router.push({ name: 'dashboard' })
@@ -75,34 +97,54 @@ async function confirmReset() {
             Zona de peligro
           </h3>
         </div>
-        <div class="p-4 space-y-3">
-          <div>
-            <p class="font-medium text-sm">Restablecer cuenta (hard reset)</p>
-            <p class="text-xs text-[color:var(--color-text-muted)] mt-1">
-              Borra <strong>permanentemente</strong> todos tus movimientos, cuentas adicionales
-              y eventos del plan. Tu Bolsa queda vacía y tus categorías se conservan.
-              Esta acción <strong>no se puede deshacer</strong>.
-            </p>
+        <div class="divide-y divide-[color:var(--color-border)]">
+          <div class="p-4 flex items-start justify-between gap-4 flex-wrap">
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-sm">Vaciar movimientos</p>
+              <p class="text-xs text-[color:var(--color-text-muted)] mt-1">
+                Borra todas las transacciones pero <strong>conserva tus cuentas</strong>
+                (quedan en saldo 0), categorías y plan. Útil para empezar un periodo
+                nuevo sin perder tu estructura.
+              </p>
+            </div>
+            <BaseButton
+              variant="ghost"
+              class="text-[color:var(--color-negative)] border border-[color:var(--color-negative)]/40 shrink-0"
+              @click="openReset('movements')"
+            >
+              Vaciar movimientos
+            </BaseButton>
           </div>
-          <BaseButton
-            variant="ghost"
-            class="text-[color:var(--color-negative)] border border-[color:var(--color-negative)]/40"
-            @click="openReset"
-          >
-            Restablecer mi cuenta
-          </BaseButton>
+
+          <div class="p-4 flex items-start justify-between gap-4 flex-wrap">
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-sm">Restablecer cuenta completa</p>
+              <p class="text-xs text-[color:var(--color-text-muted)] mt-1">
+                Borra <strong>permanentemente</strong> movimientos, cuentas adicionales
+                y plan. Tu Bolsa queda vacía y las categorías se conservan. Deja la cuenta
+                como recién creada.
+              </p>
+            </div>
+            <BaseButton
+              variant="ghost"
+              class="text-[color:var(--color-negative)] border border-[color:var(--color-negative)]/40 shrink-0"
+              @click="openReset('full')"
+            >
+              Restablecer todo
+            </BaseButton>
+          </div>
         </div>
       </section>
     </div>
 
-    <BaseModal :open="showResetModal" title="Restablecer cuenta" @close="showResetModal = false">
+    <BaseModal :open="resetMode !== null" :title="activeCopy.title" @close="closeReset">
       <form class="space-y-4" novalidate @submit.prevent="confirmReset">
         <div class="bg-[color:var(--color-negative)]/10 border border-[color:var(--color-negative)]/30 rounded-lg p-3">
           <p class="text-sm text-[color:var(--color-negative)] font-medium">
-            Vas a borrar todo de forma permanente.
+            {{ activeCopy.warning }}
           </p>
           <p class="text-xs text-[color:var(--color-text-muted)] mt-1">
-            Movimientos, cuentas adicionales y plan. No hay vuelta atrás. Confirma con tu contraseña.
+            {{ activeCopy.detail }} Confirma con tu contraseña.
           </p>
         </div>
         <BaseInput
@@ -114,7 +156,7 @@ async function confirmReset() {
           required
         />
         <footer class="flex gap-2 justify-end pt-2">
-          <BaseButton variant="ghost" type="button" @click="showResetModal = false">
+          <BaseButton variant="ghost" type="button" @click="closeReset">
             Cancelar
           </BaseButton>
           <BaseButton
@@ -122,7 +164,7 @@ async function confirmReset() {
             :loading="submitting"
             class="bg-[color:var(--color-negative)] text-white hover:opacity-90"
           >
-            Borrar todo
+            {{ resetMode === 'movements' ? 'Vaciar movimientos' : 'Borrar todo' }}
           </BaseButton>
         </footer>
       </form>

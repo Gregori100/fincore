@@ -1,7 +1,7 @@
 import client from './client'
 
-export function hardReset(password) {
-  return client.post('/finance/reset', { password })
+export function hardReset(password, mode = 'full') {
+  return client.post('/finance/reset', { password, mode })
 }
 
 export default {

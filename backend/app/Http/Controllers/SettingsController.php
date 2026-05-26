@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Domain\Finance\Actions\HardResetUserData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class SettingsController extends Controller
@@ -17,17 +18,19 @@ class SettingsController extends Controller
      */
     public function hardReset(Request $request)
     {
-        $request->validate([
+        $data = $request->validate([
             'password' => 'required|string',
+            'mode' => ['sometimes', 'string', Rule::in(HardResetUserData::MODES)],
         ]);
 
-        if (! Hash::check($request->input('password'), $request->user()->password)) {
+        if (! Hash::check($data['password'], $request->user()->password)) {
             throw ValidationException::withMessages([
                 'password' => 'La contraseña no es correcta.',
             ]);
         }
 
-        $result = HardResetUserData::execute($request->user()->id);
+        $mode = $data['mode'] ?? HardResetUserData::MODE_FULL;
+        $result = HardResetUserData::execute($request->user()->id, $mode);
 
         return response()->json([
             'message' => 'Cuenta restablecida',
