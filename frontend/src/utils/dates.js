@@ -57,6 +57,22 @@ export function formatYearMonth(ym) {
   return `${SHORT_MONTHS_ES[m - 1]} ${String(y).slice(-2)}`
 }
 
+/**
+ * Rango de fechas que el backend del módulo Plan acepta
+ * (CreatePlannedEvent::validateDateRange): [hoy − 1 año, hoy + 5 años]. El
+ * cliente valida lo mismo para evitar un 422 sorpresa al crear eventos.
+ */
+export function isWithinPlanDateRange(dateStr) {
+  if (!dateStr) return false
+  const d = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const min = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate())
+  const max = new Date(today.getFullYear() + 5, today.getMonth(), today.getDate())
+  return d >= min && d <= max
+}
+
 /** Devuelve `YYYY-MM` del mes actual. */
 export function currentYearMonth() {
   const d = new Date()

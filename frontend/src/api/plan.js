@@ -8,6 +8,10 @@ export function createEvent(payload) {
   return client.post('/finance/plan/events', payload)
 }
 
+export function bulkCreateEvents(events) {
+  return client.post('/finance/plan/events/bulk', { events })
+}
+
 export function updateEvent(id, payload) {
   return client.patch(`/finance/plan/events/${id}`, payload)
 }
@@ -39,6 +43,7 @@ export function projection() {
 export default {
   listEvents,
   createEvent,
+  bulkCreateEvents,
   updateEvent,
   deleteEvent,
   clearEvents,

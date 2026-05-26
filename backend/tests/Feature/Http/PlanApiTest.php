@@ -78,6 +78,36 @@ class PlanApiTest extends TestCase
             ->assertJsonPath('event.recurrence_type', 'weekly');
     }
 
+    public function test_bulk_create_via_api(): void
+    {
+        $bolsa = $this->bolsa();
+        $card = Account::factory()->credit()->for($this->user)->create();
+
+        $this->postJson('/api/finance/plan/events/bulk', [
+            'events' => [
+                ['kind' => 'income', 'amount' => 5700, 'account_destination_id' => $bolsa->id, 'recurrence_type' => 'weekly', 'recurrence_day' => 4, 'start_date' => Carbon::today()->toDateString()],
+                ['kind' => 'debt_payment', 'amount' => 3000, 'account_origin_id' => $bolsa->id, 'account_destination_id' => $card->id, 'recurrence_type' => 'monthly', 'recurrence_day' => 15, 'start_date' => Carbon::today()->toDateString()],
+                ['kind' => 'expense', 'amount' => 800, 'account_origin_id' => $bolsa->id, 'recurrence_type' => 'one_off', 'recurrence_day' => null, 'start_date' => Carbon::today()->addDays(3)->toDateString()],
+            ],
+        ])
+            ->assertCreated()
+            ->assertJsonPath('created', 3);
+
+        $this->assertSame(3, PlannedEvent::where('user_id', $this->user->id)->count());
+    }
+
+    public function test_bulk_rejects_out_of_range_date_with_row_context(): void
+    {
+        $bolsa = $this->bolsa();
+        $this->postJson('/api/finance/plan/events/bulk', [
+            'events' => [
+                ['kind' => 'income', 'amount' => 100, 'account_destination_id' => $bolsa->id, 'recurrence_type' => 'one_off', 'recurrence_day' => null, 'start_date' => Carbon::today()->addYears(8)->toDateString()],
+            ],
+        ])
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'invalid_recurrence');
+    }
+
     public function test_create_event_invalid_recurrence(): void
     {
         $bolsa = $this->bolsa();

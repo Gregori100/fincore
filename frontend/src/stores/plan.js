@@ -37,28 +37,37 @@ export const usePlanStore = defineStore('plan', () => {
   async function createEvent(payload) {
     const { data } = await planApi.createEvent(payload)
     events.value.push(data.event)
-    await fetchProjection()
+    await fetchProjection().catch(() => {})
     return data.event
+  }
+
+  async function bulkCreateEvents(events) {
+    // La creación es lo que importa. Si el POST falla, propaga (lo maneja el form).
+    const { data } = await planApi.bulkCreateEvents(events)
+    // Refetch best-effort: un fallo aquí (red, timing) NO debe reportarse como
+    // "no se pudieron crear los eventos" — ya se crearon.
+    await Promise.allSettled([fetchEvents(), fetchProjection()])
+    return data
   }
 
   async function updateEvent(id, payload) {
     const { data } = await planApi.updateEvent(id, payload)
     const idx = events.value.findIndex((e) => e.id === id)
     if (idx !== -1) events.value.splice(idx, 1, data.event)
-    await fetchProjection()
+    await fetchProjection().catch(() => {})
     return data
   }
 
   async function deleteEvent(id) {
     await planApi.deleteEvent(id)
     events.value = events.value.filter((e) => e.id !== id)
-    await fetchProjection()
+    await fetchProjection().catch(() => {})
   }
 
   async function clearAll() {
     await planApi.clearEvents()
     events.value = []
-    await fetchProjection()
+    await fetchProjection().catch(() => {})
   }
 
   async function createOverride(eventId, payload) {
@@ -67,7 +76,7 @@ export const usePlanStore = defineStore('plan', () => {
     if (event) {
       event.overrides = [...(event.overrides ?? []), data.override]
     }
-    await fetchProjection()
+    await fetchProjection().catch(() => {})
     return data.override
   }
 
@@ -80,7 +89,7 @@ export const usePlanStore = defineStore('plan', () => {
         break
       }
     }
-    await fetchProjection()
+    await fetchProjection().catch(() => {})
     return data.override
   }
 
@@ -90,7 +99,7 @@ export const usePlanStore = defineStore('plan', () => {
       if (!event.overrides) continue
       event.overrides = event.overrides.filter((o) => o.id !== id)
     }
-    await fetchProjection()
+    await fetchProjection().catch(() => {})
   }
 
   function reset() {
@@ -108,6 +117,7 @@ export const usePlanStore = defineStore('plan', () => {
     fetchEvents,
     fetchProjection,
     createEvent,
+    bulkCreateEvents,
     updateEvent,
     deleteEvent,
     clearAll,

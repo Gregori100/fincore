@@ -72,6 +72,7 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::get('/plan/events', [PlanController::class, 'listEvents']);
     Route::delete('/plan/events', [PlanController::class, 'clearEvents']);
     Route::post('/plan/events', [PlanController::class, 'createEvent']);
+    Route::post('/plan/events/bulk', [PlanController::class, 'bulkCreateEvents']);
     Route::patch('/plan/events/{id}', [PlanController::class, 'updateEvent']);
     Route::delete('/plan/events/{id}', [PlanController::class, 'deleteEvent']);
     Route::post('/plan/events/{eventId}/overrides', [PlanController::class, 'createOverride']);

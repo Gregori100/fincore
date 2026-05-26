@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Finance\Plan\Actions\BulkCreatePlannedEvents;
 use App\Domain\Finance\Plan\Actions\ClearPlannedEvents;
 use App\Domain\Finance\Plan\Actions\CreatePlannedEvent;
 use App\Domain\Finance\Plan\Actions\CreatePlannedEventOverride;
@@ -45,6 +46,30 @@ class PlanController extends Controller
         return response()->json([
             'message' => 'Evento planeado creado',
             'event' => $event->fresh(['origin', 'destination', 'category', 'overrides']),
+        ], 201);
+    }
+
+    public function bulkCreateEvents(Request $request)
+    {
+        $data = $request->validate([
+            'events' => 'required|array|min:1',
+            'events.*.kind' => 'required|string',
+            'events.*.amount' => 'required|numeric|gt:0',
+            'events.*.account_origin_id' => 'sometimes|nullable|uuid',
+            'events.*.account_destination_id' => 'sometimes|nullable|uuid',
+            'events.*.category_id' => 'sometimes|nullable|uuid|exists:categories,id',
+            'events.*.description' => 'sometimes|nullable|string|max:200',
+            'events.*.recurrence_type' => 'required|string',
+            'events.*.recurrence_day' => 'sometimes|nullable|integer',
+            'events.*.start_date' => 'required|date',
+            'events.*.end_date' => 'sometimes|nullable|date',
+        ]);
+
+        $result = BulkCreatePlannedEvents::execute($request->user()->id, $data['events']);
+
+        return response()->json([
+            'message' => "{$result['created']} eventos creados",
+            'created' => $result['created'],
         ], 201);
     }
 

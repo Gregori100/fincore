@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue'
 import {
   Dialog,
   DialogPanel,
@@ -7,17 +8,35 @@ import {
   TransitionChild,
 } from '@headlessui/vue'
 
-defineProps({
+const props = defineProps({
   open: { type: Boolean, default: false },
   title: { type: String, default: '' },
+  // md (default) | lg | xl | 2xl | 4xl — controla el ancho máximo del panel.
+  size: { type: String, default: 'md' },
+  // persistent: ignora click-fuera y Escape para no perder trabajo. Los botones
+  // explícitos del contenido (Cancelar/X) siguen emitiendo 'close'.
+  persistent: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['close'])
+
+function onDialogClose() {
+  if (props.persistent) return
+  emit('close')
+}
+
+const maxWidthClass = computed(() => ({
+  md: 'max-w-md',
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '4xl': 'max-w-4xl',
+}[props.size] ?? 'max-w-md'))
 </script>
 
 <template>
   <TransitionRoot appear :show="open" as="template">
-    <Dialog as="div" class="relative z-50" @close="emit('close')">
+    <Dialog as="div" class="relative z-50" @close="onDialogClose">
       <TransitionChild
         as="template"
         enter="duration-200 ease-out"
@@ -42,7 +61,8 @@ const emit = defineEmits(['close'])
             leave-to="opacity-0 scale-95"
           >
             <DialogPanel
-              class="w-full max-w-md rounded-xl bg-[color:var(--color-surface)] border border-[color:var(--color-border)] shadow-2xl shadow-black/40 p-6"
+              class="w-full rounded-xl bg-[color:var(--color-surface)] border border-[color:var(--color-border)] shadow-2xl shadow-black/40 p-6"
+              :class="maxWidthClass"
             >
               <DialogTitle v-if="title" class="text-lg font-medium mb-4">
                 {{ title }}
