@@ -9,6 +9,7 @@ const props = defineProps({
   // 'expense' | 'income'. Define qué dirección de delta es "buena" vs "mala".
   kind: { type: String, default: 'expense' },
 })
+const emit = defineEmits(['drilldown'])
 
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', {
@@ -66,7 +67,9 @@ function toneColor(tone) {
     <li
       v-for="b in rows"
       :key="b.category_id ?? 'uncategorized'"
-      class="flex items-center justify-between gap-3 py-3"
+      class="flex items-center justify-between gap-3 py-3 px-2 -mx-2 rounded"
+      :class="b.current > 0 ? 'cursor-pointer hover:bg-[color:var(--color-surface-elevated)]/50' : ''"
+      @click="b.current > 0 && emit('drilldown', b)"
     >
       <div class="flex items-center gap-3 min-w-0">
         <div

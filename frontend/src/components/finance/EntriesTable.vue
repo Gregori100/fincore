@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useFinanceStore } from '@/stores/finance'
 import { useToastStore } from '@/stores/toast'
 import { financeApi } from '@/api/finance'
@@ -11,7 +12,7 @@ import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseConfirm from '@/components/ui/BaseConfirm.vue'
 import CategoryBadge from '@/components/finance/CategoryBadge.vue'
 import EntryEditForm from '@/components/finance/EntryEditForm.vue'
-import { firstDayOfMonth, lastDayOfMonth } from '@/utils/dates'
+import { firstDayOfMonth, lastDayOfMonth, toISODate } from '@/utils/dates'
 import { InboxIcon, ChevronLeftIcon, ChevronRightIcon, FunnelIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -112,7 +113,32 @@ async function fetchEntries() {
   }
 }
 
+const route = useRoute()
+
+// Precarga de filtros desde query params al montar. Usado por el drill-down
+// de los reportes para abrir /entries ya filtrado a un bucket.
+function applyQueryToFilters() {
+  const q = route.query
+  if (!q || !Object.keys(q).length) return
+  if (q.account_id) filters.value.account_id = String(q.account_id)
+  if (q.category_id) filters.value.category_id = String(q.category_id)
+  if (q.kind) filters.value.kind = String(q.kind)
+  if (q.from) filters.value.from = String(q.from)
+  if (q.to) filters.value.to = String(q.to)
+  // year_month es atajo del drill-down; aquí lo traducimos a from/to si no vinieron.
+  // Usamos `toISODate` (local) para evitar el corrimiento de un día que `toISOString()`
+  // introduce en zonas horarias positivas.
+  if (q.year_month && !q.from && !q.to) {
+    const [y, m] = String(q.year_month).split('-').map(Number)
+    if (y && m) {
+      filters.value.from = toISODate(new Date(y, m - 1, 1))
+      filters.value.to = toISODate(new Date(y, m, 0))
+    }
+  }
+}
+
 onMounted(async () => {
+  applyQueryToFilters()
   if (!finance.accounts.length) {
     try {
       await finance.fetchState()

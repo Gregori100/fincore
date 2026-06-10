@@ -5,6 +5,8 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import CreditCardSummary from '@/components/finance/CreditCardSummary.vue'
+import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import { firstDayOfMonth, toISODate } from '@/utils/dates'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { CreditCardIcon } from '@heroicons/vue/24/outline'
 
@@ -13,6 +15,20 @@ const loading = ref(false)
 const error = ref(null)
 
 const hasCards = computed(() => cards.value.length > 0)
+
+const drillOpen = ref(false)
+const drillFilters = ref({})
+
+function openDrilldown(card) {
+  // Cargos del mes en curso para la tarjeta.
+  drillFilters.value = {
+    account_id: card.id,
+    kind: 'credit_expense',
+    from: firstDayOfMonth(),
+    to: toISODate(),
+  }
+  drillOpen.value = true
+}
 
 async function fetchReport() {
   loading.value = true
@@ -84,8 +100,10 @@ onMounted(fetchReport)
       </div>
 
       <section v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <CreditCardSummary v-for="c in cards" :key="c.id" :card="c" />
+        <CreditCardSummary v-for="c in cards" :key="c.id" :card="c" @drilldown="openDrilldown" />
       </section>
     </div>
+
+    <EntriesDrilldownModal :open="drillOpen" :filters="drillFilters" @close="drillOpen = false" />
   </AppLayout>
 </template>

@@ -30,6 +30,8 @@ export const financeApi = {
   reportMonthComparison: (params) => client.get('/finance/reports/month-comparison', { params }),
   reportCreditCards: () => client.get('/finance/reports/credit-cards'),
   reportBudgets: () => client.get('/finance/reports/budgets'),
+  reportByAccount: (params) => client.get('/finance/reports/by-account', { params }),
+  entriesByBucket: (params) => client.get('/finance/reports/entries-by-bucket', { params }),
 
   income: (payload) => client.post('/finance/income', payload),
   expense: (payload) => client.post('/finance/expense', payload),

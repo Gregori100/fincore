@@ -6,6 +6,7 @@ const props = defineProps({
   // [{ category_id, name, color_slug, icon_slug, monthly_limit, spent, remaining, pct_consumed }]
   buckets: { type: Array, default: () => [] },
 })
+const emit = defineEmits(['drilldown'])
 
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', {
@@ -46,7 +47,9 @@ const rows = computed(() => {
     <li
       v-for="b in rows"
       :key="b.category_id"
-      class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5 flex flex-col gap-4"
+      class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5 flex flex-col gap-4 transition"
+      :class="b.spent > 0 ? 'cursor-pointer hover:border-[color:var(--color-accent)]' : ''"
+      @click="b.spent > 0 && emit('drilldown', b)"
     >
       <header class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-3 min-w-0">

@@ -5,6 +5,7 @@ import { CalendarIcon, CreditCardIcon } from '@heroicons/vue/24/outline'
 const props = defineProps({
   card: { type: Object, required: true },
 })
+const emit = defineEmits(['drilldown'])
 
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', {
@@ -55,7 +56,10 @@ const cycleSummary = computed(() => {
 </script>
 
 <template>
-  <article class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5 flex flex-col gap-4">
+  <article
+    class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-5 flex flex-col gap-4 cursor-pointer hover:border-[color:var(--color-accent)] transition"
+    @click="emit('drilldown', card)"
+  >
     <header class="flex items-start justify-between gap-2">
       <div class="min-w-0">
         <h3 class="font-medium truncate flex items-center gap-2">

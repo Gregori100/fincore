@@ -11,6 +11,7 @@ const tabs = [
   { name: 'reports-month-comparison', label: 'Comparativo' },
   { name: 'reports-credit-cards', label: 'Tarjetas' },
   { name: 'reports-budgets', label: 'Presupuestos' },
+  { name: 'reports-by-account', label: 'Por cuenta' },
 ]
 </script>
 

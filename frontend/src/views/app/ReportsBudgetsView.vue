@@ -6,6 +6,8 @@ import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BudgetsList from '@/components/finance/BudgetsList.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
+import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import { firstDayOfMonth, toISODate } from '@/utils/dates'
 import { WalletIcon } from '@heroicons/vue/24/outline'
 
 const data = ref({
@@ -19,6 +21,19 @@ const loading = ref(false)
 const error = ref(null)
 
 const hasBudgets = computed(() => data.value.buckets.length > 0)
+
+const drillOpen = ref(false)
+const drillFilters = ref({})
+
+function openDrilldown(bucket) {
+  drillFilters.value = {
+    category_id: bucket.category_id,
+    kind: 'expense',
+    from: firstDayOfMonth(),
+    to: toISODate(),
+  }
+  drillOpen.value = true
+}
 
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', {
@@ -138,7 +153,9 @@ onMounted(fetchReport)
         </RouterLink>
       </div>
 
-      <BudgetsList v-else :buckets="data.buckets" />
+      <BudgetsList v-else :buckets="data.buckets" @drilldown="openDrilldown" />
     </div>
+
+    <EntriesDrilldownModal :open="drillOpen" :filters="drillFilters" @close="drillOpen = false" />
   </AppLayout>
 </template>

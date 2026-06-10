@@ -9,6 +9,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import CategoryBreakdownChart from '@/components/finance/CategoryBreakdownChart.vue'
 import CategoryBreakdownList from '@/components/finance/CategoryBreakdownList.vue'
+import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
 import ReportHero from '@/components/finance/ReportHero.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { firstDayOfMonth, lastDayOfMonth, toISODate, weeksInRange } from '@/utils/dates'
@@ -27,6 +28,20 @@ const filters = ref({
 const data = ref({ total: 0, count: 0, buckets: [] })
 const loading = ref(false)
 const error = ref(null)
+
+const drillOpen = ref(false)
+const drillFilters = ref({})
+
+function openDrilldown(bucket) {
+  drillFilters.value = {
+    kind: filters.value.kind,
+    category_id: bucket.category_id ?? null,
+    account_id: filters.value.account_id ?? null,
+    from: filters.value.from,
+    to: filters.value.to,
+  }
+  drillOpen.value = true
+}
 
 const kindLabel = computed(() => filters.value.kind === 'expense' ? 'Gastos' : 'Ingresos')
 const periodLabel = computed(() => `${filters.value.from} → ${filters.value.to}`)
@@ -206,9 +221,11 @@ onMounted(async () => {
           <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)] mb-2">
             Detalle por categoría
           </h3>
-          <CategoryBreakdownList :buckets="data.buckets" />
+          <CategoryBreakdownList :buckets="data.buckets" @drilldown="openDrilldown" />
         </div>
       </section>
     </div>
+
+    <EntriesDrilldownModal :open="drillOpen" :filters="drillFilters" @close="drillOpen = false" />
   </AppLayout>
 </template>

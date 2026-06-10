@@ -7,6 +7,7 @@ const props = defineProps({
   // este componente reordena por total desc.
   buckets: { type: Array, default: () => [] },
 })
+const emit = defineEmits(['drilldown'])
 
 function fmt(n) {
   return new Intl.NumberFormat('es-MX', {
@@ -42,7 +43,9 @@ const rows = computed(() => {
     <li
       v-for="b in rows"
       :key="b.category_id ?? 'uncategorized'"
-      class="flex items-center justify-between gap-3 py-3"
+      class="flex items-center justify-between gap-3 py-3 px-2 -mx-2 rounded"
+      :class="b.total > 0 ? 'cursor-pointer hover:bg-[color:var(--color-surface-elevated)]/50' : ''"
+      @click="b.total > 0 && emit('drilldown', b)"
     >
       <div class="flex items-center gap-3 min-w-0">
         <div

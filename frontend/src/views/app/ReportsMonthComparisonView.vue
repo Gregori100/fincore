@@ -6,6 +6,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import MonthComparisonList from '@/components/finance/MonthComparisonList.vue'
+import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { currentYearMonth, formatYearMonth, previousYearMonth } from '@/utils/dates'
 import { ArrowsRightLeftIcon } from '@heroicons/vue/24/outline'
@@ -27,6 +28,19 @@ const data = ref({
 })
 const loading = ref(false)
 const error = ref(null)
+
+const drillOpen = ref(false)
+const drillFilters = ref({})
+
+function openDrilldown(bucket) {
+  drillFilters.value = {
+    kind: kind.value,
+    category_id: bucket.category_id ?? null,
+    account_id: accountId.value ?? null,
+    year_month: month.value,
+  }
+  drillOpen.value = true
+}
 
 const accountOptions = computed(() => [
   { value: null, label: 'Todas las cuentas' },
@@ -218,8 +232,10 @@ onMounted(async () => {
         <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)] mb-2">
           Detalle por categoría (ordenado por cambio absoluto)
         </h3>
-        <MonthComparisonList :buckets="data.buckets" :kind="kind" />
+        <MonthComparisonList :buckets="data.buckets" :kind="kind" @drilldown="openDrilldown" />
       </section>
     </div>
+
+    <EntriesDrilldownModal :open="drillOpen" :filters="drillFilters" @close="drillOpen = false" />
   </AppLayout>
 </template>

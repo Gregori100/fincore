@@ -6,6 +6,7 @@ import AppLayout from '@/components/layout/AppLayout.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import MonthlyCashflowChart from '@/components/finance/MonthlyCashflowChart.vue'
+import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { fillMissingMonths, lastNMonths } from '@/utils/dates'
 import { ChartBarIcon } from '@heroicons/vue/24/outline'
@@ -20,6 +21,19 @@ const accountId = ref(null)
 const data = ref({ months: [], total_income: 0, total_expense: 0, total_net: 0 })
 const loading = ref(false)
 const error = ref(null)
+
+const drillOpen = ref(false)
+const drillFilters = ref({})
+
+function openDrilldown(payload) {
+  // payload viene del chart: { year_month, kind }
+  drillFilters.value = {
+    year_month: payload.year_month,
+    kind: payload.kind,
+    account_id: accountId.value ?? null,
+  }
+  drillOpen.value = true
+}
 
 const accountOptions = computed(() => [
   { value: null, label: 'Todas las cuentas' },
@@ -190,8 +204,10 @@ onMounted(async () => {
         <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--color-text-subtle)] mb-4">
           Cashflow mensual
         </h3>
-        <MonthlyCashflowChart :months="months" />
+        <MonthlyCashflowChart :months="months" @drilldown="openDrilldown" />
       </section>
     </div>
+
+    <EntriesDrilldownModal :open="drillOpen" :filters="drillFilters" @close="drillOpen = false" />
   </AppLayout>
 </template>

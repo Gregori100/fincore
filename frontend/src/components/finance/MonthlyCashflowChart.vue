@@ -33,6 +33,18 @@ const props = defineProps({
   // [{ year_month, income, expense, net }] — array continuo (12 elementos)
   months: { type: Array, default: () => [] },
 })
+const emit = defineEmits(['drilldown'])
+
+function onChartClick(_evt, elements) {
+  if (!elements?.length) return
+  const el = elements[0]
+  const month = props.months[el.index]
+  if (!month) return
+  // dataset 0=Ingresos, 1=Egresos, 2=Neto (línea). Neto no abre drilldown.
+  const datasetIndex = el.datasetIndex
+  if (datasetIndex === 0) emit('drilldown', { year_month: month.year_month, kind: 'income' })
+  else if (datasetIndex === 1) emit('drilldown', { year_month: month.year_month, kind: 'expense' })
+}
 
 /** Resuelve una CSS var oklch a un color real para Chart.js. */
 function resolveCss(name) {
@@ -90,6 +102,12 @@ const options = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   interaction: { mode: 'index', intersect: false },
+  onClick: onChartClick,
+  onHover: (evt, els) => {
+    if (evt?.native?.target) {
+      evt.native.target.style.cursor = els.length ? 'pointer' : 'default'
+    }
+  },
   scales: {
     x: {
       ticks: { color: resolveCss('--color-text-muted') },
