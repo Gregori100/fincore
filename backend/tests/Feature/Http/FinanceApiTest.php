@@ -227,4 +227,46 @@ class FinanceApiTest extends TestCase
             ->assertOk()
             ->assertJsonPath('total', 2);
     }
+
+    public function test_by_account_report_returns_shape_and_correct_totals()
+    {
+        RegisterIncome::execute($this->user->id, $this->bolsa()->id, 5000);
+
+        $resp = $this->getJson('/api/finance/reports/by-account')
+            ->assertOk()
+            ->assertJsonStructure(['from', 'to', 'accounts']);
+
+        $accounts = $resp->json('accounts');
+        $bolsa = collect($accounts)->firstWhere('account_id', $this->bolsa()->id);
+        $this->assertNotNull($bolsa);
+        $this->assertEquals(5000.0, $bolsa['income']);
+        $this->assertEquals(0.0, $bolsa['expense']);
+        $this->assertEquals(5000.0, $bolsa['net']);
+    }
+
+    public function test_by_account_default_range_is_current_month()
+    {
+        // Default sin params: from = primer día del mes, to = hoy.
+        $resp = $this->getJson('/api/finance/reports/by-account')->assertOk();
+        $this->assertSame(now()->startOfMonth()->toDateString(), $resp->json('from'));
+        $this->assertSame(now()->toDateString(), $resp->json('to'));
+    }
+
+    public function test_by_account_excludes_archived_and_respects_user_scope()
+    {
+        // Cuenta archivada del propio usuario: no debe aparecer.
+        $banamex = Account::factory()->debit()->for($this->user)->create(['name' => 'Banamex']);
+        $banamex->delete();
+
+        // Otro usuario con sus propias cuentas/movimientos.
+        $otherUser = $this->createUserWithBolsa();
+        RegisterIncome::execute($otherUser->id, $otherUser->accounts()->where('type', Account::TYPE_CASH)->firstOrFail()->id, 9999);
+
+        $accounts = $this->getJson('/api/finance/reports/by-account')->assertOk()->json('accounts');
+        $ids = collect($accounts)->pluck('account_id')->all();
+
+        $this->assertNotContains($banamex->id, $ids, 'Cuentas archivadas no deben aparecer');
+        $this->assertCount(1, $accounts, 'Solo se ve la Bolsa del usuario actual');
+        $this->assertEquals(0.0, $accounts[0]['income'], 'Sin movimientos del otro usuario contaminando');
+    }
 }

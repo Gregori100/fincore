@@ -238,6 +238,8 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | GET | `/finance/reports/month-comparison` | sanctum + verified | MonthlyComparisonReport (kind, month=YYYY-MM, account_id opcional). Devuelve buckets por categoría con delta y delta_pct (null si previous=0). |
 | GET | `/finance/reports/credit-cards` | sanctum + verified | CreditCardsReport. Sin parámetros. Devuelve por tarjeta: deuda, % usado, próximas fechas, ciclos y pago mínimo estimado. |
 | GET | `/finance/reports/budgets` | sanctum + verified | BudgetsReport. Sin parámetros. Devuelve por categoría con `monthly_limit` (sólo `applies_to ∈ {expense, both}`): limit, spent, remaining, pct_consumed del mes en curso. |
+| GET | `/finance/reports/by-account` | sanctum + verified | ByAccountReport (from, to). Para cada cuenta activa: ingresos (suma como destination), gastos (suma como origin) y neto. En tarjetas, "ingresos" son pagos recibidos y "gastos" son cargos. Default: mes en curso. |
+| GET | `/finance/reports/entries-by-bucket` | sanctum + verified | Endpoint genérico de drill-down. Filtros estandarizados (`kind`, `account_id`, `category_id`, `from`, `to`, `year_month`). Devuelve hasta 100 entries con `truncated`/`total_count` y `bucket_label` humano. Exige al menos un filtro (422 `missing_filters` si ninguno). Usado por todos los reportes. |
 | POST | `/finance/income` | sanctum + verified | RegisterIncome (acepta `category_id` opcional) |
 | POST | `/finance/expense` | sanctum + verified | RegisterExpense (acepta `category_id` opcional) |
 | POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense (acepta `category_id` opcional) |

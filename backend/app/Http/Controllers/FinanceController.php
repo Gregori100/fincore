@@ -16,6 +16,7 @@ use App\Domain\Finance\Actions\UpdateAccount;
 use App\Domain\Finance\Actions\UpdateCategory;
 use App\Domain\Finance\Actions\UpdateJournalEntry;
 use App\Domain\Finance\Reports\BudgetsReport;
+use App\Domain\Finance\Reports\ByAccountReport;
 use App\Domain\Finance\Reports\CashflowMonthlyReport;
 use App\Domain\Finance\Reports\CategoryBreakdownReport;
 use App\Domain\Finance\Reports\CreditCardsReport;
@@ -220,9 +221,10 @@ class FinanceController extends Controller
 
     public function listEntries(Request $request)
     {
+        $userId = $request->user()->id;
         $filters = $request->validate([
-            'account_id' => 'sometimes|uuid|exists:accounts,id',
-            'category_id' => 'sometimes|uuid|exists:categories,id',
+            'account_id' => ['sometimes', 'uuid', 'exists:accounts,id,user_id,'.$userId],
+            'category_id' => ['sometimes', 'uuid', 'exists:categories,id,user_id,'.$userId],
             'kind' => 'sometimes|in:income,expense,credit_expense,debt_payment,transfer,adjustment',
             'from' => 'sometimes|date',
             'to' => 'sometimes|date',
@@ -233,6 +235,22 @@ class FinanceController extends Controller
             ->where('user_id', $request->user()->id)
             ->orderByDesc('occurred_at');
 
+        self::applyEntryFilters($query, $filters);
+
+        $perPage = (int) ($filters['per_page'] ?? 25);
+
+        return response()->json($query->paginate($perPage));
+    }
+
+    /**
+     * Aplica filtros estandarizados a una query de JournalEntry. Compartido por
+     * `listEntries` (paginado para /entries) y `entriesByBucket` (sin paginar
+     * para drill-down). Centralizar evita que la semántica de filtros diverja.
+     *
+     * `account_id` matchea cuentas en origin OR destination (la entry "toca" la cuenta).
+     */
+    private static function applyEntryFilters(\Illuminate\Database\Eloquent\Builder $query, array $filters): void
+    {
         if (isset($filters['account_id'])) {
             $id = $filters['account_id'];
             $query->where(function ($q) use ($id) {
@@ -256,10 +274,6 @@ class FinanceController extends Controller
         if (isset($filters['to'])) {
             $query->where('occurred_at', '<=', $filters['to']);
         }
-
-        $perPage = (int) ($filters['per_page'] ?? 25);
-
-        return response()->json($query->paginate($perPage));
     }
 
     public function updateEntry(Request $request, string $id)
@@ -412,5 +426,126 @@ class FinanceController extends Controller
         $report = (new BudgetsReport($request->user()->id))->generate();
 
         return response()->json($report);
+    }
+
+    public function reportByAccount(Request $request)
+    {
+        $data = $request->validate([
+            'from' => 'sometimes|date',
+            'to' => 'sometimes|date|after_or_equal:from',
+        ]);
+
+        // Default: mes en curso (primer día → hoy), consistente con /entries.
+        $from = $data['from'] ?? now()->startOfMonth()->toDateString();
+        $to = $data['to'] ?? now()->toDateString();
+
+        $report = (new ByAccountReport($request->user()->id))->generate($from, $to);
+
+        return response()->json($report);
+    }
+
+    /**
+     * Endpoint genérico de drill-down: dado un set de filtros estandarizados
+     * (kind, account_id, category_id, from, to, year_month), devuelve hasta 100
+     * journal_entries que matchean, con eager loading de relaciones. Sirve a
+     * todos los reportes para no duplicar lógica por bucket.
+     */
+    public function entriesByBucket(Request $request)
+    {
+        $userId = $request->user()->id;
+        // El drill-down permite auditar histórico de cuentas/categorías archivadas,
+        // por eso `exists:` no filtra por `deleted_at` (la regla no respeta scopes
+        // de soft delete). El scope por `user_id` sí es defensa explícita.
+        $data = $request->validate([
+            'kind' => 'sometimes|in:income,expense,credit_expense,debt_payment,transfer,adjustment',
+            'account_id' => ['sometimes', 'uuid', 'exists:accounts,id,user_id,'.$userId],
+            'category_id' => ['sometimes', 'uuid', 'exists:categories,id,user_id,'.$userId],
+            'from' => 'sometimes|date',
+            'to' => 'sometimes|date',
+            'year_month' => ['sometimes', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+        ]);
+
+        // Exige al menos un filtro para evitar dump de toda la cuenta.
+        if (empty($data)) {
+            return response()->json([
+                'error' => 'Drill-down requiere al menos un filtro.',
+                'code' => 'missing_filters',
+            ], 422);
+        }
+
+        // year_month es atajo: traduce a from/to (primer y último día del mes).
+        // Si vienen ambos, year_month prevalece.
+        if (isset($data['year_month'])) {
+            [$y, $m] = explode('-', $data['year_month']);
+            $start = \Carbon\Carbon::create((int) $y, (int) $m, 1)->startOfDay();
+            $data['from'] = $start->toDateString();
+            $data['to'] = $start->copy()->endOfMonth()->toDateString();
+            unset($data['year_month']);
+        }
+
+        $filters = $data;
+
+        $query = JournalEntry::with(['origin', 'destination', 'category'])
+            ->where('user_id', $request->user()->id)
+            ->orderByDesc('occurred_at');
+
+        self::applyEntryFilters($query, $filters);
+
+        $totalCount = (clone $query)->count();
+        $cap = 100;
+        $entries = $query->limit($cap)->get();
+
+        return response()->json([
+            'entries' => $entries,
+            'truncated' => $totalCount > $cap,
+            'total_count' => $totalCount,
+            'bucket_label' => self::buildBucketLabel($filters, $request->user()->id),
+        ]);
+    }
+
+    /**
+     * Arma un label humano del bucket basándose en los filtros. Lazily resuelve
+     * nombres (cuenta, categoría) sólo cuando los ids están presentes.
+     */
+    private static function buildBucketLabel(array $filters, string $userId): string
+    {
+        $parts = [];
+
+        $kindLabel = [
+            JournalEntry::KIND_INCOME => 'Ingresos',
+            JournalEntry::KIND_EXPENSE => 'Gastos',
+            JournalEntry::KIND_CREDIT_EXPENSE => 'Cargos a tarjeta',
+            JournalEntry::KIND_DEBT_PAYMENT => 'Pagos a tarjeta',
+            JournalEntry::KIND_TRANSFER => 'Transferencias',
+        ];
+        $parts[] = $kindLabel[$filters['kind'] ?? ''] ?? 'Movimientos';
+
+        if (isset($filters['category_id'])) {
+            $cat = \App\Models\Category::withTrashed()
+                ->where('user_id', $userId)
+                ->find($filters['category_id']);
+            if ($cat) {
+                $parts[] = 'de '.$cat->name;
+            }
+        }
+
+        if (isset($filters['account_id'])) {
+            $acc = \App\Models\Account::withTrashed()
+                ->where('user_id', $userId)
+                ->find($filters['account_id']);
+            if ($acc) {
+                $parts[] = 'en '.$acc->name;
+            }
+        }
+
+        if (isset($filters['from']) && isset($filters['to'])) {
+            $parts[] = 'del '.$filters['from'].' al '.$filters['to'];
+        } elseif (isset($filters['from'])) {
+            $parts[] = 'desde '.$filters['from'];
+        } elseif (isset($filters['to'])) {
+            $parts[] = 'hasta '.$filters['to'];
+        }
+
+        return implode(' ', $parts);
     }
 }
