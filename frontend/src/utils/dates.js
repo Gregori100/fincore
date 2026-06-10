@@ -88,6 +88,110 @@ export function previousYearMonth(ym) {
 }
 
 /**
+ * Lista canónica de presets de fecha para los filtros de rango. El orden importa:
+ * `detectPreset` recorre en este orden y devuelve la primera coincidencia.
+ *
+ * Mantener "today" antes de "this_week" / "this_month" para que un rango
+ * `from == to == hoy` se detecte como "today", no como "this_week" en lunes
+ * ni como "this_month" si hoy es 1.
+ */
+export const DATE_PRESETS = [
+  { key: 'today', label: 'Hoy' },
+  { key: 'this_week', label: 'Esta semana' },
+  { key: 'this_month', label: 'Este mes' },
+  { key: 'last_month', label: 'Mes pasado' },
+  { key: 'last_30_days', label: 'Últimos 30 días' },
+  { key: 'last_90_days', label: 'Últimos 90 días' },
+  { key: 'this_year', label: 'Este año' },
+]
+
+/**
+ * Devuelve `{ from, to }` en ISO `YYYY-MM-DD` para el preset solicitado.
+ *
+ * Reglas semánticas:
+ * - `today`: from = to = hoy.
+ * - `this_week`: lunes de esta semana → hoy (semana ISO; lunes = 1).
+ * - `this_month`: día 1 del mes en curso → hoy.
+ * - `last_month`: rango completo del mes anterior.
+ * - `last_30_days` / `last_90_days`: inclusivos del día actual (hoy - (N-1) → hoy = N días).
+ * - `this_year`: 1 ene del año actual → hoy.
+ *
+ * Todas las operaciones usan fecha local del navegador, nunca UTC, y usan
+ * `setDate(getDate() - N)` para evitar bugs DST en "Últimos N días".
+ *
+ * @param {string} presetKey una clave de `DATE_PRESETS`.
+ * @param {Date} today por defecto `new Date()`; inyectable para tests.
+ * @returns {{ from: string, to: string }}
+ * @throws {Error} si la clave no está en `DATE_PRESETS`.
+ */
+export function rangeForPreset(presetKey, today = new Date()) {
+  const toDate = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const toISO = toISODate(toDate)
+
+  switch (presetKey) {
+    case 'today':
+      return { from: toISO, to: toISO }
+
+    case 'this_week': {
+      // getDay(): 0=domingo, 1=lunes, ..., 6=sábado. Semana ISO comienza lunes.
+      // Para lunes: offset 0. Para domingo (0): offset 6. Para resto: dow - 1.
+      const dow = toDate.getDay()
+      const offset = dow === 0 ? 6 : dow - 1
+      const monday = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate() - offset)
+      return { from: toISODate(monday), to: toISO }
+    }
+
+    case 'this_month':
+      return { from: firstDayOfMonth(toDate), to: toISO }
+
+    case 'last_month': {
+      // mes anterior: setMonth a mes-1; Date normaliza el desbordamiento si día > daysInMonth.
+      const firstOfPrev = new Date(toDate.getFullYear(), toDate.getMonth() - 1, 1)
+      const lastOfPrev = new Date(toDate.getFullYear(), toDate.getMonth(), 0)
+      return { from: toISODate(firstOfPrev), to: toISODate(lastOfPrev) }
+    }
+
+    case 'last_30_days':
+    case 'last_90_days': {
+      const n = presetKey === 'last_30_days' ? 30 : 90
+      // setDate con valor negativo retrocede días respetando DST y cambios de mes.
+      const from = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate() - (n - 1))
+      return { from: toISODate(from), to: toISO }
+    }
+
+    case 'this_year': {
+      const jan1 = new Date(toDate.getFullYear(), 0, 1)
+      return { from: toISODate(jan1), to: toISO }
+    }
+
+    default:
+      throw new Error(`rangeForPreset: clave de preset desconocida: "${presetKey}"`)
+  }
+}
+
+/**
+ * Dado un rango `{ from, to }`, devuelve la clave de `DATE_PRESETS` cuyo
+ * `rangeForPreset(today)` coincide exactamente, o `'custom'` si ninguna lo hace.
+ *
+ * Valores vacíos, null o no parseables devuelven `'custom'` sin lanzar.
+ *
+ * @param {string} from ISO `YYYY-MM-DD`.
+ * @param {string} to   ISO `YYYY-MM-DD`.
+ * @param {Date} today por defecto `new Date()`.
+ * @returns {string} clave de preset o `'custom'`.
+ */
+export function detectPreset(from, to, today = new Date()) {
+  if (!from || !to) return 'custom'
+  if (typeof from !== 'string' || typeof to !== 'string') return 'custom'
+
+  for (const { key } of DATE_PRESETS) {
+    const r = rangeForPreset(key, today)
+    if (r.from === from && r.to === to) return key
+  }
+  return 'custom'
+}
+
+/**
  * Rellena con ceros los meses faltantes entre `from` y `to`. Recibe los rows
  * del backend (sólo meses con actividad) y devuelve la serie continua para
  * que el gráfico tenga 12 barras siempre, aunque haya meses vacíos.
