@@ -7,6 +7,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import MonthlyCashflowChart from '@/components/finance/MonthlyCashflowChart.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { fillMissingMonths, lastNMonths } from '@/utils/dates'
 import { ChartBarIcon } from '@heroicons/vue/24/outline'
@@ -120,9 +121,20 @@ onMounted(async () => {
       <ReportsSubnav />
 
       <!-- Filtro -->
-      <section class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-4">
+      <section class="bg-[color:var(--color-surface)] border border-[color:var(--color-border)] rounded-xl p-4 space-y-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end">
           <BaseSelect v-model="accountId" label="Cuenta" :options="accountOptions" />
+        </div>
+        <div class="flex justify-end">
+          <ExcelExportButton
+            url="/finance/reports/cashflow-monthly/export.xlsx"
+            :params="{
+              from: range.from,
+              to: range.to,
+              ...(accountId ? { account_id: accountId } : {}),
+            }"
+            :disabled="loading || !data.months.length"
+          />
         </div>
       </section>
 

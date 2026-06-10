@@ -10,6 +10,7 @@ import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import CategoryBreakdownChart from '@/components/finance/CategoryBreakdownChart.vue'
 import CategoryBreakdownList from '@/components/finance/CategoryBreakdownList.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
 import ReportHero from '@/components/finance/ReportHero.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { firstDayOfMonth, lastDayOfMonth, toISODate, weeksInRange } from '@/utils/dates'
@@ -170,6 +171,19 @@ onMounted(async () => {
           <BaseInput v-model="filters.from" type="date" label="Desde" />
           <BaseInput v-model="filters.to" type="date" label="Hasta" />
           <BaseButton variant="ghost" type="button" @click="thisMonth">Este mes</BaseButton>
+        </div>
+
+        <div class="flex justify-end">
+          <ExcelExportButton
+            url="/finance/reports/by-category/export.xlsx"
+            :params="{
+              kind: filters.kind,
+              from: filters.from,
+              to: filters.to,
+              ...(filters.account_id ? { account_id: filters.account_id } : {}),
+            }"
+            :disabled="loading || !data.buckets.length"
+          />
         </div>
       </section>
 

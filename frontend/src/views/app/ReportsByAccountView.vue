@@ -7,6 +7,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
 import { firstDayOfMonth, toISODate } from '@/utils/dates'
 
 const loading = ref(false)
@@ -100,8 +101,13 @@ onMounted(fetchReport)
       <section class="grid grid-cols-2 gap-3 sm:max-w-md">
         <BaseInput v-model="filters.from" type="date" label="Desde" />
         <BaseInput v-model="filters.to" type="date" label="Hasta" />
-        <div class="col-span-2">
+        <div class="col-span-2 flex items-center gap-2 flex-wrap">
           <BaseButton variant="secondary" :loading="loading" @click="fetchReport">Actualizar</BaseButton>
+          <ExcelExportButton
+            url="/finance/reports/by-account/export.xlsx"
+            :params="{ from: filters.from, to: filters.to }"
+            :disabled="loading || !rows.length"
+          />
         </div>
       </section>
 

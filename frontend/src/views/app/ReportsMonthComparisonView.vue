@@ -7,6 +7,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import MonthComparisonList from '@/components/finance/MonthComparisonList.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { currentYearMonth, formatYearMonth, previousYearMonth } from '@/utils/dates'
 import { ArrowsRightLeftIcon } from '@heroicons/vue/24/outline'
@@ -155,6 +156,18 @@ onMounted(async () => {
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <BaseSelect v-model="accountId" label="Cuenta" :options="accountOptions" />
+        </div>
+
+        <div class="flex justify-end">
+          <ExcelExportButton
+            url="/finance/reports/month-comparison/export.xlsx"
+            :params="{
+              kind,
+              month,
+              ...(accountId ? { account_id: accountId } : {}),
+            }"
+            :disabled="loading || !data.buckets.length"
+          />
         </div>
       </section>
 

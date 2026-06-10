@@ -6,6 +6,7 @@ import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import CreditCardSummary from '@/components/finance/CreditCardSummary.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
 import { firstDayOfMonth, toISODate } from '@/utils/dates'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import { CreditCardIcon } from '@heroicons/vue/24/outline'
@@ -69,6 +70,14 @@ onMounted(fetchReport)
       </header>
 
       <ReportsSubnav />
+
+      <div v-if="cards.length" class="flex justify-end">
+        <ExcelExportButton
+          url="/finance/reports/credit-cards/export.xlsx"
+          :params="{}"
+          :disabled="loading || !cards.length"
+        />
+      </div>
 
       <!-- Loading / Error / Empty / Cards -->
       <div v-if="loading && !cards.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

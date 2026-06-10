@@ -7,6 +7,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BudgetsList from '@/components/finance/BudgetsList.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
+import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
 import { firstDayOfMonth, toISODate } from '@/utils/dates'
 import { WalletIcon } from '@heroicons/vue/24/outline'
 
@@ -89,6 +90,14 @@ onMounted(fetchReport)
       </header>
 
       <ReportsSubnav />
+
+      <div v-if="hasBudgets" class="flex justify-end">
+        <ExcelExportButton
+          url="/finance/reports/budgets/export.xlsx"
+          :params="{}"
+          :disabled="loading || !hasBudgets"
+        />
+      </div>
 
       <!-- Hero con totales -->
       <section
