@@ -3,17 +3,17 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useFinanceStore } from '@/stores/finance'
 import { financeApi } from '@/api/finance'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import BaseSelect from '@/components/ui/BaseSelect.vue'
-import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import CategoryBreakdownChart from '@/components/finance/CategoryBreakdownChart.vue'
 import CategoryBreakdownList from '@/components/finance/CategoryBreakdownList.vue'
+import DateRangePreset from '@/components/finance/DateRangePreset.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
 import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
 import ReportHero from '@/components/finance/ReportHero.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
-import { firstDayOfMonth, lastDayOfMonth, toISODate, weeksInRange } from '@/utils/dates'
+import { firstDayOfMonth, toISODate, weeksInRange } from '@/utils/dates'
 import { ChartPieIcon } from '@heroicons/vue/24/outline'
 
 const finance = useFinanceStore()
@@ -97,10 +97,15 @@ async function fetchReport() {
   }
 }
 
-function thisMonth() {
-  filters.value.from = firstDayOfMonth()
-  filters.value.to = lastDayOfMonth()
-}
+// Adapter para DateRangePreset (v-model objeto { from, to }) sin reemplazar
+// el objeto filters (mantiene reactividad del watch sobre filters).
+const dateRangeModel = computed({
+  get: () => ({ from: filters.value.from, to: filters.value.to }),
+  set: (range) => {
+    filters.value.from = range.from
+    filters.value.to = range.to
+  },
+})
 
 watch(
   () => [filters.value.kind, filters.value.account_id, filters.value.from, filters.value.to],
@@ -166,11 +171,9 @@ onMounted(async () => {
           </button>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <BaseSelect v-model="filters.account_id" label="Cuenta" :options="accountOptions" />
-          <BaseInput v-model="filters.from" type="date" label="Desde" />
-          <BaseInput v-model="filters.to" type="date" label="Hasta" />
-          <BaseButton variant="ghost" type="button" @click="thisMonth">Este mes</BaseButton>
+          <DateRangePreset v-model="dateRangeModel" />
         </div>
 
         <div class="flex justify-end">

@@ -4,15 +4,15 @@ import { useRoute } from 'vue-router'
 import { useFinanceStore } from '@/stores/finance'
 import { useToastStore } from '@/stores/toast'
 import { financeApi } from '@/api/finance'
-import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import BaseModal from '@/components/ui/BaseModal.vue'
 import BaseConfirm from '@/components/ui/BaseConfirm.vue'
 import CategoryBadge from '@/components/finance/CategoryBadge.vue'
+import DateRangePreset from '@/components/finance/DateRangePreset.vue'
 import EntryEditForm from '@/components/finance/EntryEditForm.vue'
-import { firstDayOfMonth, lastDayOfMonth, toISODate } from '@/utils/dates'
+import { firstDayOfMonth, toISODate } from '@/utils/dates'
 import { InboxIcon, ChevronLeftIcon, ChevronRightIcon, FunnelIcon, PencilSquareIcon, TrashIcon } from '@heroicons/vue/24/outline'
 
 const props = defineProps({
@@ -47,8 +47,10 @@ const KIND_COLORS = {
 
 // Rango por default: mes en curso. El usuario rara vez quiere "toda la historia"
 // como punto de partida; ver el mes actual es lo más común y se ajusta a mano.
+// `to` es HOY (no último día del mes) para alinear con el preset 'this_month'
+// del componente DateRangePreset y evitar inclusión de "futuro" del mes.
 const DEFAULT_FROM = firstDayOfMonth()
-const DEFAULT_TO = lastDayOfMonth()
+const DEFAULT_TO = toISODate()
 
 const filters = ref({
   account_id: null,
@@ -70,6 +72,17 @@ const error = ref(null)
 const showAccountSelector = computed(
   () => props.showAccountFilter && props.accountId === null,
 )
+
+// Adapter para que DateRangePreset (v-model objeto { from, to }) escriba
+// directo en las dos propiedades del filtro existente, sin reemplazar
+// el objeto filters (preserva la reactividad del watch sobre filters).
+const dateRangeModel = computed({
+  get: () => ({ from: filters.value.from, to: filters.value.to }),
+  set: (range) => {
+    filters.value.from = range.from
+    filters.value.to = range.to
+  },
+})
 
 const accountOptions = computed(() => [
   { value: null, label: 'Todas las cuentas' },
@@ -271,7 +284,7 @@ const hasActiveFilters = computed(
       </div>
       <div
         class="grid grid-cols-1 gap-3"
-        :class="showAccountSelector ? 'sm:grid-cols-2 lg:grid-cols-5' : 'sm:grid-cols-2 lg:grid-cols-4'"
+        :class="showAccountSelector ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-2 lg:grid-cols-3'"
       >
         <BaseSelect
           v-if="showAccountSelector"
@@ -281,8 +294,7 @@ const hasActiveFilters = computed(
         />
         <BaseSelect v-model="filters.category_id" label="Categoría" :options="categoryFilterOptions" />
         <BaseSelect v-model="filters.kind" label="Tipo" :options="kindOptions" />
-        <BaseInput v-model="filters.from" type="date" label="Desde" />
-        <BaseInput v-model="filters.to" type="date" label="Hasta" />
+        <DateRangePreset v-model="dateRangeModel" />
       </div>
     </section>
 

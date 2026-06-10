@@ -1,10 +1,10 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { financeApi } from '@/api/finance'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
+import DateRangePreset from '@/components/finance/DateRangePreset.vue'
 import ReportsSubnav from '@/components/finance/ReportsSubnav.vue'
 import EntriesDrilldownModal from '@/components/finance/EntriesDrilldownModal.vue'
 import ExcelExportButton from '@/components/finance/ExcelExportButton.vue'
@@ -16,6 +16,15 @@ const rows = ref([])
 const filters = ref({
   from: firstDayOfMonth(),
   to: toISODate(),
+})
+
+// Adapter para DateRangePreset (v-model objeto { from, to }).
+const dateRangeModel = computed({
+  get: () => ({ from: filters.value.from, to: filters.value.to }),
+  set: (range) => {
+    filters.value.from = range.from
+    filters.value.to = range.to
+  },
 })
 
 const drillOpen = ref(false)
@@ -74,6 +83,10 @@ function hasCreditAccount() {
   return rows.value.some((r) => r.type === 'credit')
 }
 
+// Refetch automático cuando cambia el rango (preset o personalizado),
+// consistente con ReportsByCategoryView y EntriesTable.
+watch(() => [filters.value.from, filters.value.to], fetchReport)
+
 onMounted(fetchReport)
 </script>
 
@@ -98,10 +111,9 @@ onMounted(fetchReport)
       <ReportsSubnav />
 
       <!-- Filtros de rango -->
-      <section class="grid grid-cols-2 gap-3 sm:max-w-md">
-        <BaseInput v-model="filters.from" type="date" label="Desde" />
-        <BaseInput v-model="filters.to" type="date" label="Hasta" />
-        <div class="col-span-2 flex items-center gap-2 flex-wrap">
+      <section class="space-y-3 sm:max-w-md">
+        <DateRangePreset v-model="dateRangeModel" />
+        <div class="flex items-center gap-2 flex-wrap">
           <BaseButton variant="secondary" :loading="loading" @click="fetchReport">Actualizar</BaseButton>
           <ExcelExportButton
             url="/finance/reports/by-account/export.xlsx"
