@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\PlanController;
+use App\Http\Controllers\ReportExportController;
 use App\Http\Controllers\SettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -64,6 +65,13 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::get('/reports/budgets', [FinanceController::class, 'reportBudgets']);
     Route::get('/reports/by-account', [FinanceController::class, 'reportByAccount']);
     Route::get('/reports/entries-by-bucket', [FinanceController::class, 'entriesByBucket']);
+
+    Route::get('/reports/by-category/export.xlsx', [ReportExportController::class, 'byCategory']);
+    Route::get('/reports/cashflow-monthly/export.xlsx', [ReportExportController::class, 'cashflowMonthly']);
+    Route::get('/reports/month-comparison/export.xlsx', [ReportExportController::class, 'monthComparison']);
+    Route::get('/reports/credit-cards/export.xlsx', [ReportExportController::class, 'creditCards']);
+    Route::get('/reports/budgets/export.xlsx', [ReportExportController::class, 'budgets']);
+    Route::get('/reports/by-account/export.xlsx', [ReportExportController::class, 'byAccount']);
 
     Route::post('/income', [FinanceController::class, 'income']);
     Route::post('/expense', [FinanceController::class, 'expense']);

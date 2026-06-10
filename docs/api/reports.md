@@ -355,3 +355,65 @@ Sin parámetros. La respuesta cubre todas las categorías activas con presupuest
 curl "http://localhost/api/finance/reports/budgets" \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
+
+---
+
+## Export a Excel (.xlsx)
+
+Cada uno de los 6 reportes anteriores tiene un endpoint paralelo que devuelve los mismos datos serializados como archivo Excel (`.xlsx`), generado en backend con PhpSpreadsheet.
+
+### Endpoints
+
+- `GET /api/finance/reports/by-category/export.xlsx`
+- `GET /api/finance/reports/cashflow-monthly/export.xlsx`
+- `GET /api/finance/reports/month-comparison/export.xlsx`
+- `GET /api/finance/reports/credit-cards/export.xlsx`
+- `GET /api/finance/reports/budgets/export.xlsx`
+- `GET /api/finance/reports/by-account/export.xlsx`
+
+### Query parameters
+
+Cada endpoint xlsx acepta exactamente los mismos query params que su contraparte JSON (ver secciones anteriores). Las validaciones también son idénticas; query params inválidos devuelven 422 con el payload estándar de Laravel.
+
+### Response 200
+
+- `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`
+- `Content-Disposition: attachment; filename="fincore-<reporte>-<rango>.xlsx"`
+- Body: binario `.xlsx` (firma ZIP `PK\x03\x04`).
+
+### Patrón de nombre de archivo
+
+| Reporte | Patrón |
+|---------|--------|
+| Por categoría | `fincore-por-categoria-YYYY-MM-DD_YYYY-MM-DD.xlsx` |
+| Cashflow mensual | `fincore-cashflow-mensual-YYYY-MM-DD_YYYY-MM-DD.xlsx` |
+| Comparativo mes vs mes | `fincore-comparativo-mes-YYYY-MM.xlsx` |
+| Tarjetas de crédito | `fincore-tarjetas-credito.xlsx` |
+| Presupuestos | `fincore-presupuestos.xlsx` |
+| Por cuenta | `fincore-por-cuenta-YYYY-MM-DD_YYYY-MM-DD.xlsx` |
+
+### Estructura del workbook
+
+- Una hoja por archivo (worksheet count = 1). El título de la hoja coincide con el nombre humano del reporte (truncado a 31 chars por límite de Excel).
+- Filas 1-2: encabezado (nombre + rango/contexto + fecha de generación).
+- Fila 4: headers en bold con fondo gris claro.
+- Filas 5..N: data, con formatos por columna (`$#,##0.00` para moneda, `0.0%` para porcentajes, `0` para enteros).
+- Fila N+1: footer `TOTAL` en bold con SUMA por columna. Tarjetas de crédito **no lleva** footer (cada fila es independiente).
+- Cuentas archivadas se excluyen; categorías archivadas conservan su nombre histórico en agregados (igual que el endpoint JSON).
+- Filtro `account_id` y `category_id` validan que pertenezcan al usuario autenticado (422 si vienen de otro usuario).
+
+### Errores
+
+| Status | Cuándo |
+|--------|--------|
+| 401 | Sin token o expirado |
+| 403 | Email no verificado |
+| 422 | Query params inválidos (mismas reglas que el endpoint JSON) |
+
+### Ejemplo
+
+```bash
+curl -OJ "http://localhost/api/finance/reports/by-category/export.xlsx?kind=expense&from=2026-05-01&to=2026-05-31" \
+  -H "Authorization: Bearer $TOKEN"
+# -O guarda con el filename que envía el servidor en Content-Disposition.
+```
