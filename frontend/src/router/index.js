@@ -101,6 +101,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/reports/forecast',
+    name: 'reports-forecast',
+    component: () => import('@/views/app/ReportsForecastView.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/plan',
     name: 'plan',
     component: () => import('@/views/app/PlanView.vue'),

@@ -31,6 +31,7 @@ export const financeApi = {
   reportCreditCards: () => client.get('/finance/reports/credit-cards'),
   reportBudgets: () => client.get('/finance/reports/budgets'),
   reportByAccount: (params) => client.get('/finance/reports/by-account', { params }),
+  reportForecast: () => client.get('/finance/reports/forecast'),
   entriesByBucket: (params) => client.get('/finance/reports/entries-by-bucket', { params }),
 
   income: (payload) => client.post('/finance/income', payload),
