@@ -92,7 +92,7 @@ describe('EntriesDrilldownModal', () => {
     expect(wrapper.text()).toContain('Mostrando los 100 más recientes de 137')
   })
 
-  it('quita campos vacíos antes de enviar al backend', async () => {
+  it('preserva category_id como string vacío cuando viene como null (bucket "Sin categorizar")', async () => {
     financeApi.entriesByBucket.mockResolvedValue({
       data: { entries: [], truncated: false, total_count: 0, bucket_label: '' },
     })
@@ -100,7 +100,49 @@ describe('EntriesDrilldownModal', () => {
     mountModal({ filters: { kind: 'expense', category_id: null, account_id: '', from: '2026-05-01' } })
     await flushPromises()
 
-    expect(financeApi.entriesByBucket).toHaveBeenCalledWith({ kind: 'expense', from: '2026-05-01' })
+    // category_id: null se traduce a '' para que axios lo serialice en el
+    // query string. El backend con `nullable` lo interpreta como null.
+    expect(financeApi.entriesByBucket).toHaveBeenCalledWith({
+      kind: 'expense',
+      category_id: '',
+      from: '2026-05-01',
+    })
+  })
+
+  it('omite category_id si la key no está en filters', async () => {
+    financeApi.entriesByBucket.mockResolvedValue({
+      data: { entries: [], truncated: false, total_count: 0, bucket_label: '' },
+    })
+
+    mountModal({ filters: { kind: 'expense', from: '2026-05-01' } })
+    await flushPromises()
+
+    expect(financeApi.entriesByBucket).toHaveBeenCalledWith({
+      kind: 'expense',
+      from: '2026-05-01',
+    })
+  })
+
+  it('descarta category_id cuando es undefined o string vacío', async () => {
+    financeApi.entriesByBucket.mockResolvedValue({
+      data: { entries: [], truncated: false, total_count: 0, bucket_label: '' },
+    })
+
+    mountModal({ filters: { kind: 'expense', category_id: undefined } })
+    await flushPromises()
+
+    expect(financeApi.entriesByBucket).toHaveBeenCalledWith({ kind: 'expense' })
+  })
+
+  it('account_id null se descarta (la regla null-preserve es sólo para category_id)', async () => {
+    financeApi.entriesByBucket.mockResolvedValue({
+      data: { entries: [], truncated: false, total_count: 0, bucket_label: '' },
+    })
+
+    mountModal({ filters: { kind: 'expense', account_id: null } })
+    await flushPromises()
+
+    expect(financeApi.entriesByBucket).toHaveBeenCalledWith({ kind: 'expense' })
   })
 
   it('al click "Ir a Movimientos" navega a /entries con filtros podados', async () => {
@@ -124,9 +166,11 @@ describe('EntriesDrilldownModal', () => {
     await flushPromises()
 
     await wrapper.get('button:nth-of-type(2)').trigger('click') // "Ir a Movimientos"
+    // category_id: null se traduce a '' (sinónimo de "sin categoría") para
+    // que Vue Router lo serialice en el query string como `?category_id=`.
     expect(pushSpy).toHaveBeenCalledWith({
       name: 'entries',
-      query: { kind: 'expense', account_id: 'acc-1' },
+      query: { kind: 'expense', account_id: 'acc-1', category_id: '' },
     })
   })
 })

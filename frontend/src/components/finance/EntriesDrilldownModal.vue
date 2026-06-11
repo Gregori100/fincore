@@ -55,11 +55,20 @@ const total = computed(() =>
 
 function pruneFilters(f) {
   // Quita campos vacíos antes de mandar al backend. `null`/`undefined`/`''`
-  // se descartan; valores 0 / false se preservan (no se usan hoy en filtros,
-  // pero la regla es defensiva si la API evoluciona).
+  // se descartan; valores 0 / false se preservan.
+  // EXCEPCIÓN: `category_id: null` se traduce a string vacío `''` para que
+  // axios lo serialice en el query string (`?category_id=`). axios omite por
+  // default los params con valor `null`/`undefined`. El backend valida con
+  // `nullable` y trata `''` y `null` de forma equivalente como filtro
+  // "sin categoría" (bucket "Sin categorizar" de los reportes que agrupan
+  // por categoría).
   const out = {}
   for (const k of Object.keys(f)) {
     const v = f[k]
+    if (k === 'category_id' && v === null) {
+      out[k] = ''
+      continue
+    }
     if (v === null || v === undefined) continue
     if (typeof v === 'string' && v === '') continue
     out[k] = v
