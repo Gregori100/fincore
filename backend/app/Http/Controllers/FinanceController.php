@@ -260,20 +260,46 @@ class FinanceController extends Controller
             });
         }
 
-        if (isset($filters['category_id'])) {
-            $query->where('category_id', $filters['category_id']);
+        // `array_key_exists` en lugar de `isset` porque la key puede estar
+        // presente con valor `null` para filtrar entries sin categoría (bucket
+        // "Sin categorizar" de los reportes que agrupan por categoría).
+        if (array_key_exists('category_id', $filters)) {
+            if ($filters['category_id'] === null) {
+                $query->whereNull('category_id');
+            } else {
+                $query->where('category_id', $filters['category_id']);
+            }
         }
 
         if (isset($filters['kind'])) {
-            $query->where('kind', $filters['kind']);
+            // `kind=expense` engloba expense + credit_expense para alinear el
+            // drill-down con la semántica que ya usan los Report Services
+            // agregados (CategoryBreakdownReport, BudgetsReport, SpendingForecastReport).
+            // Otros kinds mantienen comportamiento literal.
+            if ($filters['kind'] === JournalEntry::KIND_EXPENSE) {
+                $query->whereIn('kind', [
+                    JournalEntry::KIND_EXPENSE,
+                    JournalEntry::KIND_CREDIT_EXPENSE,
+                ]);
+            } else {
+                $query->where('kind', $filters['kind']);
+            }
         }
 
         if (isset($filters['from'])) {
+            // El `from` es una fecha (YYYY-MM-DD) que el cliente interpreta
+            // como inicio del día. Usar `>= $from` (sin hora) ya cubre todo
+            // el día porque Postgres compara timestamps con la cadena tratada
+            // como medianoche local.
             $query->where('occurred_at', '>=', $filters['from']);
         }
 
         if (isset($filters['to'])) {
-            $query->where('occurred_at', '<=', $filters['to']);
+            // El `to` es una fecha (YYYY-MM-DD); sin hora, se trata como
+            // 00:00:00 del día y excluiría todo lo que ocurra después en
+            // ese mismo día. Patrón consistente con los Report Services que
+            // sí agregan ' 23:59:59' (CategoryBreakdownReport, etc.).
+            $query->where('occurred_at', '<=', $filters['to'].' 23:59:59');
         }
     }
 
@@ -467,7 +493,7 @@ class FinanceController extends Controller
         $data = $request->validate([
             'kind' => 'sometimes|in:income,expense,credit_expense,debt_payment,transfer,adjustment',
             'account_id' => ['sometimes', 'uuid', 'exists:accounts,id,user_id,'.$userId],
-            'category_id' => ['sometimes', 'uuid', 'exists:categories,id,user_id,'.$userId],
+            'category_id' => ['sometimes', 'nullable', 'uuid', 'exists:categories,id,user_id,'.$userId],
             'from' => 'sometimes|date',
             'to' => 'sometimes|date',
             'year_month' => ['sometimes', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
@@ -528,12 +554,18 @@ class FinanceController extends Controller
         ];
         $parts[] = $kindLabel[$filters['kind'] ?? ''] ?? 'Movimientos';
 
-        if (isset($filters['category_id'])) {
-            $cat = \App\Models\Category::withTrashed()
-                ->where('user_id', $userId)
-                ->find($filters['category_id']);
-            if ($cat) {
-                $parts[] = 'de '.$cat->name;
+        // `array_key_exists` para captar el caso `category_id=null` (bucket
+        // "Sin categorizar"), que `isset` no detectaría.
+        if (array_key_exists('category_id', $filters)) {
+            if ($filters['category_id'] === null) {
+                $parts[] = 'sin categorizar';
+            } else {
+                $cat = \App\Models\Category::withTrashed()
+                    ->where('user_id', $userId)
+                    ->find($filters['category_id']);
+                if ($cat) {
+                    $parts[] = 'de '.$cat->name;
+                }
             }
         }
 

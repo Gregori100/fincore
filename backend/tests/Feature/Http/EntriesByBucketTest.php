@@ -7,7 +7,6 @@ use App\Domain\Finance\Actions\RegisterExpense;
 use App\Domain\Finance\Actions\RegisterIncome;
 use App\Models\Account;
 use App\Models\Category;
-use App\Models\JournalEntry;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -217,5 +216,117 @@ class EntriesByBucketTest extends TestCase
         $label = $resp->json('bucket_label');
         $this->assertStringContainsString('Ingresos', $label);
         $this->assertStringContainsString('Bolsa', $label);
+    }
+
+    /* ---------------- Fixes entries-by-bucket-fixes ---------------- */
+
+    public function test_category_id_null_filters_uncategorized_entries(): void
+    {
+        $bolsa = $this->bolsa();
+        $cat = $this->makeCategory();
+        // 1 con categoría, 1 sin categoría.
+        RegisterExpense::execute($this->user->id, $bolsa->id, 100, 'con cat', $cat->id);
+        RegisterExpense::execute($this->user->id, $bolsa->id, 200, 'sin cat');
+
+        $resp = $this->getJson('/api/finance/reports/entries-by-bucket?category_id=&kind=expense')
+            ->assertOk()
+            ->assertJsonPath('total_count', 1);
+        $this->assertSame('sin cat', $resp->json('entries.0.description'));
+    }
+
+    public function test_kind_expense_includes_credit_expense(): void
+    {
+        $bolsa = $this->bolsa();
+        $credit = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 10000]);
+        RegisterExpense::execute($this->user->id, $bolsa->id, 100, 'gasto');
+        RegisterCreditExpense::execute($this->user->id, $credit->id, 200, 'cargo');
+
+        $this->getJson("/api/finance/reports/entries-by-bucket?account_id={$bolsa->id}&kind=expense")
+            ->assertOk()
+            // El account_id=bolsa solo encaja con el expense (el credit_expense salió de la tarjeta).
+            ->assertJsonPath('total_count', 1);
+
+        $this->getJson('/api/finance/reports/entries-by-bucket?kind=expense&from=2020-01-01&to=2030-12-31')
+            ->assertOk()
+            // Sin account_id, kind=expense trae los 2 (expense + credit_expense).
+            ->assertJsonPath('total_count', 2);
+    }
+
+    public function test_kind_credit_expense_literal_does_not_mix_with_expense(): void
+    {
+        $bolsa = $this->bolsa();
+        $credit = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 10000]);
+        RegisterExpense::execute($this->user->id, $bolsa->id, 100, 'gasto');
+        RegisterCreditExpense::execute($this->user->id, $credit->id, 200, 'cargo');
+
+        $resp = $this->getJson('/api/finance/reports/entries-by-bucket?kind=credit_expense&from=2020-01-01&to=2030-12-31')
+            ->assertOk()
+            ->assertJsonPath('total_count', 1);
+        $this->assertSame('cargo', $resp->json('entries.0.description'));
+    }
+
+    public function test_kind_income_literal(): void
+    {
+        $bolsa = $this->bolsa();
+        RegisterIncome::execute($this->user->id, $bolsa->id, 100, 'ingreso');
+        RegisterExpense::execute($this->user->id, $bolsa->id, 50, 'gasto');
+
+        $resp = $this->getJson('/api/finance/reports/entries-by-bucket?kind=income&from=2020-01-01&to=2030-12-31')
+            ->assertOk()
+            ->assertJsonPath('total_count', 1);
+        $this->assertSame('ingreso', $resp->json('entries.0.description'));
+    }
+
+    public function test_kind_transfer_literal(): void
+    {
+        $bolsa = $this->bolsa();
+        $banamex = Account::factory()->debit()->for($this->user)->create(['name' => 'Banamex']);
+        \App\Domain\Finance\Actions\RegisterTransfer::execute($this->user->id, $bolsa->id, $banamex->id, 50);
+        RegisterExpense::execute($this->user->id, $bolsa->id, 100, 'gasto');
+
+        $resp = $this->getJson('/api/finance/reports/entries-by-bucket?kind=transfer&from=2020-01-01&to=2030-12-31')
+            ->assertOk()
+            ->assertJsonPath('total_count', 1);
+    }
+
+    public function test_category_id_null_combined_with_kind_expense_includes_credit_expense_sin_categoria(): void
+    {
+        $bolsa = $this->bolsa();
+        $credit = Account::factory()->credit()->for($this->user)->create(['credit_limit' => 10000]);
+        $cat = $this->makeCategory();
+        // 1 expense con cat (no debe contar), 1 expense sin cat (sí cuenta),
+        // 1 credit_expense sin cat (también cuenta porque kind=expense engloba).
+        RegisterExpense::execute($this->user->id, $bolsa->id, 100, 'con cat', $cat->id);
+        RegisterExpense::execute($this->user->id, $bolsa->id, 200, 'expense sin cat');
+        RegisterCreditExpense::execute($this->user->id, $credit->id, 300, 'credit_expense sin cat');
+
+        $this->getJson('/api/finance/reports/entries-by-bucket?category_id=&kind=expense&from=2020-01-01&to=2030-12-31')
+            ->assertOk()
+            ->assertJsonPath('total_count', 2);
+    }
+
+    public function test_bucket_label_includes_sin_categorizar_when_category_id_is_null(): void
+    {
+        $bolsa = $this->bolsa();
+        RegisterExpense::execute($this->user->id, $bolsa->id, 100, 'sin cat');
+
+        $resp = $this->getJson('/api/finance/reports/entries-by-bucket?category_id=&kind=expense')
+            ->assertOk();
+        $label = $resp->json('bucket_label');
+        $this->assertStringContainsString('Gastos', $label);
+        $this->assertStringContainsString('sin categorizar', $label);
+    }
+
+    public function test_bucket_label_with_category_id_uuid_unchanged(): void
+    {
+        $bolsa = $this->bolsa();
+        $cat = $this->makeCategory();
+        RegisterExpense::execute($this->user->id, $bolsa->id, 100, 'gasto', $cat->id);
+
+        $resp = $this->getJson("/api/finance/reports/entries-by-bucket?category_id={$cat->id}&kind=expense")
+            ->assertOk();
+        $label = $resp->json('bucket_label');
+        $this->assertStringContainsString('Gastos', $label);
+        $this->assertStringContainsString('de '.$cat->name, $label);
     }
 }
