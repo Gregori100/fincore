@@ -21,6 +21,7 @@ use App\Domain\Finance\Reports\CashflowMonthlyReport;
 use App\Domain\Finance\Reports\CategoryBreakdownReport;
 use App\Domain\Finance\Reports\CreditCardsReport;
 use App\Domain\Finance\Reports\MonthlyComparisonReport;
+use App\Domain\Finance\Reports\SpendingForecastReport;
 use App\Domain\Finance\Services\FinancialStateService;
 use App\Models\JournalEntry;
 use Illuminate\Http\Request;
@@ -424,6 +425,13 @@ class FinanceController extends Controller
     public function reportBudgets(Request $request)
     {
         $report = (new BudgetsReport($request->user()->id))->generate();
+
+        return response()->json($report);
+    }
+
+    public function reportForecast(Request $request)
+    {
+        $report = (new SpendingForecastReport($request->user()->id))->generate();
 
         return response()->json($report);
     }

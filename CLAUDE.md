@@ -239,6 +239,7 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | GET | `/finance/reports/credit-cards` | sanctum + verified | CreditCardsReport. Sin parámetros. Devuelve por tarjeta: deuda, % usado, próximas fechas, ciclos y pago mínimo estimado. |
 | GET | `/finance/reports/budgets` | sanctum + verified | BudgetsReport. Sin parámetros. Devuelve por categoría con `monthly_limit` (sólo `applies_to ∈ {expense, both}`): limit, spent, remaining, pct_consumed del mes en curso. |
 | GET | `/finance/reports/by-account` | sanctum + verified | ByAccountReport (from, to). Para cada cuenta activa: ingresos (suma como destination), gastos (suma como origin) y neto. En tarjetas, "ingresos" son pagos recibidos y "gastos" son cargos. Default: mes en curso. |
+| GET | `/finance/reports/forecast` | sanctum + verified | SpendingForecastReport. Sin parámetros. Proyección de gasto del mes en curso por categoría usando método lineal por ritmo (`gastado × dias_mes / dias_transcurridos`) comparado contra promedio de los 3 meses calendario inmediatamente anteriores. Sólo incluye categorías con al menos 1 entry de gasto en la ventana histórica. |
 | GET | `/finance/reports/entries-by-bucket` | sanctum + verified | Endpoint genérico de drill-down. Filtros estandarizados (`kind`, `account_id`, `category_id`, `from`, `to`, `year_month`). Devuelve hasta 100 entries con `truncated`/`total_count` y `bucket_label` humano. Exige al menos un filtro (422 `missing_filters` si ninguno). Usado por todos los reportes. |
 | GET | `/finance/reports/by-category/export.xlsx` | sanctum + verified | Export Excel del reporte por categoría (mismos params que `/by-category`). Devuelve binario `.xlsx` con headers `Content-Type: application/vnd.openxmlformats...` + `Content-Disposition: attachment`. |
 | GET | `/finance/reports/cashflow-monthly/export.xlsx` | sanctum + verified | Export Excel del cashflow mensual (mismos params). |
@@ -246,6 +247,7 @@ Full API docs in [`docs/api/auth.md`](./docs/api/auth.md). Short version:
 | GET | `/finance/reports/credit-cards/export.xlsx` | sanctum + verified | Export Excel de tarjetas de crédito (sin params). |
 | GET | `/finance/reports/budgets/export.xlsx` | sanctum + verified | Export Excel de presupuestos del mes en curso (sin params). |
 | GET | `/finance/reports/by-account/export.xlsx` | sanctum + verified | Export Excel de por cuenta (mismos params que `/by-account`). |
+| GET | `/finance/reports/forecast/export.xlsx` | sanctum + verified | Export Excel de proyección de gasto del mes en curso (sin params). |
 | POST | `/finance/income` | sanctum + verified | RegisterIncome (acepta `category_id` opcional) |
 | POST | `/finance/expense` | sanctum + verified | RegisterExpense (acepta `category_id` opcional) |
 | POST | `/finance/credit-expense` | sanctum + verified | RegisterCreditExpense (acepta `category_id` opcional) |

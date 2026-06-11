@@ -9,6 +9,7 @@ use App\Domain\Finance\Reports\CategoryBreakdownReport;
 use App\Domain\Finance\Reports\CreditCardsReport;
 use App\Domain\Finance\Reports\Export\ReportExporter;
 use App\Domain\Finance\Reports\MonthlyComparisonReport;
+use App\Domain\Finance\Reports\SpendingForecastReport;
 use App\Models\Account;
 use Illuminate\Http\Request;
 
@@ -316,6 +317,54 @@ class ReportExportController extends Controller
             ]);
 
         $filename = sprintf('fincore-por-cuenta-%s_%s.xlsx', $from, $to);
+
+        return $exporter->download($filename);
+    }
+
+    public function forecast(Request $request)
+    {
+        $report = (new SpendingForecastReport($request->user()->id))->generate();
+
+        // delta_pct viene en porcentaje 0-100; convertir a fracción para que el
+        // formato 0.0% de Excel lo pinte como X.X% sin doble multiplicación.
+        $rows = array_map(
+            fn (array $b) => [
+                $b['name'],
+                (float) $b['current_spent'],
+                (float) $b['historical_average'],
+                (float) $b['projection'],
+                $b['delta_pct'] === null ? '' : ((float) $b['delta_pct']) / 100,
+            ],
+            $report['categories']
+        );
+
+        $totalDeltaPct = $report['totals']['delta_pct'] === null
+            ? ''
+            : ((float) $report['totals']['delta_pct']) / 100;
+
+        $exporter = (new ReportExporter)
+            ->sheetTitle('Proyección de gasto')
+            ->header('Proyección de gasto', 'Mes en curso: '.$report['month'])
+            ->table(
+                ['Categoría', 'Gastado este mes', 'Promedio histórico', 'Proyección fin de mes', 'Δ %'],
+                $rows,
+                [
+                    ReportExporter::FORMAT_TEXT,
+                    ReportExporter::FORMAT_MONEY,
+                    ReportExporter::FORMAT_MONEY,
+                    ReportExporter::FORMAT_MONEY,
+                    ReportExporter::FORMAT_PCT,
+                ]
+            )
+            ->footer([
+                'TOTAL',
+                (float) $report['totals']['current_spent'],
+                (float) $report['totals']['historical_average'],
+                (float) $report['totals']['projection'],
+                $totalDeltaPct,
+            ]);
+
+        $filename = sprintf('fincore-proyeccion-gasto-%s.xlsx', $report['month']);
 
         return $exporter->download($filename);
     }

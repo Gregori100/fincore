@@ -64,6 +64,7 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::get('/reports/credit-cards', [FinanceController::class, 'reportCreditCards']);
     Route::get('/reports/budgets', [FinanceController::class, 'reportBudgets']);
     Route::get('/reports/by-account', [FinanceController::class, 'reportByAccount']);
+    Route::get('/reports/forecast', [FinanceController::class, 'reportForecast']);
     Route::get('/reports/entries-by-bucket', [FinanceController::class, 'entriesByBucket']);
 
     Route::get('/reports/by-category/export.xlsx', [ReportExportController::class, 'byCategory']);
@@ -72,6 +73,7 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('finance')->group(functi
     Route::get('/reports/credit-cards/export.xlsx', [ReportExportController::class, 'creditCards']);
     Route::get('/reports/budgets/export.xlsx', [ReportExportController::class, 'budgets']);
     Route::get('/reports/by-account/export.xlsx', [ReportExportController::class, 'byAccount']);
+    Route::get('/reports/forecast/export.xlsx', [ReportExportController::class, 'forecast']);
 
     Route::post('/income', [FinanceController::class, 'income']);
     Route::post('/expense', [FinanceController::class, 'expense']);

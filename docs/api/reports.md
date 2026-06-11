@@ -358,9 +358,75 @@ curl "http://localhost/api/finance/reports/budgets" \
 
 ---
 
+## GET `/api/finance/reports/forecast`
+
+Proyección de gasto del mes en curso por categoría, basada en el histórico de los últimos 3 meses calendario.
+
+### Query parameters
+
+Ninguno. El mes en curso se deriva de `now()` del servidor.
+
+### Response 200
+
+```json
+{
+  "month": "2026-06",
+  "today": "2026-06-10",
+  "days_in_month": 30,
+  "days_elapsed": 10,
+  "window_from": "2026-03-01",
+  "window_to": "2026-05-31",
+  "categories": [
+    {
+      "category_id": "uuid-o-null",
+      "name": "Comida",
+      "color_slug": "orange",
+      "icon_slug": "shopping-bag",
+      "current_spent": 2500.00,
+      "historical_average": 6000.00,
+      "projection": 7500.00,
+      "delta_pct": 25.0
+    }
+  ],
+  "totals": {
+    "current_spent": 2500.00,
+    "historical_average": 6000.00,
+    "projection": 7500.00,
+    "delta_pct": 25.0
+  }
+}
+```
+
+### Comportamiento
+
+- **Fórmula de proyección**: `projection = current_spent × (days_in_month / days_elapsed)`. Con `days_elapsed` clampeado a 1 para defensa contra división por cero.
+- **Ventana histórica**: 3 meses calendario inmediatamente anteriores. Promedio = `sum / 3` (siempre dividido entre 3, no entre meses con actividad).
+- **Cobertura**: una categoría aparece sólo si tiene al menos 1 entry de gasto (`expense` o `credit_expense`) en la ventana.
+- **`delta_pct`**: `((projection - historical_average) / historical_average) × 100`, redondeado a 1 decimal. `null` si `historical_average == 0`.
+- **Categorías archivadas con histórico**: aparecen con su nombre/color/icono originales.
+- **Bucket "Sin categorizar"**: entries con `category_id = NULL` se agrupan con label "Sin categorizar".
+- **Orden**: `delta_pct` desc con `null` al final (alfabético entre `null`).
+- **`totals.delta_pct`**: aplica la misma fórmula sobre los agregados (no es promedio de delta_pct individuales).
+
+### Errores
+
+| Status | Cuándo |
+|--------|--------|
+| 401 | Sin token o expirado |
+| 403 | Email no verificado |
+
+### Ejemplo
+
+```bash
+curl "http://localhost/api/finance/reports/forecast" \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+---
+
 ## Export a Excel (.xlsx)
 
-Cada uno de los 6 reportes anteriores tiene un endpoint paralelo que devuelve los mismos datos serializados como archivo Excel (`.xlsx`), generado en backend con PhpSpreadsheet.
+Cada uno de los 7 reportes anteriores tiene un endpoint paralelo que devuelve los mismos datos serializados como archivo Excel (`.xlsx`), generado en backend con PhpSpreadsheet.
 
 ### Endpoints
 
@@ -370,6 +436,7 @@ Cada uno de los 6 reportes anteriores tiene un endpoint paralelo que devuelve lo
 - `GET /api/finance/reports/credit-cards/export.xlsx`
 - `GET /api/finance/reports/budgets/export.xlsx`
 - `GET /api/finance/reports/by-account/export.xlsx`
+- `GET /api/finance/reports/forecast/export.xlsx`
 
 ### Query parameters
 
@@ -391,6 +458,7 @@ Cada endpoint xlsx acepta exactamente los mismos query params que su contraparte
 | Tarjetas de crédito | `fincore-tarjetas-credito.xlsx` |
 | Presupuestos | `fincore-presupuestos.xlsx` |
 | Por cuenta | `fincore-por-cuenta-YYYY-MM-DD_YYYY-MM-DD.xlsx` |
+| Proyección de gasto | `fincore-proyeccion-gasto-YYYY-MM.xlsx` |
 
 ### Estructura del workbook
 
