@@ -1,0 +1,74 @@
+# Stack productivo "casero" de FinCore, pensado para correr en la PC del usuario
+# y exponerse a internet vía Tailscale Funnel. Se usa MIENTRAS no hay hosting
+# con tarjeta — el día que migremos a Fly.io u otro host, este archivo queda
+# de respaldo "demo local" y el fly.toml de la raíz toma el relevo.
+#
+# Reutiliza la misma imagen unificada (nginx + php-fpm + SPA built) del
+# `Dockerfile` raíz que estaba pensada para Fly. La idea es no mantener dos
+# imágenes distintas.
+#
+# IMPORTANTE: el volume `sail-pgsql` aquí apunta al mismo `fincore_sail-pgsql`
+# que usa Sail dev (compose.yaml). Eso quiere decir que la BD de este stack
+# y la de dev SON LA MISMA. No correr `./scripts/fincore start` y este
+# compose simultáneamente — Postgres pelearía el lock del data dir.
+#
+# Uso:
+#   docker compose -f compose.tailscale.yml build
+#   docker compose -f compose.tailscale.yml up -d
+#   docker compose -f compose.tailscale.yml logs -f app
+#   docker compose -f compose.tailscale.yml down
+
+services:
+  pgsql:
+    image: postgres:17-alpine
+    container_name: fincore-tailscale-pgsql
+    environment:
+      POSTGRES_DB: fincore
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - sail-pgsql:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-q', '-d', 'fincore', '-U', 'postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - fincore-tailscale
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fincore-app:tailscale
+    container_name: fincore-tailscale-app
+    env_file:
+      - .env.tailscale
+    ports:
+      # Puerto host 8081 → puerto interno 8080 que expone serversideup/php
+      # (nginx delante de php-fpm). Tailscale Funnel apunta a 8081 en localhost.
+      - '8081:8080'
+    depends_on:
+      pgsql:
+        condition: service_healthy
+    volumes:
+      # Storage de Laravel persistente (logs, cache compilado, sessions de file
+      # si en el futuro cambiamos driver, eventuales uploads). Sobrevive a
+      # `down`/`up` mientras no borres el volume.
+      - app-storage:/var/www/html/storage
+    networks:
+      - fincore-tailscale
+    restart: unless-stopped
+
+networks:
+  fincore-tailscale:
+    driver: bridge
+
+volumes:
+  sail-pgsql:
+    external: true
+    name: fincore_sail-pgsql
+  app-storage:
+    driver: local

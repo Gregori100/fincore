@@ -13,6 +13,13 @@ Thumbs.db
 
 # Environment (raíz — usado por docker compose). .env.example sí se commitea.
 /.env
+# Variables del stack productivo casero (Tailscale Funnel) — contiene APP_KEY.
+/.env.tailscale
+# Cert + key que `tailscale cert <host>.ts.net` deja en el cwd. No los necesitamos
+# (Funnel los gestiona internamente cuando se usa --bg), pero si alguien corre el
+# comando para diagnóstico, no deben commitearse.
+/*.ts.net.crt
+/*.ts.net.key
 
 # Test cache (PHPUnit deja esto fuera de backend/ si se corre desde la raíz)
 /.phpunit.result.cache

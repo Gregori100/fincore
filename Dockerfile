@@ -24,12 +24,17 @@ WORKDIR /app
 COPY backend/composer.json backend/composer.lock ./
 # --no-scripts evita correr post-install (que necesita artisan + el resto del
 # código); el dump-autoload final corre en la imagen runtime ya con todo el árbol.
+# --ignore-platform-reqs salta la verificación de extensiones porque la imagen
+# composer:2 no trae ext-gd (que requiere phpspreadsheet ^5.8) ni otras
+# extensiones que sí están en el runtime serversideup. Aquí solo descargamos
+# paquetes; el código se ejecuta en stage 3 donde las extensiones sí existen.
 RUN composer install \
     --no-dev \
     --no-scripts \
     --no-autoloader \
     --prefer-dist \
-    --no-interaction
+    --no-interaction \
+    --ignore-platform-reqs
 
 # ============================================================
 # Stage 3 — Runtime: nginx + php-fpm (serversideup).
@@ -58,8 +63,10 @@ RUN cd /var/www/html \
     && php artisan route:clear \
     && chown -R www-data:www-data storage bootstrap/cache
 
-# nginx: routing /api y /up → PHP-FPM, todo lo demás → SPA (index.html).
-COPY docker/nginx-server.conf /etc/nginx/server-opts.d/fincore.conf
+# nginx: reemplazamos el template del site (que serversideup procesa en arranque
+# y deja en /etc/nginx/site-opts.d/http.conf). Nuestro fragmento define el
+# routing /api → PHP, /up → PHP, resto → SPA con fallback /index.html.
+COPY docker/nginx-server.conf /etc/nginx/site-opts.d/http.conf.template
 
 # Entrypoint script — corre migraciones en cada arranque (idempotente).
 COPY docker/entrypoint.sh /etc/entrypoint.d/30-fincore.sh
