@@ -1,9 +1,0 @@
-{
-  "private": true,
-  "workspaces": ["frontend", "tests-e2e"],
-  "scripts": {
-    "dev": "npm run dev --workspace=frontend",
-    "build": "npm run build --workspace=frontend",
-    "test:e2e": "npm run test --workspace=tests-e2e"
-  }
-}
