@@ -1,0 +1,39 @@
+name: fincore
+description: "Cliente Flutter (Android + Linux desktop) para FinCore — finanzas personales que consume el API Laravel del monorepo."
+publish_to: 'none'
+
+# version: <name>+<code>. versionName=0.1.0, versionCode=1 (alineado con android/app/build.gradle.kts).
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # HTTP client con interceptores limpios para Bearer + 401/403/422/429/5xx.
+  dio: ^5.7.0
+
+  # Storage seguro del bearer token. En Linux desktop usar LinuxOptions(useSessionKeyring: false).
+  flutter_secure_storage: ^9.2.2
+
+  # Navegación declarativa con redirects condicionados por token + verify.
+  go_router: ^14.6.2
+
+  # Formato de moneda y fechas en es_MX.
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+  # Mocking para tests de api clients e interceptors.
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
