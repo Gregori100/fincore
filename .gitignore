@@ -7,33 +7,12 @@ Thumbs.db
 /.nova/
 /.fleet/
 
-# Dependencies (root-level, e.g. npm workspaces)
-/node_modules/
-/vendor/
+# El subproyecto mobile/ tiene su propio .gitignore (Flutter default + ajustes).
+# Las únicas reglas root quedan acá.
 
-# Environment (raíz — usado por docker compose). .env.example sí se commitea.
-/.env
-# Variables del stack productivo casero (Tailscale Funnel) — contiene APP_KEY.
-/.env.tailscale
-# Cert + key que `tailscale cert <host>.ts.net` deja en el cwd. No los necesitamos
-# (Funnel los gestiona internamente cuando se usa --bg), pero si alguien corre el
-# comando para diagnóstico, no deben commitearse.
-/*.ts.net.crt
-/*.ts.net.key
-
-# Test cache (PHPUnit deja esto fuera de backend/ si se corre desde la raíz)
-/.phpunit.result.cache
-
-# Playwright MCP artefactos (snapshots, console logs de smoke tests)
-/.playwright-mcp/
-
-# Output de los E2E (test-results/, reportes HTML, traces). El código sí se commitea.
-/tests-e2e/test-results/
-/tests-e2e/playwright-report/
-/tests-e2e/blob-report/
-/tests-e2e/.playwright-cache/
-# Si por accidente Playwright se corre desde la raíz, crea test-results/ aquí.
-/test-results/
-/playwright-report/
-
-# Each subproject handles its own ignores via backend/.gitignore and frontend/.gitignore
+.env
+.env.tailscale
+*.ts.net.crt
+*.ts.net.key
+.phpunit.result.cache
+.playwright-mcp/

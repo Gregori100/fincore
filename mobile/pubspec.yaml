@@ -1,0 +1,71 @@
+name: fincore
+description: "FinCore — app local-first single-user de finanzas personales. SQLite vía drift, sin red, sin login."
+publish_to: 'none'
+
+# 0.2.0+5: pickers migrados a DropdownMenu (M3) para que el overlay
+# respete el ancho del field y no se desborde.
+version: 0.2.0+29
+
+environment:
+  sdk: ^3.7.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # SQLite con drift + codegen. Streams reactivos cacheados.
+  drift: ^2.20.0
+  drift_flutter: ^0.2.0
+  sqlite3: ^2.4.0
+  sqlite3_flutter_libs: ^0.5.0
+  path: ^1.9.0
+  path_provider: ^2.1.0
+
+  # Formato de moneda y fechas en es_MX.
+  intl: ^0.19.0
+
+  # Navegación declarativa con redirect a /first-run si BD vacía.
+  go_router: ^14.6.2
+
+  # Importar backup JSON desde file picker del sistema.
+  file_picker: ^8.1.0
+
+  # Exportar backup vía share sheet de Android.
+  share_plus: ^10.0.0
+
+  # File picker para Linux desktop (fallback de file_picker).
+  file_selector: ^1.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^5.0.0
+
+  # Mocks de file_picker y share_plus en widget tests.
+  mocktail: ^1.0.4
+
+  # Codegen drift.
+  drift_dev: ^2.20.0
+  build_runner: ^2.4.0
+
+  # Generación de iconos de launcher (Android adaptive + monochrome themed).
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/icon/
+
+# Config de flutter_launcher_icons: corre con
+# `flutter pub run flutter_launcher_icons` desde mobile/.
+flutter_launcher_icons:
+  image_path: "assets/icon/icon_full.png"
+
+  android: true
+  adaptive_icon_background: "#1F242B"
+  adaptive_icon_foreground: "assets/icon/foreground_1024.png"
+  adaptive_icon_monochrome: "assets/icon/monochrome_1024.png"
+  min_sdk_android: 24

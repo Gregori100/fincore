@@ -1,59 +1,56 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# FinCore
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Libreta digital de cuentas. App Flutter Android **local-first single-user**: SQLite con drift como única fuente de verdad, sin red en runtime, sin login.
 
-## About Laravel
+> _"Tu libreta digital de cuentas."_
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Estado actual
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Sprint `flutter-local-mvp` cerrado. APK release **0.2.0+27** instalado y validado en Redmi. Toda la app vive en [`mobile/`](./mobile/README.md). Detalles del modelo, dominio y stack en [`CLAUDE.md`](./CLAUDE.md).
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Quick start
 
-## Learning Laravel
+```bash
+cd mobile
+flutter pub get
+dart run build_runner build --delete-conflicting-outputs
+flutter test                       # 56 tests verdes
+flutter run -d linux               # iterar en desktop
+# o:
+flutter build apk --release --split-per-abi
+~/Android/Sdk/platform-tools/adb install -r build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Setup completo y troubleshooting en [`mobile/README.md`](./mobile/README.md).
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Estructura
 
-## Laravel Sponsors
+```
+fincore/
+├── mobile/        # Único producto activo en main: app Flutter local
+├── engineering/   # Specs, planes, implementación, quality reviews
+├── CLAUDE.md      # Guía de dominio y stack para Claude Code
+└── README.md      # Este archivo
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Filosofía
 
-### Premium Partners
+- **Libreta libre**: gastos, transfers y cargos a tarjeta se permiten siempre, incluso con saldo negativo. Único bloqueo: no pagar más de lo que se debe a una tarjeta.
+- **Local-first**: el archivo SQLite es el producto. La app respalda a JSON y restaura desde JSON. No depende de un servidor.
+- **Single user**: una BD por cel, sin login ni multi-tenancy.
+- **Schema sync-ready**: UUIDs v7, soft delete, timestamps en todo. Cuando aparezca la necesidad de sync, será una spec aparte; el modelo ya está preparado.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Cliente web legacy (Vue + Laravel)
 
-## Contributing
+El backend Laravel, frontend Vue, cliente Flutter online y stack Docker viven en la rama [`legacy/web-and-online-flutter`](../../tree/legacy/web-and-online-flutter). Conservados por si en algún momento se necesita consultar la arquitectura previa o exportar JSON de la BD productiva original.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+git checkout legacy/web-and-online-flutter
+```
 
-## Code of Conduct
+## Specs y trazabilidad
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- `engineering/specs/flutter-local-mvp/spec.md` — qué se construyó y por qué.
+- `engineering/specs/flutter-local-mvp/plan/` — plan técnico + tasks + test-plan.
+- `engineering/specs/flutter-local-mvp/implementation/` — progreso, desviaciones, resúmenes, review final.
+- `engineering/quality-review/flutter-local-mvp/` — branch-quality-review al cierre.

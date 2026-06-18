@@ -1,0 +1,485 @@
+import 'package:drift/drift.dart';
+import 'package:fincore/data/database.dart';
+import 'package:fincore/data/financial_state.dart';
+import 'package:fincore/data/uuid.dart';
+
+part 'entries_dao.g.dart';
+
+class EntriesDaoError implements Exception {
+  final String code;
+  final String message;
+  const EntriesDaoError(this.code, this.message);
+
+  @override
+  String toString() => 'EntriesDaoError($code): $message';
+}
+
+/// Entry con sus relaciones resueltas (account_origin, account_destination, category).
+/// Versión de read del DAO que joinea para la lista de movimientos.
+class EntryWithRelations {
+  final JournalEntry entry;
+  final Account? accountOrigin;
+  final Account? accountDestination;
+  final Category? category;
+
+  const EntryWithRelations({
+    required this.entry,
+    this.accountOrigin,
+    this.accountDestination,
+    this.category,
+  });
+}
+
+const _validKinds = {'income', 'expense', 'credit_expense', 'debt_payment', 'transfer'};
+
+@DriftAccessor(tables: [JournalEntries, Accounts, Categories])
+class EntriesDao extends DatabaseAccessor<FincoreDatabase>
+    with _$EntriesDaoMixin {
+  final FinancialStateService _state;
+  EntriesDao(super.db, this._state);
+
+  /// Lista paginada con filtros. Stream reactivo: drift reemite al cambiar
+  /// cualquier tabla involucrada.
+  Stream<List<EntryWithRelations>> watchPage({
+    String? kind,
+    String? accountId,
+    DateTime? from,
+    DateTime? to,
+    int offset = 0,
+    int limit = 50,
+  }) {
+    final origin = alias(accounts, 'origin');
+    final dest = alias(accounts, 'dest');
+
+    final query = select(journalEntries).join([
+      leftOuterJoin(origin, origin.id.equalsExp(journalEntries.accountOriginId)),
+      leftOuterJoin(dest, dest.id.equalsExp(journalEntries.accountDestinationId)),
+      leftOuterJoin(categories, categories.id.equalsExp(journalEntries.categoryId)),
+    ])
+      ..where(journalEntries.deletedAt.isNull());
+
+    if (kind != null) query.where(journalEntries.kind.equals(kind));
+    if (accountId != null) {
+      query.where(
+        journalEntries.accountOriginId.equals(accountId) |
+            journalEntries.accountDestinationId.equals(accountId),
+      );
+    }
+    if (from != null) {
+      query.where(journalEntries.occurredAt.isBiggerOrEqualValue(from));
+    }
+    if (to != null) {
+      // Incluye el día completo (hasta 23:59:59.999) — alineado con el backend
+      // tras el sprint entries-by-bucket-fixes.
+      final inclusiveTo = DateTime(to.year, to.month, to.day, 23, 59, 59, 999);
+      query.where(journalEntries.occurredAt.isSmallerOrEqualValue(inclusiveTo));
+    }
+
+    query
+      ..orderBy([
+        OrderingTerm(expression: journalEntries.occurredAt, mode: OrderingMode.desc),
+        OrderingTerm(expression: journalEntries.createdAt, mode: OrderingMode.desc),
+      ])
+      ..limit(limit, offset: offset);
+
+    return query.watch().map((rows) {
+      return rows.map((row) {
+        return EntryWithRelations(
+          entry: row.readTable(journalEntries),
+          accountOrigin: row.readTableOrNull(origin),
+          accountDestination: row.readTableOrNull(dest),
+          category: row.readTableOrNull(categories),
+        );
+      }).toList();
+    });
+  }
+
+  Future<EntryWithRelations?> findById(String id) async {
+    final origin = alias(accounts, 'origin');
+    final dest = alias(accounts, 'dest');
+    final rows = await (select(journalEntries).join([
+      leftOuterJoin(origin, origin.id.equalsExp(journalEntries.accountOriginId)),
+      leftOuterJoin(dest, dest.id.equalsExp(journalEntries.accountDestinationId)),
+      leftOuterJoin(categories, categories.id.equalsExp(journalEntries.categoryId)),
+    ])
+          ..where(journalEntries.id.equals(id)))
+        .get();
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return EntryWithRelations(
+      entry: row.readTable(journalEntries),
+      accountOrigin: row.readTableOrNull(origin),
+      accountDestination: row.readTableOrNull(dest),
+      category: row.readTableOrNull(categories),
+    );
+  }
+
+  // ===========================================================================
+  // Registro por kind
+  // ===========================================================================
+
+  Future<String> registerIncome({
+    required String accountDestinationId,
+    required double amount,
+    required DateTime occurredAt,
+    String? description,
+    String? categoryId,
+  }) =>
+      _register(
+        kind: 'income',
+        accountDestinationId: accountDestinationId,
+        amount: amount,
+        occurredAt: occurredAt,
+        description: description,
+        categoryId: categoryId,
+      );
+
+  Future<String> registerExpense({
+    required String accountOriginId,
+    required double amount,
+    required DateTime occurredAt,
+    String? description,
+    String? categoryId,
+  }) =>
+      _register(
+        kind: 'expense',
+        accountOriginId: accountOriginId,
+        amount: amount,
+        occurredAt: occurredAt,
+        description: description,
+        categoryId: categoryId,
+      );
+
+  Future<String> registerCreditExpense({
+    required String accountOriginId,
+    required double amount,
+    required DateTime occurredAt,
+    String? description,
+    String? categoryId,
+  }) =>
+      _register(
+        kind: 'credit_expense',
+        accountOriginId: accountOriginId,
+        amount: amount,
+        occurredAt: occurredAt,
+        description: description,
+        categoryId: categoryId,
+      );
+
+  Future<String> registerDebtPayment({
+    required String accountOriginId,
+    required String accountDestinationId,
+    required double amount,
+    required DateTime occurredAt,
+    String? description,
+  }) async {
+    // Validamos tipos de cuenta PRIMERO (RN-011): el destino debe ser credit.
+    // Si no, devolvemos invalid_account_type sin chequear OverpayDebt.
+    await _validateAccountTypes(
+      kind: 'debt_payment',
+      originId: accountOriginId,
+      destinationId: accountDestinationId,
+    );
+    // OverpayDebt + insert dentro de la MISMA transacción: el check del saldo
+    // y la inserción del entry quedan atómicos. Sin esto, dos taps muy rápidos
+    // del botón Guardar podrían ambos pasar el check con la misma deuda y
+    // dejar la tarjeta con saldo a favor.
+    return transaction(() async {
+      final deuda = await _state.accountBalanceNow(accountDestinationId);
+      if (amount > deuda) {
+        throw const EntriesDaoError(
+          'overpay_debt',
+          'No podés pagar más de lo que debés a la tarjeta.',
+        );
+      }
+      return _register(
+        kind: 'debt_payment',
+        accountOriginId: accountOriginId,
+        accountDestinationId: accountDestinationId,
+        amount: amount,
+        occurredAt: occurredAt,
+        description: description,
+      );
+    });
+  }
+
+  Future<String> registerTransfer({
+    required String accountOriginId,
+    required String accountDestinationId,
+    required double amount,
+    required DateTime occurredAt,
+    String? description,
+  }) {
+    if (accountOriginId == accountDestinationId) {
+      throw const EntriesDaoError(
+        'invalid_account_type',
+        'La cuenta origen y destino no pueden ser la misma.',
+      );
+    }
+    return _register(
+      kind: 'transfer',
+      accountOriginId: accountOriginId,
+      accountDestinationId: accountDestinationId,
+      amount: amount,
+      occurredAt: occurredAt,
+      description: description,
+    );
+  }
+
+  Future<String> _register({
+    required String kind,
+    required double amount,
+    required DateTime occurredAt,
+    String? accountOriginId,
+    String? accountDestinationId,
+    String? description,
+    String? categoryId,
+  }) async {
+    if (!_validKinds.contains(kind)) {
+      throw const EntriesDaoError('invalid_kind', 'Kind inválido.');
+    }
+    if (amount <= 0) {
+      throw const EntriesDaoError(
+        'invalid_amount',
+        'El monto debe ser mayor a 0.',
+      );
+    }
+    await _validateAccountTypes(
+      kind: kind,
+      originId: accountOriginId,
+      destinationId: accountDestinationId,
+    );
+    if (categoryId != null) {
+      await _validateCategoryForKind(kind, categoryId);
+    }
+
+    final id = UuidV7.generate();
+    final now = DateTime.now();
+    await into(journalEntries).insert(JournalEntriesCompanion.insert(
+      id: id,
+      kind: kind,
+      accountOriginId: Value(accountOriginId),
+      accountDestinationId: Value(accountDestinationId),
+      amount: amount,
+      description: Value(description),
+      occurredAt: occurredAt,
+      categoryId: Value(categoryId),
+      createdAt: now,
+      updatedAt: now,
+    ));
+    return id;
+  }
+
+  /// Editar entry. kind inmutable.
+  Future<void> updateEntry({
+    required String id,
+    double? amount,
+    String? description,
+    DateTime? occurredAt,
+    String? accountOriginId,
+    String? accountDestinationId,
+    String? categoryId,
+    bool clearCategory = false,
+  }) async {
+    final existing = await (select(journalEntries)..where((e) => e.id.equals(id)))
+        .getSingleOrNull();
+    if (existing == null) {
+      throw const EntriesDaoError('not_found', 'El movimiento no existe.');
+    }
+    if (amount != null && amount <= 0) {
+      throw const EntriesDaoError(
+        'invalid_amount',
+        'El monto debe ser mayor a 0.',
+      );
+    }
+    final effectiveOrigin = accountOriginId ?? existing.accountOriginId;
+    final effectiveDestination =
+        accountDestinationId ?? existing.accountDestinationId;
+    await _validateAccountTypes(
+      kind: existing.kind,
+      originId: effectiveOrigin,
+      destinationId: effectiveDestination,
+    );
+    final effectiveCategoryId = clearCategory ? null : (categoryId ?? existing.categoryId);
+    if (effectiveCategoryId != null) {
+      await _validateCategoryForKind(existing.kind, effectiveCategoryId);
+    }
+
+    await (update(journalEntries)..where((e) => e.id.equals(id))).write(
+      JournalEntriesCompanion(
+        amount: amount != null ? Value(amount) : const Value.absent(),
+        description: description != null
+            ? Value(description.isEmpty ? null : description)
+            : const Value.absent(),
+        occurredAt: occurredAt != null ? Value(occurredAt) : const Value.absent(),
+        accountOriginId: accountOriginId != null
+            ? Value(accountOriginId)
+            : const Value.absent(),
+        accountDestinationId: accountDestinationId != null
+            ? Value(accountDestinationId)
+            : const Value.absent(),
+        categoryId: clearCategory
+            ? const Value(null)
+            : (categoryId != null ? Value(categoryId) : const Value.absent()),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  /// Cancelar (soft delete). Terminal — sin reactivación.
+  Future<void> cancel(String id) async {
+    final existing = await (select(journalEntries)..where((e) => e.id.equals(id)))
+        .getSingleOrNull();
+    if (existing == null) {
+      throw const EntriesDaoError('not_found', 'El movimiento no existe.');
+    }
+    if (existing.deletedAt != null) {
+      // Idempotente: si ya estaba cancelado, no hace nada.
+      return;
+    }
+    await (update(journalEntries)..where((e) => e.id.equals(id))).write(
+      JournalEntriesCompanion(
+        deletedAt: Value(DateTime.now()),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> _validateAccountTypes({
+    required String kind,
+    String? originId,
+    String? destinationId,
+  }) async {
+    Future<Account?> get(String? id) async {
+      if (id == null) return null;
+      return (select(accounts)..where((a) => a.id.equals(id))).getSingleOrNull();
+    }
+
+    final origin = await get(originId);
+    final destination = await get(destinationId);
+
+    if (origin != null && origin.deletedAt != null) {
+      throw const EntriesDaoError(
+        'invalid_account_type',
+        'La cuenta origen ya no está activa.',
+      );
+    }
+    if (destination != null && destination.deletedAt != null) {
+      throw const EntriesDaoError(
+        'invalid_account_type',
+        'La cuenta destino ya no está activa.',
+      );
+    }
+
+    switch (kind) {
+      case 'income':
+        if (origin != null) {
+          throw const EntriesDaoError('invalid_account_type', 'Ingreso no lleva cuenta origen.');
+        }
+        if (destination == null ||
+            (destination.type != 'cash' && destination.type != 'debit')) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Ingreso requiere cuenta destino tipo efectivo o débito.',
+          );
+        }
+        break;
+      case 'expense':
+        if (destination != null) {
+          throw const EntriesDaoError('invalid_account_type', 'Gasto no lleva cuenta destino.');
+        }
+        if (origin == null ||
+            (origin.type != 'cash' && origin.type != 'debit')) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Gasto requiere cuenta origen tipo efectivo o débito.',
+          );
+        }
+        break;
+      case 'credit_expense':
+        if (destination != null) {
+          throw const EntriesDaoError(
+              'invalid_account_type', 'Gasto a tarjeta no lleva cuenta destino.');
+        }
+        if (origin == null || origin.type != 'credit') {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Gasto a tarjeta requiere tarjeta de crédito como origen.',
+          );
+        }
+        break;
+      case 'debt_payment':
+        if (origin == null ||
+            (origin.type != 'cash' && origin.type != 'debit')) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Pago de tarjeta requiere efectivo o débito como origen.',
+          );
+        }
+        if (destination == null || destination.type != 'credit') {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Pago de tarjeta requiere tarjeta de crédito como destino.',
+          );
+        }
+        break;
+      case 'transfer':
+        if (origin == null ||
+            (origin.type != 'cash' && origin.type != 'debit')) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Transferencia requiere efectivo o débito como origen.',
+          );
+        }
+        if (destination == null ||
+            (destination.type != 'cash' && destination.type != 'debit')) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Transferencia requiere efectivo o débito como destino.',
+          );
+        }
+        if (origin.id == destination.id) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'La cuenta origen y destino no pueden ser la misma.',
+          );
+        }
+        break;
+    }
+  }
+
+  Future<void> _validateCategoryForKind(String kind, String categoryId) async {
+    if (kind == 'transfer' || kind == 'debt_payment') {
+      throw const EntriesDaoError(
+        'invalid_category_applies_to',
+        'Este tipo de movimiento no acepta categoría.',
+      );
+    }
+    final cat = await (select(categories)..where((c) => c.id.equals(categoryId)))
+        .getSingleOrNull();
+    if (cat == null) {
+      throw const EntriesDaoError(
+        'invalid_category_applies_to',
+        'La categoría no existe.',
+      );
+    }
+    if (cat.deletedAt != null) {
+      throw const EntriesDaoError(
+        'invalid_category_applies_to',
+        'La categoría está archivada.',
+      );
+    }
+    final valid = switch (kind) {
+      'income' => cat.appliesTo == 'income' || cat.appliesTo == 'both',
+      'expense' || 'credit_expense' =>
+        cat.appliesTo == 'expense' || cat.appliesTo == 'both',
+      _ => false,
+    };
+    if (!valid) {
+      throw const EntriesDaoError(
+        'invalid_category_applies_to',
+        'La categoría no aplica a este tipo de movimiento.',
+      );
+    }
+  }
+}

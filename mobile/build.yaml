@@ -1,0 +1,12 @@
+# Configuración de build_runner para drift.
+#
+# `store_date_time_values_as_text: true` es CRÍTICO: sin esto drift trunca
+# subsegundos en DateTimeColumn (gotcha conocido de dogear), lo que rompe
+# el orden estable de movimientos creados en el mismo segundo y el
+# round-trip del backup JSON (que serializa con ISO 8601 con subsegundos).
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          store_date_time_values_as_text: true
