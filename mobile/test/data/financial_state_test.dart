@@ -181,4 +181,43 @@ void main() {
     expect(sync, reactive);
     expect(sync, 750);
   });
+
+  // Cache de streams (RF-012 del sprint flutter-local-hardening).
+  test('cache: watchAccountBalance retorna el mismo Stream para la misma key', () {
+    final s1 = state.watchAccountBalance(bolsa, 'cash');
+    final s2 = state.watchAccountBalance(bolsa, 'cash');
+    expect(identical(s1, s2), isTrue);
+  });
+
+  test('cache: keys distintas retornan Streams distintos', () {
+    final s1 = state.watchAccountBalance(bolsa, 'cash');
+    final s2 = state.watchAccountBalance(debit, 'debit');
+    expect(identical(s1, s2), isFalse);
+  });
+
+  test('cache: invalidateAccount borra solo las keys de esa cuenta', () {
+    final sBolsa = state.watchAccountBalance(bolsa, 'cash');
+    final sDebit = state.watchAccountBalance(debit, 'debit');
+    state.invalidateAccount(bolsa);
+    // Tras invalidar bolsa, la próxima llamada crea un Stream nuevo.
+    final sBolsa2 = state.watchAccountBalance(bolsa, 'cash');
+    expect(identical(sBolsa, sBolsa2), isFalse);
+    // Debit no se tocó: misma referencia.
+    final sDebit2 = state.watchAccountBalance(debit, 'debit');
+    expect(identical(sDebit, sDebit2), isTrue);
+  });
+
+  test('cache: invalidateAll vacía el Map', () {
+    final s1 = state.watchAccountBalance(bolsa, 'cash');
+    state.invalidateAll();
+    final s2 = state.watchAccountBalance(bolsa, 'cash');
+    expect(identical(s1, s2), isFalse);
+  });
+
+  test('cache: archive(id) invalida automáticamente la cuenta archivada', () async {
+    final sDebit1 = state.watchAccountBalance(debit, 'debit');
+    await accountsDao.archive(debit, state);
+    final sDebit2 = state.watchAccountBalance(debit, 'debit');
+    expect(identical(sDebit1, sDebit2), isFalse);
+  });
 }

@@ -219,6 +219,10 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
         ),
       );
     });
+    // Invalidar cache de streams del FinancialStateService DESPUÉS de la
+    // transacción (RF-012). El stream de saldo de esta cuenta ya no se
+    // necesita; los listeners del Dashboard se desmontan por watchActive.
+    stateService?.invalidateAccount(id);
   }
 
   /// Cuenta cuántos movimientos activos (no cancelados) tocan esta cuenta como

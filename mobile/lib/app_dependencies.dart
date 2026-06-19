@@ -36,7 +36,7 @@ class AppDependencies {
     final accountsDao = AccountsDao(database);
     final categoriesDao = CategoriesDao(database);
     final entriesDao = EntriesDao(database, stateService);
-    final backupService = BackupService(database);
+    final backupService = BackupService(database, stateService);
     return AppDependencies(
       database: database,
       accountsDao: accountsDao,

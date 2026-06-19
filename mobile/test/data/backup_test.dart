@@ -145,7 +145,7 @@ void main() {
     {
       "id": "01234567-0123-7000-8000-000000000002",
       "kind": "expense",
-      "account_origin_id": "ID-INEXISTENTE",
+      "account_origin_id": "00000000-0000-7000-8000-fffffffffff0",
       "account_destination_id": null,
       "amount": 100,
       "description": null,
@@ -181,6 +181,302 @@ void main() {
     expect(json, contains('"accounts"'));
     expect(json, contains('"categories": []'));
     expect(json, contains('"journal_entries": []'));
+  });
+
+  // Validaciones de entrada del import (RF-001..RF-006 + RN-H01 del sprint
+  // flutter-local-hardening). El payload base es válido; cada test cambia una
+  // sola key para verificar que la validación correspondiente dispara.
+  String buildPayload({
+    String accountId = '01a2b3c4-5678-7abc-9def-0123456789ab',
+    String accountType = 'cash',
+    String accountName = 'Bolsa',
+    String? accountDescription,
+    String categoryId = '01a2b3c4-5678-7abc-9def-0123456789ac',
+    String appliesTo = 'expense',
+    String categoryName = 'Comida',
+    String entryId = '01a2b3c4-5678-7abc-9def-0123456789ad',
+    String kind = 'expense',
+    double amount = 100,
+    String? entryDescription,
+  }) {
+    String esc(String? s) => s == null ? 'null' : '"$s"';
+    return '''
+{
+  "version": 1,
+  "exported_at": "2026-06-18T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "$accountId",
+      "name": "$accountName",
+      "type": "$accountType",
+      "description": ${esc(accountDescription)},
+      "is_protected": true,
+      "credit_limit": null,
+      "closing_day": null,
+      "payment_day": null,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-18T12:00:00.000Z",
+      "updated_at": "2026-06-18T12:00:00.000Z"
+    }
+  ],
+  "categories": [
+    {
+      "id": "$categoryId",
+      "name": "$categoryName",
+      "applies_to": "$appliesTo",
+      "color_slug": "orange",
+      "icon_slug": "shopping-cart",
+      "created_at": "2026-06-18T12:00:00.000Z",
+      "updated_at": "2026-06-18T12:00:00.000Z"
+    }
+  ],
+  "journal_entries": [
+    {
+      "id": "$entryId",
+      "kind": "$kind",
+      "account_origin_id": "$accountId",
+      "account_destination_id": null,
+      "amount": $amount,
+      "description": ${esc(entryDescription)},
+      "occurred_at": "2026-06-18T12:00:00.000Z",
+      "category_id": "$categoryId",
+      "created_at": "2026-06-18T12:00:00.000Z",
+      "updated_at": "2026-06-18T12:00:00.000Z"
+    }
+  ]
+}
+''';
+  }
+
+  test('Import con kind inválido rechaza con invalid_kind', () async {
+    expect(
+      () => backup.importFromJson(buildPayload(kind: 'hacked')),
+      throwsA(isA<BackupError>().having((e) => e.code, 'code', 'invalid_kind')),
+    );
+  });
+
+  test('Import con type inválido rechaza con invalid_account_type', () async {
+    expect(
+      () => backup.importFromJson(buildPayload(accountType: 'savings')),
+      throwsA(isA<BackupError>()
+          .having((e) => e.code, 'code', 'invalid_account_type')),
+    );
+  });
+
+  test('Import con applies_to inválido rechaza con invalid_applies_to', () async {
+    expect(
+      () => backup.importFromJson(buildPayload(appliesTo: 'any')),
+      throwsA(
+          isA<BackupError>().having((e) => e.code, 'code', 'invalid_applies_to')),
+    );
+  });
+
+  test('Import con amount = 0 rechaza con invalid_amount', () async {
+    expect(
+      () => backup.importFromJson(buildPayload(amount: 0)),
+      throwsA(
+          isA<BackupError>().having((e) => e.code, 'code', 'invalid_amount')),
+    );
+  });
+
+  test('Import con amount < 0 rechaza con invalid_amount', () async {
+    expect(
+      () => backup.importFromJson(buildPayload(amount: -50)),
+      throwsA(
+          isA<BackupError>().having((e) => e.code, 'code', 'invalid_amount')),
+    );
+  });
+
+  test('Import con name > 200 chars rechaza con string_too_long', () async {
+    final huge = 'X' * 201;
+    expect(
+      () => backup.importFromJson(buildPayload(categoryName: huge)),
+      throwsA(
+          isA<BackupError>().having((e) => e.code, 'code', 'string_too_long')),
+    );
+  });
+
+  test('Import con description > 1000 chars rechaza con string_too_long', () async {
+    final huge = 'D' * 1001;
+    expect(
+      () => backup.importFromJson(buildPayload(entryDescription: huge)),
+      throwsA(
+          isA<BackupError>().having((e) => e.code, 'code', 'string_too_long')),
+    );
+  });
+
+  test('Import con id no UUID rechaza con invalid_uuid_format', () async {
+    expect(
+      () => backup.importFromJson(buildPayload(entryId: 'abc')),
+      throwsA(isA<BackupError>()
+          .having((e) => e.code, 'code', 'invalid_uuid_format')),
+    );
+  });
+
+  test('Import con UUID v4 válido pasa la validación de formato', () async {
+    // v4: 4 en la primera nibble del 3er grupo. El test no espera que importe
+    // por completo (necesitaría un payload coherente con la cuenta Bolsa),
+    // pero sí que NO falle por invalid_uuid_format antes.
+    const v4 = '01a2b3c4-5678-4abc-9def-0123456789ad';
+    try {
+      await backup.importFromJson(buildPayload(entryId: v4));
+    } catch (e) {
+      expect(e, isA<BackupError>());
+      expect((e as BackupError).code, isNot('invalid_uuid_format'));
+    }
+  });
+
+  test('Import con timestamp inválido rechaza con invalid_date_format', () async {
+    // B1 (quality review 2026-06-19).
+    final payload = buildPayload().replaceFirst(
+      '"occurred_at": "2026-06-18T12:00:00.000Z"',
+      '"occurred_at": "not-a-date"',
+    );
+    expect(
+      () => backup.importFromJson(payload),
+      throwsA(isA<BackupError>()
+          .having((e) => e.code, 'code', 'invalid_date_format')),
+    );
+  });
+
+  test('Import con credit_limit <= 0 rechaza con invalid_credit_limit', () async {
+    // B3 (quality review 2026-06-19).
+    const credit = '''
+{
+  "version": 1,
+  "exported_at": "2026-06-19T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789ab",
+      "name": "Bolsa",
+      "type": "cash",
+      "description": null,
+      "is_protected": true,
+      "credit_limit": null,
+      "closing_day": null,
+      "payment_day": null,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    },
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789ac",
+      "name": "Visa",
+      "type": "credit",
+      "description": null,
+      "is_protected": false,
+      "credit_limit": -100,
+      "closing_day": 15,
+      "payment_day": 5,
+      "interest_rate": 0.5,
+      "minimum_payment_pct": 0.05,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": []
+}
+''';
+    expect(
+      () => backup.importFromJson(credit),
+      throwsA(isA<BackupError>()
+          .having((e) => e.code, 'code', 'invalid_credit_limit')),
+    );
+  });
+
+  test('Import con closing_day fuera de rango rechaza con invalid_credit_metadata',
+      () async {
+    // B3 (quality review 2026-06-19).
+    const badDay = '''
+{
+  "version": 1,
+  "exported_at": "2026-06-19T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789ab",
+      "name": "Bolsa",
+      "type": "cash",
+      "description": null,
+      "is_protected": true,
+      "credit_limit": null,
+      "closing_day": null,
+      "payment_day": null,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    },
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789ac",
+      "name": "Visa",
+      "type": "credit",
+      "description": null,
+      "is_protected": false,
+      "credit_limit": 50000,
+      "closing_day": 99,
+      "payment_day": 5,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": []
+}
+''';
+    expect(
+      () => backup.importFromJson(badDay),
+      throwsA(isA<BackupError>()
+          .having((e) => e.code, 'code', 'invalid_credit_metadata')),
+    );
+  });
+
+  test('Import con color_slug fuera del catálogo rechaza con invalid_color_slug',
+      () async {
+    // M2 (quality review 2026-06-19).
+    expect(
+      () => backup.importFromJson(buildPayload().replaceFirst(
+        '"color_slug": "orange"',
+        '"color_slug": "magenta_loco"',
+      )),
+      throwsA(isA<BackupError>()
+          .having((e) => e.code, 'code', 'invalid_color_slug')),
+    );
+  });
+
+  test('Import con dos cuentas protegidas rechaza', () async {
+    // M1 (quality review 2026-06-19): Bolsa singleton.
+    const twoBolsas = '''
+{
+  "version": 1,
+  "exported_at": "2026-06-19T12:00:00.000Z",
+  "accounts": [
+    {"id": "01a2b3c4-5678-7abc-9def-000000000001","name": "Bolsa","type": "cash","description": null,"is_protected": true,"credit_limit": null,"closing_day": null,"payment_day": null,"interest_rate": null,"minimum_payment_pct": null,"created_at": "2026-06-19T12:00:00.000Z","updated_at": "2026-06-19T12:00:00.000Z"},
+    {"id": "01a2b3c4-5678-7abc-9def-000000000002","name": "Otra Bolsa","type": "cash","description": null,"is_protected": true,"credit_limit": null,"closing_day": null,"payment_day": null,"interest_rate": null,"minimum_payment_pct": null,"created_at": "2026-06-19T12:00:00.000Z","updated_at": "2026-06-19T12:00:00.000Z"}
+  ],
+  "categories": [],
+  "journal_entries": []
+}
+''';
+    expect(
+      () => backup.importFromJson(twoBolsas),
+      throwsA(isA<BackupError>().having((e) => e.code, 'code', 'missing_bolsa')),
+    );
+  });
+
+  test('Import con name vacío pasa la validación de longitud', () async {
+    // Length 0 cumple <= 200. El DAO rechazaría "" en runtime, pero el import
+    // solo valida longitud máxima.
+    try {
+      await backup.importFromJson(buildPayload(categoryName: ''));
+    } catch (e) {
+      expect(e, isA<BackupError>());
+      expect((e as BackupError).code, isNot('string_too_long'));
+    }
   });
 
   test('wipeAll vacía las 3 tablas y deja la BD lista para reseed', () async {

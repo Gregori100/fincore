@@ -103,6 +103,19 @@ data/
 - `accountBalanceNow(id)` sincrónico para Action que necesita el balance dentro de una transacción.
 - `watchAccountBalance(id, type)` para UI reactiva.
 
+### Migraciones de schema (RN-H02 del sprint flutter-local-hardening)
+
+- `schemaVersion` se incrementa **solo cuando** existe una implementación correspondiente en `MigrationStrategy.onUpgrade` de `mobile/lib/data/database.dart`.
+- La función `onUpgrade` arranca con un guardrail: tras agotar las ramas `if (from == X && to == Y) { ... return; }` conocidas, lanza `UnimplementedError('Schema upgrade $from → $to no implementado...')`. Esto convierte cualquier bump accidental en crash visible en QA en lugar de corrupción silenciosa de datos.
+- Cualquier PR que toque las definiciones de tablas o el valor de `schemaVersion` **está obligado** a agregar la rama correspondiente antes del throw final, escribir el `CREATE INDEX`/`ALTER TABLE`/`customStatement` adecuado y conservar el guardrail.
+- Las migraciones son aditivas siempre que se pueda: nunca `DROP TABLE` ni `DROP COLUMN` con datos del usuario. Si la operación es destructiva, exigir un export JSON previo desde Settings y documentar el flujo en `pendientes.md` del sprint.
+
+### Joins con categorías archivadas
+
+- `Category` usa soft delete (`deletedAt`). Las archivadas son terminales: ni se reactivan ni se borran físicamente. La relación de drift desde `JournalEntry` devuelve `null` cuando la categoría apunta a un registro archivado.
+- **Convención**: cualquier lectura desde la UI o desde un DAO que joinee `categories` debe filtrar por `deletedAt.isNull()` o llamar a `categoriesDao.findActiveById(id)` para evitar mostrar categorías fantasma. `findActiveById` retorna `null` si la categoría no existe **o** está archivada; es el helper canónico para validar antes de un write.
+- En `EntriesDao.updateEntry`, si la `categoryId` heredada apunta a una categoría archivada, el write fuerza `categoryId = null` sin lanzar error (RN-H03). El badge desaparece y el FK colgante se limpia. Comportamiento consistente con la libreta libre.
+
 ### Backup JSON v1
 
 Mismo formato que el `/api/finance/backup/export` del backend legacy. Bit a bit compatible:
@@ -236,12 +249,24 @@ Cobertura: **56 tests verdes** en 4 suites:
 
 - Lenguaje: **español** para comentarios de dominio, mensajes de UI, commits y documentación. Identificadores en inglés.
 - `flutter analyze` debe quedar en 0 errores antes de commit. Un hint cosmético en `widgets/skeleton.dart:75` (`prefer_const_constructors`) es tolerable.
-- Bump de version en 3 lugares por release:
+- Bump de version en 2 lugares por release (desde el sprint `flutter-local-hardening`):
   1. `pubspec.yaml`: `version: X.Y.Z+N`
   2. `android/app/build.gradle.kts`: `versionCode = N` + `versionName = "X.Y.Z"`
-  3. `lib/screens/settings_screen.dart`: `const String kAppVersion = 'X.Y.Z+N'`
+  - `lib/screens/settings_screen.dart` ya no tiene `kAppVersion` hardcoded: lee de `PackageInfo.fromPlatform()` vía `package_info_plus` (RF-016).
 - Las preguntas/desviaciones/decisiones de cada sprint viven en `engineering/specs/<slug>/`.
 - Skills `spec-*` se usan para definir/planear/implementar/clarificar specs. `branch-quality-review` se invoca al cierre de cada sprint.
+
+### Política de `ndkVersion` (RF-017)
+
+- `android/app/build.gradle.kts` declara `ndkVersion = "27.0.12077973"` hardcoded porque los plugins nativos del proyecto lo requieren (`sqlite3_flutter_libs`, `file_picker`, `share_plus`, `path_provider_android`, etc.).
+- Revisar tras cada `flutter upgrade`: si el `flutter.ndkVersion` default sube a 28+ y todos los plugins lo soportan, bumpear la línea y eliminar el override.
+- No volver a `ndkVersion = flutter.ndkVersion` mientras algún plugin del proyecto exija una versión superior al default.
+
+### Política de dependencias `^` flotantes (RF-018)
+
+- `pubspec.yaml` usa `^` en todas las deps clave (`drift`, `go_router`, `sqlite3_flutter_libs`, `package_info_plus`, etc.) para iteración rápida.
+- **No ejecutar `flutter pub upgrade`** sin revisar los changelogs de `drift`, `go_router` y `sqlite3_flutter_libs` (los tres con mayor superficie en el código). Cualquier bump de minor de esos paquetes puede romper queries, redirects o el binding nativo.
+- Antes de un release "estable" (commit a `main` con APK distribuido) considerar pinear las críticas a versión exacta y validar que `flutter test` + `flutter analyze` siguen verdes.
 
 ## Decisiones de pivote (2026-06-12 → 2026-06-17)
 

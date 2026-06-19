@@ -425,6 +425,25 @@ void main() {
       await entriesDao.cancel(id); // no debe lanzar
     });
 
+    test('cancel idempotente preserva balance (no doble reversión)', () async {
+      // RF-021 del sprint flutter-local-hardening. Si una regresión hiciera
+      // que el segundo cancel volviera a restar el monto, este test lo agarra.
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 500,
+        occurredAt: DateTime.now(),
+      );
+      // Pre-condición: balance = 500.
+      expect(await stateService.accountBalanceNow(bolsaId), 500);
+      await entriesDao.cancel(id);
+      final afterFirst = await stateService.accountBalanceNow(bolsaId);
+      expect(afterFirst, 0);
+      await entriesDao.cancel(id);
+      final afterSecond = await stateService.accountBalanceNow(bolsaId);
+      expect(afterSecond, afterFirst);
+      expect(afterSecond, 0);
+    });
+
     test('credit_expense con categoría income rechaza', () async {
       final incomeCat = await categoriesDao.create(
         name: 'Sueldo',
@@ -442,6 +461,153 @@ void main() {
         throwsA(isA<EntriesDaoError>()
             .having((e) => e.code, 'code', 'invalid_category_applies_to')),
       );
+    });
+  });
+
+  // Matriz de transiciones de updateEntry (RF-022 del sprint flutter-local-hardening).
+  // Cubre combinaciones reales que el usuario puede hacer en el form de edición.
+  group('EntriesDao.updateEntry transiciones', () {
+    late FincoreDatabase db;
+    late AccountsDao accountsDao;
+    late CategoriesDao categoriesDao;
+    late EntriesDao entriesDao;
+    late FinancialStateService stateService;
+    late String bolsaId;
+    late String debitId;
+    late String catComida;
+    late String catSueldo;
+
+    setUp(() async {
+      db = FincoreDatabase(NativeDatabase.memory());
+      stateService = FinancialStateService(db);
+      accountsDao = AccountsDao(db);
+      categoriesDao = CategoriesDao(db);
+      entriesDao = EntriesDao(db, stateService);
+      bolsaId = await accountsDao.createBolsa();
+      debitId = await accountsDao.create(name: 'Banamex', type: 'debit');
+      catComida = await categoriesDao.create(
+        name: 'Comida',
+        appliesTo: 'expense',
+        colorSlug: 'orange',
+        iconSlug: 'shopping-cart',
+      );
+      catSueldo = await categoriesDao.create(
+        name: 'Sueldo',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'banknotes',
+      );
+    });
+
+    tearDown(() => db.close());
+
+    test('edita amount + description + occurredAt simultáneo', () async {
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.utc(2026, 1, 1),
+        description: 'inicial',
+      );
+      await entriesDao.updateEntry(
+        id: id,
+        amount: 250,
+        description: 'editado',
+        occurredAt: DateTime.utc(2026, 6, 15),
+      );
+      final entries = await entriesDao.watchPage().first;
+      final e = entries.first.entry;
+      expect(e.amount, 250);
+      expect(e.description, 'editado');
+      expect(e.occurredAt.year, 2026);
+      expect(e.occurredAt.month, 6);
+      expect(e.occurredAt.day, 15);
+    });
+
+    test('cambia categoryId a una compatible', () async {
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+      );
+      await entriesDao.updateEntry(id: id, categoryId: catSueldo);
+      final entries = await entriesDao.watchPage().first;
+      expect(entries.first.entry.categoryId, catSueldo);
+    });
+
+    test('cambia categoryId a una incompatible rechaza', () async {
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+      );
+      expect(
+        () => entriesDao.updateEntry(id: id, categoryId: catComida),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_category_applies_to')),
+      );
+    });
+
+    test('cambia accountOriginId a otra cuenta activa', () async {
+      final otra = await accountsDao.create(name: 'Santander', type: 'debit');
+      final id = await entriesDao.registerExpense(
+        accountOriginId: debitId,
+        amount: 50,
+        occurredAt: DateTime.now(),
+      );
+      await entriesDao.updateEntry(id: id, accountOriginId: otra);
+      final entries = await entriesDao.watchPage().first;
+      expect(entries.first.entry.accountOriginId, otra);
+    });
+
+    test('updateEntry sobre entry con categoría heredada archivada limpia silenciosamente', () async {
+      // RF-014 + RN-H03: la categoría se archiva DESPUÉS del insert.
+      // updateEntry sin tocar categoryId debe persistir el entry con
+      // categoryId = null y sin lanzar error.
+      final id = await entriesDao.registerExpense(
+        accountOriginId: debitId,
+        amount: 80,
+        occurredAt: DateTime.now(),
+        categoryId: catComida,
+      );
+      await categoriesDao.archive(catComida);
+      await entriesDao.updateEntry(id: id, amount: 90);
+      final entries = await entriesDao.watchPage().first;
+      expect(entries.first.entry.categoryId, equals(null));
+      expect(entries.first.entry.amount, 90);
+    });
+
+    test('updateEntry con categoryId explícito archivado rechaza', () async {
+      // M5 (quality review 2026-06-19): si el caller pasa explícitamente una
+      // categoryId que está archivada, debe lanzar invalid_category_applies_to.
+      // RN-H03 solo limpia silenciosamente cuando la categoría es heredada
+      // (categoryId == null en el call).
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+      );
+      await categoriesDao.archive(catSueldo);
+      expect(
+        () => entriesDao.updateEntry(id: id, categoryId: catSueldo),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_category_applies_to')),
+      );
+    });
+
+    test('updateEntry con clearCategory=true ignora categoryId pasado', () async {
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+        categoryId: catSueldo,
+      );
+      await entriesDao.updateEntry(
+        id: id,
+        clearCategory: true,
+        categoryId: catSueldo,
+      );
+      final entries = await entriesDao.watchPage().first;
+      expect(entries.first.entry.categoryId, equals(null));
     });
   });
 

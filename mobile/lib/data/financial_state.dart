@@ -11,11 +11,27 @@ class FinancialStateService {
   final FincoreDatabase _db;
   FinancialStateService(this._db);
 
+  /// Cache de streams por cuenta (RF-012 del sprint flutter-local-hardening).
+  ///
+  /// El Dashboard rendera un `_BalanceLabel` por cada cuenta activa. Sin cache,
+  /// cada `_BalanceLabel` crea un `customSelect(...).watchSingle()` nuevo:
+  /// con 10 cuentas son 10 streams idénticos suscritos al mismo `readsFrom`.
+  /// El cache hace que múltiples suscriptores compartan el mismo Stream y
+  /// drift coalesces la query subyacente.
+  ///
+  /// Key formato: `'$accountId:$accountType'`. Se invalida en dos eventos:
+  /// - `archive(id)` de una cuenta → `invalidateAccount(id)` borra las keys.
+  /// - `wipeAll()` → `invalidateAll()` vacía el Map.
+  final Map<String, Stream<double>> _balanceCache = {};
+
   /// Saldo derivado de una cuenta específica.
   ///
   /// - cash/debit: saldo = Σ destination − Σ origin (intuitivo: ingreso suma, gasto resta).
   /// - credit:     saldo = Σ origin − Σ destination (deuda actual; cargos suben, pagos bajan).
   Stream<double> watchAccountBalance(String accountId, String accountType) {
+    final key = '$accountId:$accountType';
+    final cached = _balanceCache[key];
+    if (cached != null) return cached;
     final isCredit = accountType == 'credit';
     final sql = isCredit
         ? 'SELECT COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) '
@@ -24,7 +40,7 @@ class FinancialStateService {
         : 'SELECT COALESCE(SUM(CASE WHEN account_destination_id = ? THEN amount ELSE 0 END), 0) '
             '- COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) AS balance '
             'FROM journal_entries WHERE deleted_at IS NULL';
-    return _db
+    final stream = _db
         .customSelect(
           sql,
           variables: [Variable.withString(accountId), Variable.withString(accountId)],
@@ -32,6 +48,21 @@ class FinancialStateService {
         )
         .map((row) => row.read<double>('balance'))
         .watchSingle();
+    _balanceCache[key] = stream;
+    return stream;
+  }
+
+  /// Limpia todas las entradas del cache asociadas a una cuenta específica.
+  /// Llamada desde `AccountsDao.archive(id)` para liberar referencias al stream
+  /// de una cuenta que dejó de aparecer en el listado activo.
+  void invalidateAccount(String accountId) {
+    _balanceCache.removeWhere((key, _) => key.startsWith('$accountId:'));
+  }
+
+  /// Limpia todo el cache. Llamada desde `BackupService.wipeAll()` cuando se
+  /// resetea la cuenta del usuario o se importa un respaldo (reemplazo total).
+  void invalidateAll() {
+    _balanceCache.clear();
   }
 
   /// Versión sincrónica para validaciones (ej. archive con saldo != 0).

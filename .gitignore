@@ -16,3 +16,7 @@ Thumbs.db
 *.ts.net.key
 .phpunit.result.cache
 .playwright-mcp/
+
+# `adb backup io.github.gregori100.fincore` deja un .ab vacío (47 bytes) en cwd.
+# Es el artefacto del smoke de privacidad (RF-008); no se commitea.
+*.ab

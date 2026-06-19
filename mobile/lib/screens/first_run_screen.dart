@@ -216,7 +216,11 @@ class _OptionCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: FincoreColors.textSubtle),
+              Semantics(
+                excludeSemantics: true,
+                child: const Icon(Icons.chevron_right,
+                    color: FincoreColors.textSubtle),
+              ),
             ],
           ),
         ),

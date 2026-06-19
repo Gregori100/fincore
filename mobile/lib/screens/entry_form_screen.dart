@@ -75,7 +75,18 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
         _kind = parseJournalKind(item.entry.kind);
         _originId = item.entry.accountOriginId;
         _destId = item.entry.accountDestinationId;
-        _categoryId = item.entry.categoryId;
+        // B2 (quality review 2026-06-19): si la categoría heredada está
+        // archivada, resetear _categoryId a null. Sin esto, el form pasaba
+        // categoryId del entry como "explícito" al DAO y el updateEntry
+        // lanzaba invalid_category_applies_to al guardar, rompiendo la
+        // promesa de RN-H03 (limpieza silenciosa de categoría archivada).
+        if (item.entry.categoryId != null) {
+          final activeCat =
+              await deps.categoriesDao.findActiveById(item.entry.categoryId!);
+          _categoryId = activeCat == null ? null : item.entry.categoryId;
+        } else {
+          _categoryId = null;
+        }
         _occurredAt = item.entry.occurredAt;
         _amountCtrl.text = item.entry.amount.toString();
         _descCtrl.text = item.entry.description ?? '';
@@ -370,10 +381,13 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
         else
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: TextButton.icon(
-              icon: const Icon(Icons.swap_horiz, size: 16),
-              label: Text('Cambiar tipo (${k.label})'),
-              onPressed: _saving ? null : () => setState(() => _kind = null),
+            child: Tooltip(
+              message: 'Cambiar tipo de movimiento',
+              child: TextButton.icon(
+                icon: const Icon(Icons.swap_horiz, size: 16),
+                label: Text('Cambiar tipo (${k.label})'),
+                onPressed: _saving ? null : () => setState(() => _kind = null),
+              ),
             ),
           ),
         if (_needsOrigin(k)) ...[

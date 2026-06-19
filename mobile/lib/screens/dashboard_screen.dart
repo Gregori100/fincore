@@ -70,6 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push('/entries/new'),
+        tooltip: 'Nuevo movimiento',
         icon: const Icon(Icons.add),
         label: const Text('Movimiento'),
         backgroundColor: FincoreColors.accent,

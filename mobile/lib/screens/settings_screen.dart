@@ -11,12 +11,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-
-/// Versión visible en Settings. Sincronizar a mano con pubspec.yaml y
-/// android/app/build.gradle.kts en cada release.
-const String kAppVersion = '0.2.0+29';
+import 'package:fincore/widgets/skeleton.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,19 +28,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _export() async {
     if (_working) return;
-    final deps = AppDependencies.of(context);
     setState(() => _working = true);
     try {
-      final json = await deps.backupService.exportToJson();
-      final tempDir = await getTemporaryDirectory();
-      final stamp = DateFormat('yyyy-MM-dd').format(DateTime.now());
-      final file = File('${tempDir.path}/fincore-backup-$stamp.json');
-      await file.writeAsString(json);
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: 'Respaldo FinCore $stamp',
-        text: 'Guardá este archivo en lugar seguro.',
-      );
+      await _exportInternal();
     } catch (e) {
       if (mounted) showErrorSnackbar(context, e);
     } finally {
@@ -50,37 +38,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _resetAccount() async {
-    if (_working) return;
+  /// Exporta el respaldo y dispara el share sheet. Retorna `true` si el
+  /// usuario completó el share (`status: success`), `false` si lo canceló
+  /// o si el dispositivo no tiene app destino disponible.
+  ///
+  /// Asume que el caller ya activó `_working = true` y lo desactivará al final.
+  Future<bool> _exportInternal() async {
     final deps = AppDependencies.of(context);
-    final firstRunState = FirstRunStateProvider.of(context);
-
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Reiniciar cuenta',
-      message: 'Esto BORRA toda tu BD: cuentas, categorías, movimientos. '
-          'Después la app vuelve a la pantalla de primer arranque. '
-          'No hay vuelta atrás (excepto si tenés un respaldo guardado).',
-      confirmLabel: 'Borrar todo',
-      destructive: true,
+    final json = await deps.backupService.exportToJson();
+    final tempDir = await getTemporaryDirectory();
+    final stamp = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final file = File('${tempDir.path}/fincore-backup-$stamp.json');
+    await file.writeAsString(json);
+    final result = await Share.shareXFiles(
+      [XFile(file.path)],
+      subject: 'Respaldo FinCore $stamp',
+      text: 'Guardá este archivo en lugar seguro.',
     );
-    if (!confirmed) return;
-    if (!mounted) return;
+    return result.status == ShareResultStatus.success;
+  }
 
+  /// Flujo "Exportar respaldo y luego reiniciar" (RF-013).
+  /// Dispara share; si el usuario completó, pide segunda confirmación y
+  /// resetea. Si el share fue cancelado/unavailable, no procede.
+  Future<void> _exportThenReset() async {
+    if (_working) return;
     setState(() => _working = true);
     try {
-      await deps.backupService.wipeAll();
+      final exported = await _exportInternal();
       if (!mounted) return;
-      // Notificá al router que la BD está vacía → redirect a /first-run.
-      firstRunState.value = false;
-      // Salimos de Settings para que el redirect se vea.
-      if (context.canPop()) {
-        Navigator.of(context).maybePop();
+      if (!exported) {
+        showWarningSnackbar(
+          context,
+          'Exportación cancelada. No se reinició la BD.',
+        );
+        return;
       }
+      final confirmed = await showConfirmDialog(
+        context,
+        title: 'Reiniciar cuenta',
+        message: 'El respaldo se compartió correctamente. '
+            '¿Continuar con el reseteo de tu BD local? '
+            'Esta acción es definitiva.',
+        confirmLabel: 'Sí, borrar todo',
+        destructive: true,
+      );
+      if (!confirmed) {
+        // M3 (quality review 2026-06-19): si el usuario completó el share pero
+        // canceló el segundo diálogo, dejarlo claro. El respaldo se exportó
+        // pero la BD sigue intacta.
+        if (mounted) {
+          showSuccessSnackbar(
+              context, 'Respaldo exportado. Reseteo cancelado.');
+        }
+        return;
+      }
+      if (!mounted) return;
+      await _wipeAndRedirect();
     } catch (e) {
       if (mounted) showErrorSnackbar(context, e);
     } finally {
       if (mounted) setState(() => _working = false);
+    }
+  }
+
+  /// Flujo "Reiniciar sin exportar" (RF-013).
+  /// Confirmación destructiva enfática única + wipe.
+  Future<void> _resetWithoutExport() async {
+    if (_working) return;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Reiniciar cuenta sin respaldo',
+      message: 'Esto BORRA toda tu BD: cuentas, categorías, movimientos. '
+          'NO se va a exportar respaldo. '
+          'No hay vuelta atrás (excepto si ya guardaste otro respaldo manualmente).',
+      confirmLabel: 'Borrar todo igual',
+      destructive: true,
+    );
+    if (!confirmed) return;
+    if (!mounted) return;
+    setState(() => _working = true);
+    try {
+      await _wipeAndRedirect();
+    } catch (e) {
+      if (mounted) showErrorSnackbar(context, e);
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _wipeAndRedirect() async {
+    final deps = AppDependencies.of(context);
+    final firstRunState = FirstRunStateProvider.of(context);
+    await deps.backupService.wipeAll();
+    if (!mounted) return;
+    // Notificá al router que la BD está vacía → redirect a /first-run.
+    firstRunState.value = false;
+    // Salimos de Settings para que el redirect se vea.
+    if (context.canPop()) {
+      Navigator.of(context).maybePop();
     }
   }
 
@@ -180,7 +236,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right, color: FincoreColors.textSubtle),
+                Semantics(
+                  excludeSemantics: true,
+                  child: const Icon(Icons.chevron_right,
+                      color: FincoreColors.textSubtle),
+                ),
               ],
             ),
           ),
@@ -235,10 +295,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: TextStyle(color: FincoreColors.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 16),
+                // Botón primario (RF-013): forzar export antes del reset.
+                FilledButton.icon(
+                  onPressed: _working ? null : _exportThenReset,
+                  icon: const Icon(Icons.save_alt_outlined),
+                  label: const Text('Exportar respaldo y luego reiniciar'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: FincoreColors.accent,
+                    foregroundColor: FincoreColors.canvas,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Botón secundario (RF-013): reset sin exportar, escape hatch
+                // para usuarios que ya tienen respaldo guardado manualmente.
                 OutlinedButton.icon(
-                  onPressed: _working ? null : _resetAccount,
+                  onPressed: _working ? null : _resetWithoutExport,
                   icon: const Icon(Icons.delete_forever_outlined),
-                  label: const Text('Reiniciar cuenta'),
+                  label: const Text('Reiniciar sin exportar'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: FincoreColors.negative,
                     side: const BorderSide(color: FincoreColors.negative),
@@ -253,18 +329,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 16),
           const SectionTitle('Acerca de'),
           const SizedBox(height: 8),
-          const BaseCard(
+          BaseCard(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('FinCore',
+                const Text('FinCore',
                     style: TextStyle(
-                        color: FincoreColors.textPrimary, fontWeight: FontWeight.w600)),
-                Text(kAppVersion,
-                    style: TextStyle(
-                        color: FincoreColors.textMuted,
-                        fontFamily: 'monospace',
-                        fontSize: 13)),
+                        color: FincoreColors.textPrimary,
+                        fontWeight: FontWeight.w600)),
+                // RF-016: la versión se lee de PackageInfo (manifest) en
+                // runtime; el fallback en tests/error es cadena vacía.
+                FutureBuilder<PackageInfo>(
+                  future: PackageInfo.fromPlatform(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Skeleton(width: 60, height: 13);
+                    }
+                    if (snapshot.hasError || snapshot.data == null) {
+                      return const Text('dev',
+                          style: TextStyle(
+                              color: FincoreColors.textMuted,
+                              fontFamily: 'monospace',
+                              fontSize: 13));
+                    }
+                    final info = snapshot.data!;
+                    return Text(
+                      '${info.version}+${info.buildNumber}',
+                      style: const TextStyle(
+                          color: FincoreColors.textMuted,
+                          fontFamily: 'monospace',
+                          fontSize: 13),
+                    );
+                  },
+                ),
               ],
             ),
           ),

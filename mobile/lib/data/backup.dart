@@ -1,7 +1,9 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/data/database.dart';
+import 'package:fincore/data/financial_state.dart';
 
 /// Excepción al importar un backup inválido o incompatible.
 class BackupError implements Exception {
@@ -39,9 +41,37 @@ const _supportedVersion = 1;
 /// Import: parsea, valida, ejecuta dentro de transacción que primero borra
 /// todo y luego inserta lo importado. Si algo falla, transacción aborta y
 /// la BD existente queda intacta.
+// Constantes de validación del import (RF-001..RF-006, RN-H01).
+// Mantener sincronizadas con las del DAO (`_validKinds` en entries_dao.dart,
+// catálogo de slugs en category_catalog.dart). El import valida acá antes de
+// construir el Companion para que payloads corruptos NO toquen la BD.
+
+const Set<String> _validKinds = {
+  'income',
+  'expense',
+  'credit_expense',
+  'debt_payment',
+  'transfer',
+};
+const Set<String> _validAccountTypes = {'cash', 'debit', 'credit'};
+const Set<String> _validAppliesToTypes = {'income', 'expense', 'both'};
+
+const int _kMaxNameLength = 200;
+const int _kMaxDescriptionLength = 1000;
+
+// UUID v4 o v7: octava nibble es 4 o 7; nono nibble alto es 8/9/a/b (RFC 4122
+// variant). Aceptamos hex en mayúsculas y minúsculas.
+final RegExp _uuidRegex = RegExp(
+  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[47][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+);
+
 class BackupService {
   final FincoreDatabase _db;
-  BackupService(this._db);
+  // Opcional para no romper callers de test; se inyecta desde AppDependencies
+  // para que `wipeAll()` y `importFromJson()` puedan limpiar el cache de
+  // streams de saldos cuando reemplazan toda la BD (RF-012).
+  final FinancialStateService? _state;
+  BackupService(this._db, [this._state]);
 
   Future<String> exportToJson() async {
     final activeAccounts = await (_db.select(_db.accounts)
@@ -139,6 +169,24 @@ class BackupService {
       );
     }
 
+    // M1 (quality review 2026-06-19): solo una Bolsa singleton + protección
+    // exclusiva del tipo cash. Sin esto, dos cuentas protegidas o una cuenta
+    // debit/credit con is_protected=true rompen invariantes del Dashboard.
+    final protectedAccounts =
+        accountsParsed.where((a) => a.isProtected.value).toList();
+    if (protectedAccounts.length > 1) {
+      throw const BackupError(
+        'missing_bolsa',
+        'El respaldo tiene más de una cuenta protegida (Bolsa singleton).',
+      );
+    }
+    if (protectedAccounts.any((a) => a.type.value != 'cash')) {
+      throw const BackupError(
+        'protected_account',
+        'Solo una Bolsa (type=cash) puede tener is_protected=true.',
+      );
+    }
+
     // Validación de FKs antes de la transacción.
     final accountIds = accountsParsed.map((a) => a.id.value).toSet();
     final categoryIds = categoriesParsed.map((c) => c.id.value).toSet();
@@ -180,6 +228,9 @@ class BackupService {
         b.insertAll(_db.journalEntries, entriesParsed);
       });
     });
+    // Invalidar cache de streams tras reemplazo total (RF-012). Las nuevas
+    // suscripciones quedarán contra los datos recién importados.
+    _state?.invalidateAll();
 
     return ImportReport(
       accountsCount: accountsParsed.length,
@@ -194,6 +245,9 @@ class BackupService {
   /// responsable de mandar al usuario a /first-run para reseed.
   Future<void> wipeAll() async {
     await _db.transaction(_wipeTablesInternal);
+    // Invalidar cache de streams DESPUÉS del wipe (RF-012). Si llamamos antes,
+    // un nuevo suscriptor podría crear una entrada nueva con el stream viejo.
+    _state?.invalidateAll();
   }
 
   Future<void> _wipeTablesInternal() async {
@@ -246,29 +300,100 @@ class BackupService {
       };
 
   AccountsCompanion _accountFromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    final name = json['name'] as String;
+    final type = json['type'] as String;
+    final description = json['description'] as String?;
+    final isProtected = (json['is_protected'] as bool?) ?? false;
+    final creditLimit = (json['credit_limit'] as num?)?.toDouble();
+    final closingDay = json['closing_day'] as int?;
+    final paymentDay = json['payment_day'] as int?;
+    final interestRate = (json['interest_rate'] as num?)?.toDouble();
+    final minimumPaymentPct = (json['minimum_payment_pct'] as num?)?.toDouble();
+    _validateUuid('accounts.id', id);
+    _validateLength('accounts.name', name, _kMaxNameLength);
+    _validateDescription('accounts.description', description);
+    if (!_validAccountTypes.contains(type)) {
+      throw BackupError(
+        'invalid_account_type',
+        'El tipo de cuenta no es válido (esperado: cash, debit o credit; recibido: "$type").',
+      );
+    }
+    // B3 (quality review 2026-06-19): validar metadata de credit en el import.
+    // Sin esto, un JSON corrupto con closing_day=99 o credit_limit<0 entraba y
+    // se rompía la UI al editar la cuenta.
+    if (type == 'credit') {
+      if (creditLimit == null || creditLimit <= 0) {
+        throw BackupError('invalid_credit_limit',
+            'La cuenta de crédito "$name" debe tener credit_limit > 0 (recibido: $creditLimit).');
+      }
+      if (closingDay == null || closingDay < 1 || closingDay > 31) {
+        throw BackupError('invalid_credit_metadata',
+            'La cuenta "$name" debe tener closing_day entre 1 y 31 (recibido: $closingDay).');
+      }
+      if (paymentDay == null || paymentDay < 1 || paymentDay > 31) {
+        throw BackupError('invalid_credit_metadata',
+            'La cuenta "$name" debe tener payment_day entre 1 y 31 (recibido: $paymentDay).');
+      }
+      if (closingDay == paymentDay) {
+        throw BackupError('invalid_credit_metadata',
+            'La cuenta "$name" no puede tener closing_day == payment_day (ambos = $closingDay).');
+      }
+    }
+    if (interestRate != null && (interestRate < 0 || interestRate > 1)) {
+      throw BackupError('invalid_credit_metadata',
+          'La cuenta "$name" tiene interest_rate fuera de rango [0, 1] (recibido: $interestRate).');
+    }
+    if (minimumPaymentPct != null &&
+        (minimumPaymentPct < 0 || minimumPaymentPct > 1)) {
+      throw BackupError('invalid_credit_metadata',
+          'La cuenta "$name" tiene minimum_payment_pct fuera de rango [0, 1] (recibido: $minimumPaymentPct).');
+    }
     return AccountsCompanion.insert(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      type: json['type'] as String,
-      description: Value(json['description'] as String?),
-      isProtected: Value((json['is_protected'] as bool?) ?? false),
-      creditLimit: Value((json['credit_limit'] as num?)?.toDouble()),
-      closingDay: Value(json['closing_day'] as int?),
-      paymentDay: Value(json['payment_day'] as int?),
-      interestRate: Value((json['interest_rate'] as num?)?.toDouble()),
-      minimumPaymentPct: Value((json['minimum_payment_pct'] as num?)?.toDouble()),
+      id: id,
+      name: name,
+      type: type,
+      description: Value(description),
+      isProtected: Value(isProtected),
+      creditLimit: Value(creditLimit),
+      closingDay: Value(closingDay),
+      paymentDay: Value(paymentDay),
+      interestRate: Value(interestRate),
+      minimumPaymentPct: Value(minimumPaymentPct),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );
   }
 
   CategoriesCompanion _categoryFromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    final name = json['name'] as String;
+    final appliesTo = json['applies_to'] as String;
+    final colorSlug = json['color_slug'] as String;
+    final iconSlug = json['icon_slug'] as String;
+    _validateUuid('categories.id', id);
+    _validateLength('categories.name', name, _kMaxNameLength);
+    if (!_validAppliesToTypes.contains(appliesTo)) {
+      throw BackupError(
+        'invalid_applies_to',
+        'El campo applies_to no es válido (esperado: income, expense o both; recibido: "$appliesTo").',
+      );
+    }
+    // M2 (quality review 2026-06-19): validar slugs contra catálogo.
+    if (!kCategoryColors.any((c) => c.slug == colorSlug)) {
+      throw BackupError('invalid_color_slug',
+          'La categoría "$name" tiene color_slug fuera del catálogo (recibido: "$colorSlug").');
+    }
+    if (!kCategoryIcons.any((i) => i.slug == iconSlug)) {
+      throw BackupError('invalid_icon_slug',
+          'La categoría "$name" tiene icon_slug fuera del catálogo (recibido: "$iconSlug").');
+    }
     return CategoriesCompanion.insert(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      appliesTo: json['applies_to'] as String,
-      colorSlug: json['color_slug'] as String,
-      iconSlug: json['icon_slug'] as String,
+      id: id,
+      name: name,
+      appliesTo: appliesTo,
+      colorSlug: colorSlug,
+      iconSlug: iconSlug,
       monthlyLimit: Value((json['monthly_limit'] as num?)?.toDouble()),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
@@ -276,22 +401,91 @@ class BackupService {
   }
 
   JournalEntriesCompanion _entryFromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    final kind = json['kind'] as String;
+    final amount = (json['amount'] as num).toDouble();
+    final description = json['description'] as String?;
+    final originId = json['account_origin_id'] as String?;
+    final destId = json['account_destination_id'] as String?;
+    final categoryId = json['category_id'] as String?;
+    _validateUuid('journal_entries.id', id);
+    if (!_validKinds.contains(kind)) {
+      throw BackupError(
+        'invalid_kind',
+        'El kind del movimiento no es válido '
+        '(esperado: income, expense, credit_expense, debt_payment o transfer; '
+        'recibido: "$kind").',
+      );
+    }
+    if (amount <= 0) {
+      throw BackupError(
+        'invalid_amount',
+        'El monto del movimiento debe ser mayor a 0 (recibido: $amount).',
+      );
+    }
+    _validateDescription('journal_entries.description', description);
+    if (originId != null) {
+      _validateUuid('journal_entries.account_origin_id', originId);
+    }
+    if (destId != null) {
+      _validateUuid('journal_entries.account_destination_id', destId);
+    }
+    if (categoryId != null) {
+      _validateUuid('journal_entries.category_id', categoryId);
+    }
     return JournalEntriesCompanion.insert(
-      id: json['id'] as String,
-      kind: json['kind'] as String,
-      accountOriginId: Value(json['account_origin_id'] as String?),
-      accountDestinationId: Value(json['account_destination_id'] as String?),
-      amount: (json['amount'] as num).toDouble(),
-      description: Value(json['description'] as String?),
+      id: id,
+      kind: kind,
+      accountOriginId: Value(originId),
+      accountDestinationId: Value(destId),
+      amount: amount,
+      description: Value(description),
       occurredAt: _parseDate(json['occurred_at']) ?? DateTime.now(),
-      categoryId: Value(json['category_id'] as String?),
+      categoryId: Value(categoryId),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );
   }
 
+  void _validateUuid(String field, String value) {
+    if (!_uuidRegex.hasMatch(value)) {
+      // Trunco el valor a 16 chars para que el mensaje no explote con basura.
+      final preview = value.length <= 16 ? value : '${value.substring(0, 16)}…';
+      throw BackupError(
+        'invalid_uuid_format',
+        'El campo $field tiene un ID inválido (esperado UUID v4 o v7, recibido: "$preview").',
+      );
+    }
+  }
+
+  void _validateLength(String field, String value, int max) {
+    if (value.length > max) {
+      throw BackupError(
+        'string_too_long',
+        'El campo $field excede el límite de $max caracteres '
+        '(longitud observada: ${value.length}).',
+      );
+    }
+  }
+
+  void _validateDescription(String field, String? value) {
+    if (value == null) return;
+    _validateLength(field, value, _kMaxDescriptionLength);
+  }
+
   DateTime? _parseDate(dynamic raw) {
-    if (raw is String) return DateTime.parse(raw);
-    return null;
+    if (raw is! String) return null;
+    try {
+      return DateTime.parse(raw);
+    } on FormatException {
+      // B1 (quality review 2026-06-19): un timestamp inválido no debe abortar
+      // el import sin error tipado. Lanzamos BackupError para que el wrapper
+      // común haga rollback y el snackbar muestre mensaje amigable.
+      final preview = raw.length <= 32 ? raw : '${raw.substring(0, 32)}…';
+      throw BackupError(
+        'invalid_date_format',
+        'El respaldo tiene un timestamp inválido: "$preview".',
+      );
+    }
   }
 }

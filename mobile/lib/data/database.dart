@@ -92,7 +92,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -120,10 +120,36 @@ class FincoreDatabase extends _$FincoreDatabase {
           await customStatement(
             'CREATE INDEX idx_entries_kind ON journal_entries(kind)',
           );
+          // schemaVersion 2 (RF-011 del sprint flutter-local-hardening):
+          // índice parcial para `watchPage` que ordena por occurred_at DESC y
+          // filtra deleted_at IS NULL. Sin esto la lista de movimientos
+          // degrada con 50k+ entries.
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_entries_occurred_active '
+            'ON journal_entries(occurred_at DESC) '
+            'WHERE deleted_at IS NULL',
+          );
         },
         onUpgrade: (m, from, to) async {
-          // Stub para futuras migraciones. Nunca recrear la BD del usuario
-          // (RN-005 + spec): cada paso preserva los datos existentes.
+          // Migración 1 → 2 (RF-011 + RN-H02): agrega el índice parcial nuevo
+          // a instalaciones existentes sin tocar datos del usuario.
+          if (from == 1 && to == 2) {
+            await customStatement(
+              'CREATE INDEX idx_entries_occurred_active '
+              'ON journal_entries(occurred_at DESC) '
+              'WHERE deleted_at IS NULL',
+            );
+            return;
+          }
+          // Guardrail (RN-H02 + RF-009): cualquier futura migración debe
+          // implementarse explícitamente como rama `if (from == X && to == Y)`
+          // ANTES de este throw. Sin esto, un bump accidental de
+          // `schemaVersion` corrompería datos del usuario silenciosamente.
+          throw UnimplementedError(
+            'Schema upgrade $from → $to no implementado en database.dart. '
+            'Agregá la rama correspondiente en MigrationStrategy.onUpgrade '
+            'antes de bumpear schemaVersion.',
+          );
         },
         beforeOpen: (details) async {
           // SQLite trae FKs deshabilitadas por default; sin esto las references

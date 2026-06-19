@@ -41,6 +41,16 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     return (select(categories)..where((c) => c.id.equals(id))).getSingleOrNull();
   }
 
+  /// Devuelve la categoría solo si está activa (no archivada). Helper canónico
+  /// (RF-015) para validar antes de un write y para joins desde la UI que NO
+  /// deben mostrar categorías fantasma. Documentado en CLAUDE.md bajo
+  /// "Joins con categorías archivadas".
+  Future<Category?> findActiveById(String id) {
+    return (select(categories)
+          ..where((c) => c.id.equals(id) & c.deletedAt.isNull()))
+        .getSingleOrNull();
+  }
+
   Future<String> create({
     required String name,
     required String appliesTo,

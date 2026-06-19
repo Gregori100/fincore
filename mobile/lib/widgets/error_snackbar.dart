@@ -1,6 +1,50 @@
+import 'package:fincore/data/backup.dart';
 import 'package:fincore/models/domain_error.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:flutter/material.dart';
+
+/// Mapeo de códigos de `BackupError` (validaciones del import de respaldos) a
+/// mensajes amigables en español. RF-007 + RN-H01: el switch de
+/// `showErrorSnackbar` rutea `BackupError` acá ANTES del branch `Exception()`
+/// para que el usuario no vea texto crudo del estilo `"BackupError(invalid_kind)…"`.
+String backupErrorToMessage(BackupError error) {
+  switch (error.code) {
+    case 'invalid_json':
+      return 'El archivo no es un JSON válido.';
+    case 'unsupported_version':
+      return 'El respaldo es de una versión no soportada por esta app.';
+    case 'missing_bolsa':
+      return 'El respaldo no incluye la Bolsa (cuenta singleton requerida).';
+    case 'invalid_reference':
+      return 'El respaldo referencia cuentas o categorías que no existen.';
+    case 'invalid_kind':
+      return error.message;
+    case 'invalid_account_type':
+      return error.message;
+    case 'invalid_applies_to':
+      return error.message;
+    case 'invalid_amount':
+      return error.message;
+    case 'string_too_long':
+      return error.message;
+    case 'invalid_uuid_format':
+      return error.message;
+    case 'invalid_date_format':
+      return error.message;
+    case 'invalid_credit_limit':
+      return error.message;
+    case 'invalid_credit_metadata':
+      return error.message;
+    case 'invalid_color_slug':
+      return error.message;
+    case 'invalid_icon_slug':
+      return error.message;
+    case 'protected_account':
+      return 'Solo una Bolsa puede estar protegida.';
+    default:
+      return error.message;
+  }
+}
 
 /// Mapeo de códigos del backend a mensajes amigables en español.
 /// Si no hay match, devolvemos `error.message` directo (que ya es texto humano
@@ -52,6 +96,12 @@ SnackBar _buildFincoreSnackBar({
   required String message,
   required Duration duration,
 }) {
+  // RF-019: el fondo `warning` (#EBBD52) con texto blanco daba contraste
+  // ~3.8:1 (debajo del umbral WCAG AA de 4.5:1). Con texto sobre canvas
+  // oscuro queda en ~10:1. Para success/error mantenemos texto blanco
+  // porque sus contrastes con blanco ya son aceptables.
+  final foreground =
+      background == FincoreColors.warning ? FincoreColors.canvas : Colors.white;
   return SnackBar(
     content: Material(
       color: Colors.transparent,
@@ -62,13 +112,13 @@ SnackBar _buildFincoreSnackBar({
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(
             children: [
-              Icon(icon, color: Colors.white, size: 20),
+              Icon(icon, color: foreground, size: 20),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   message,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: foreground,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -92,6 +142,7 @@ void showErrorSnackbar(BuildContext context, Object error) {
   if (messenger == null) return;
 
   final message = switch (error) {
+    BackupError() => backupErrorToMessage(error),
     DomainError() => domainErrorToMessage(error),
     Exception() => error.toString().replaceFirst('Exception: ', ''),
     _ => 'Error inesperado.',

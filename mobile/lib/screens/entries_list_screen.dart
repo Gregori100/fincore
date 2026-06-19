@@ -88,6 +88,7 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
         ),
         actions: [
           IconButton(
+            tooltip: hasFilters ? 'Filtros (activos)' : 'Filtros',
             icon: Stack(
               children: [
                 const Icon(Icons.filter_list),
@@ -112,6 +113,7 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/entries/new'),
+        tooltip: 'Nuevo movimiento',
         backgroundColor: FincoreColors.accent,
         foregroundColor: FincoreColors.canvas,
         child: const Icon(Icons.add),

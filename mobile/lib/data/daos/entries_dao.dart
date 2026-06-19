@@ -54,7 +54,15 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     final query = select(journalEntries).join([
       leftOuterJoin(origin, origin.id.equalsExp(journalEntries.accountOriginId)),
       leftOuterJoin(dest, dest.id.equalsExp(journalEntries.accountDestinationId)),
-      leftOuterJoin(categories, categories.id.equalsExp(journalEntries.categoryId)),
+      // RN-H03 + RF-015: el join filtra categorías archivadas para que la UI
+      // muestre "Sin categoría" en entries cuyo categoryId apunta a una
+      // categoría con deletedAt != null. Sin este filtro, los listados del
+      // Dashboard y de Movimientos siguen pintando el badge de la archivada.
+      leftOuterJoin(
+        categories,
+        categories.id.equalsExp(journalEntries.categoryId) &
+            categories.deletedAt.isNull(),
+      ),
     ])
       ..where(journalEntries.deletedAt.isNull());
 
@@ -100,7 +108,15 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     final rows = await (select(journalEntries).join([
       leftOuterJoin(origin, origin.id.equalsExp(journalEntries.accountOriginId)),
       leftOuterJoin(dest, dest.id.equalsExp(journalEntries.accountDestinationId)),
-      leftOuterJoin(categories, categories.id.equalsExp(journalEntries.categoryId)),
+      // RN-H03 + RF-015: el join filtra categorías archivadas para que la UI
+      // muestre "Sin categoría" en entries cuyo categoryId apunta a una
+      // categoría con deletedAt != null. Sin este filtro, los listados del
+      // Dashboard y de Movimientos siguen pintando el badge de la archivada.
+      leftOuterJoin(
+        categories,
+        categories.id.equalsExp(journalEntries.categoryId) &
+            categories.deletedAt.isNull(),
+      ),
     ])
           ..where(journalEntries.id.equals(id)))
         .get();
@@ -300,9 +316,40 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       originId: effectiveOrigin,
       destinationId: effectiveDestination,
     );
-    final effectiveCategoryId = clearCategory ? null : (categoryId ?? existing.categoryId);
+    // Resolución de categoría con RN-H03 del sprint flutter-local-hardening:
+    // si el caller NO cambia categoryId pero la heredada apunta a una
+    // categoría archivada, forzamos categoryId = null en el write sin lanzar
+    // error (limpieza silenciosa del FK colgante). Si el caller cambia
+    // categoryId explícitamente, el flujo de validación es el de siempre.
+    var forceClearCategory = false;
+    final effectiveCategoryId =
+        clearCategory ? null : (categoryId ?? existing.categoryId);
     if (effectiveCategoryId != null) {
-      await _validateCategoryForKind(existing.kind, effectiveCategoryId);
+      final isExplicitChange = categoryId != null;
+      if (isExplicitChange) {
+        // El caller asignó una categoría nueva: validar como hasta hoy.
+        await _validateCategoryForKind(existing.kind, effectiveCategoryId);
+      } else {
+        // Categoría heredada (existing.categoryId). Si está archivada,
+        // limpiar silenciosamente. Si está activa pero incompatible, igual
+        // dejamos pasar para no romper edits de un entry que tenía categoría
+        // válida en su momento. Sin embargo, debt_payment/transfer siguen
+        // sin aceptar categoría: si el entry heredado la tenía (caso raro),
+        // limpiamos.
+        // Equivalente a categoriesDao.findActiveById (RF-015): traer la
+        // categoría solo si está activa. EntriesDao no llega al DAO de
+        // categorías por la jerarquía actual; hacemos la query inline.
+        final active = await (select(categories)
+              ..where((c) =>
+                  c.id.equals(effectiveCategoryId) & c.deletedAt.isNull()))
+            .getSingleOrNull();
+        if (active == null) {
+          forceClearCategory = true;
+        } else if (existing.kind == 'transfer' ||
+            existing.kind == 'debt_payment') {
+          forceClearCategory = true;
+        }
+      }
     }
 
     await (update(journalEntries)..where((e) => e.id.equals(id))).write(
@@ -318,7 +365,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         accountDestinationId: accountDestinationId != null
             ? Value(accountDestinationId)
             : const Value.absent(),
-        categoryId: clearCategory
+        categoryId: (clearCategory || forceClearCategory)
             ? const Value(null)
             : (categoryId != null ? Value(categoryId) : const Value.absent()),
         updatedAt: Value(DateTime.now()),
