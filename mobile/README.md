@@ -122,6 +122,40 @@ Output: `build/app/outputs/flutter-apk/`:
 
 **Importante sobre el versionCode con `--split-per-abi`**: Flutter prepende un código de arquitectura al `versionCode`. Para arm64 → `2000 + versionCode`. Si el cel ya tiene una versión instalada con un código más alto, el install falla con `INSTALL_FAILED_VERSION_DOWNGRADE`. Solución: bumpear `versionCode` en `android/app/build.gradle.kts` y en `pubspec.yaml` antes del build. La constante `kAppVersion` en `lib/screens/settings_screen.dart` se actualiza a mano también para que la pantalla "Acerca de" muestre la versión real.
 
+## Importar respaldos: límites y validaciones
+
+El importador (`BackupService.importFromJson`) parsea, valida y aplica el reemplazo total **dentro de una transacción**. Si algo falla, la BD existente queda intacta y el snackbar muestra el mensaje amigable correspondiente. Códigos de error tipados (RN-H01):
+
+| Código | Cuándo dispara |
+|---|---|
+| `invalid_json` | El archivo no es JSON válido, falta `version`, o `accounts`/`categories`/`journal_entries` no son listas. |
+| `unsupported_version` | `version > 1` (respaldo de versión más nueva) o `version < 1`. |
+| `missing_bolsa` | El respaldo no incluye ninguna cuenta `type=cash`, o tiene más de una cuenta con `is_protected=true`. |
+| `protected_account` | Una cuenta `is_protected=true` con `type` distinto de `cash`. |
+| `invalid_reference` | Una entry referencia un `account_origin_id`, `account_destination_id` o `category_id` que no existe en el payload. |
+| `invalid_kind` | `kind` de la entry no es `income/expense/credit_expense/debt_payment/transfer`. |
+| `invalid_account_type` | `type` de la cuenta no es `cash/debit/credit`. |
+| `invalid_applies_to` | `applies_to` de la categoría no es `income/expense/both`. |
+| `invalid_amount` | `amount` de la entry es `≤ 0`. |
+| `string_too_long` | `name` excede 200 chars o `description` excede 1000 chars. |
+| `invalid_uuid_format` | Algún `id` no matchea el regex de UUID v4 o v7 (con variant `8/9/a/b`). |
+| `invalid_date_format` | Algún `created_at/updated_at/occurred_at` no es ISO 8601 parseable. |
+| `invalid_credit_limit` | Cuenta `credit` con `credit_limit` ausente o `≤ 0`. |
+| `invalid_credit_metadata` | Cuenta `credit` con `closing_day/payment_day` fuera de `[1, 31]`, ambos iguales, o `interest_rate/minimum_payment_pct` fuera de `[0, 1]`. |
+| `invalid_color_slug` | `color_slug` de la categoría fuera del catálogo de 10 colores. |
+| `invalid_icon_slug` | `icon_slug` de la categoría fuera del catálogo de ~30 íconos. |
+
+Límites duros (validación previa al insert):
+
+- `accounts.name`: ≤ 200 caracteres.
+- `accounts.description`: ≤ 1000 caracteres.
+- `categories.name`: ≤ 200 caracteres.
+- `journal_entries.description`: ≤ 1000 caracteres.
+- `journal_entries.amount`: `> 0` (los signos del balance se derivan del `kind` + cuenta).
+- Todos los `id` deben ser UUID v4 o v7 (regex con variant RFC 4122).
+
+Los previews truncados en mensajes de error usan `Characters.take(N)` (grapheme clusters), así que emojis y caracteres multi-byte se cortan sin dejar surrogates huérfanos.
+
 ## Filosofía
 
 - **Libreta libre**: gastos, transfers y cargos a tarjeta se permiten siempre, incluso con saldo negativo. Único bloqueo: `OverpayDebt` (no podés pagar más de lo que debés a una tarjeta).

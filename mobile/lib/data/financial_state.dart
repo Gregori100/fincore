@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/drift.dart';
 import 'package:fincore/data/database.dart';
 
@@ -22,7 +24,7 @@ class FinancialStateService {
   /// Key formato: `'$accountId:$accountType'`. Se invalida en dos eventos:
   /// - `archive(id)` de una cuenta → `invalidateAccount(id)` borra las keys.
   /// - `wipeAll()` → `invalidateAll()` vacía el Map.
-  final Map<String, Stream<double>> _balanceCache = {};
+  final Map<String, _ReplayBalanceStream> _balanceCache = {};
 
   /// Saldo derivado de una cuenta específica.
   ///
@@ -31,7 +33,7 @@ class FinancialStateService {
   Stream<double> watchAccountBalance(String accountId, String accountType) {
     final key = '$accountId:$accountType';
     final cached = _balanceCache[key];
-    if (cached != null) return cached;
+    if (cached != null) return cached.stream;
     final isCredit = accountType == 'credit';
     final sql = isCredit
         ? 'SELECT COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) '
@@ -40,7 +42,16 @@ class FinancialStateService {
         : 'SELECT COALESCE(SUM(CASE WHEN account_destination_id = ? THEN amount ELSE 0 END), 0) '
             '- COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) AS balance '
             'FROM journal_entries WHERE deleted_at IS NULL';
-    final stream = _db
+    // Hotfix post-smoke (bug "vista en gris" al volver al Dashboard tras
+    // cancelar un movimiento): `.asBroadcastStream()` simple NO replay el
+    // último valor a un listener nuevo. Al desmontar el Dashboard durante
+    // el `entry_form_screen`, el evento del cancel se emite con cero
+    // listeners; al volver, el `StreamBuilder` se re-suscribe pero el
+    // broadcast no le entrega el valor más reciente y queda en `Skeleton`
+    // hasta el próximo cambio en `journal_entries`. `_ReplayBalanceStream`
+    // implementa replay-1 con `StreamController.broadcast` propio: guarda
+    // el último valor emitido por drift y lo re-emite en `onListen`.
+    final source = _db
         .customSelect(
           sql,
           variables: [Variable.withString(accountId), Variable.withString(accountId)],
@@ -48,20 +59,29 @@ class FinancialStateService {
         )
         .map((row) => row.read<double>('balance'))
         .watchSingle();
-    _balanceCache[key] = stream;
-    return stream;
+    final entry = _ReplayBalanceStream(source);
+    _balanceCache[key] = entry;
+    return entry.stream;
   }
 
   /// Limpia todas las entradas del cache asociadas a una cuenta específica.
   /// Llamada desde `AccountsDao.archive(id)` para liberar referencias al stream
   /// de una cuenta que dejó de aparecer en el listado activo.
   void invalidateAccount(String accountId) {
-    _balanceCache.removeWhere((key, _) => key.startsWith('$accountId:'));
+    final keysToRemove = _balanceCache.keys
+        .where((key) => key.startsWith('$accountId:'))
+        .toList();
+    for (final key in keysToRemove) {
+      _balanceCache.remove(key)?.dispose();
+    }
   }
 
   /// Limpia todo el cache. Llamada desde `BackupService.wipeAll()` cuando se
   /// resetea la cuenta del usuario o se importa un respaldo (reemplazo total).
   void invalidateAll() {
+    for (final entry in _balanceCache.values) {
+      entry.dispose();
+    }
     _balanceCache.clear();
   }
 
@@ -144,5 +164,83 @@ class FinancialStateService {
         .customSelect(sql, readsFrom: {_db.accounts, _db.journalEntries})
         .map((row) => row.read<double>('total'))
         .watchSingle();
+  }
+}
+
+/// Cache de stream replay-1: envuelve un `customSelect.watchSingle()` (single
+/// listener) en un stream multi-suscriptor propio (`Stream.multi`) que
+/// recuerda el último valor emitido por drift y se lo entrega de inmediato a
+/// cada nuevo suscriptor, independientemente de cuántos otros listeners ya
+/// estén activos.
+///
+/// Por qué `Stream.multi` y no `StreamController.broadcast`:
+/// `StreamController.broadcast.onListen` solo se invoca cuando el primer
+/// listener llega tras un período de cero listeners. Si el Dashboard ya está
+/// suscrito y el `AccountBalanceHint` del form se suscribe encima, el callback
+/// de replay nunca se ejecuta para el segundo listener y queda esperando el
+/// próximo cambio en `journal_entries` (Skeleton eterno). `Stream.multi`
+/// invoca su callback por cada `.listen()`, lo que permite hacer replay
+/// individualizado.
+///
+/// Ciclo de vida:
+/// - `_upstreamSub` lazy: se crea con la primera suscripción downstream y se
+///   mantiene viva mientras la entrada del cache exista.
+/// - `dispose()` cancela el upstream y cierra los `MultiStreamController` de
+///   todos los listeners activos. Lo invocan `invalidateAccount(id)` y
+///   `invalidateAll()` para liberar recursos.
+/// - Por diseño NO se cierra al perder el último listener: el cache de
+///   `FinancialStateService` mantiene la entrada viva hasta una invalidación
+///   explícita, así que reutilizar `watchAccountBalance(...)` después sigue
+///   retornando el último valor.
+class _ReplayBalanceStream {
+  final Stream<double> _source;
+  // Cacheamos `stream` para preservar identidad referencial: los tests del
+  // sprint anterior (cache de streams) se apoyan en `identical(s1, s2)`.
+  late final Stream<double> stream;
+  final Set<MultiStreamController<double>> _listeners = {};
+  StreamSubscription<double>? _upstreamSub;
+  double? _last;
+  bool _disposed = false;
+
+  _ReplayBalanceStream(this._source) {
+    stream = Stream<double>.multi(_handleListen, isBroadcast: true);
+  }
+
+  void _handleListen(MultiStreamController<double> controller) {
+    if (_disposed) {
+      controller.closeSync();
+      return;
+    }
+    _ensureUpstream();
+    _listeners.add(controller);
+    final last = _last;
+    if (last != null) {
+      controller.addSync(last);
+    }
+    controller.onCancel = () {
+      _listeners.remove(controller);
+    };
+  }
+
+  void _ensureUpstream() {
+    _upstreamSub ??= _source.listen((value) {
+      _last = value;
+      // Forward del valor a todos los listeners activos. Iterar sobre una
+      // copia por si algún listener cancela durante el dispatch.
+      for (final controller in _listeners.toList()) {
+        controller.addSync(value);
+      }
+    });
+  }
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _upstreamSub?.cancel();
+    _upstreamSub = null;
+    for (final controller in _listeners.toList()) {
+      controller.closeSync();
+    }
+    _listeners.clear();
   }
 }

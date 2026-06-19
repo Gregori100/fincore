@@ -1,5 +1,8 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:fincore/data/daos/accounts_dao.dart';
+import 'package:fincore/data/daos/categories_dao.dart';
+import 'package:fincore/data/daos/entries_dao.dart';
 
 part 'database.g.dart';
 
@@ -86,7 +89,17 @@ class JournalEntries extends Table {
 // =============================================================================
 // FincoreDatabase
 // =============================================================================
-@DriftDatabase(tables: [Accounts, Categories, JournalEntries])
+// Solo AccountsDao y CategoriesDao se registran en `daos:` porque sus
+// constructores aceptan únicamente `(GeneratedDatabase db)`. EntriesDao requiere
+// además `FinancialStateService` (inyectado vía AppDependencies) y drift codegen
+// no sabe construirlo, así que sigue accediéndose solo a través de
+// AppDependencies. RF-008 sólo necesita `attachedDatabase.categoriesDao` para
+// reemplazar la query inline en EntriesDao.updateEntry, lo cual ya queda
+// cubierto con este registro parcial.
+@DriftDatabase(
+  tables: [Accounts, Categories, JournalEntries],
+  daos: [AccountsDao, CategoriesDao],
+)
 class FincoreDatabase extends _$FincoreDatabase {
   FincoreDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'fincore'));

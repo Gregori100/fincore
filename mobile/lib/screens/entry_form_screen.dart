@@ -214,8 +214,17 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
       if (mounted) {
         showSuccessSnackbar(
             context, _isEdit ? 'Movimiento actualizado.' : 'Movimiento creado.');
+        // Resetear _saving ANTES del pop para que PopScope.canPop pase a
+        // true. `setState` marca el state dirty pero el rebuild ocurre en
+        // el próximo frame; por eso el `maybePop` se agenda con
+        // `addPostFrameCallback` para que el PopScope ya esté con
+        // `canPop=true` cuando el pop se intente. El `finally` re-pone
+        // `_saving=false` de forma idempotente si seguimos montados.
+        setState(() => _saving = false);
         if (_isEdit) {
-          Navigator.of(context).maybePop();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) Navigator.of(context).maybePop();
+          });
         } else {
           // Alta: resetea el stack al Dashboard. Predecible y simple.
           context.go('/dashboard');
@@ -249,7 +258,13 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
       await deps.entriesDao.cancel(widget.entryId!);
       if (mounted) {
         showSuccessSnackbar(context, 'Movimiento cancelado.');
-        Navigator.of(context).maybePop();
+        // Resetear _saving ANTES del pop (ver comentario en `build()`).
+        // El `maybePop` se agenda con `addPostFrameCallback` para que el
+        // PopScope ya esté reconstruido con `canPop=true`.
+        setState(() => _saving = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.of(context).maybePop();
+        });
       }
     } on EntriesDaoError catch (e) {
       if (mounted) showErrorSnackbar(context, e);
@@ -318,9 +333,24 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
     return PopScope(
       // Mientras hay save en curso, NO permitir back: evita race entre el
       // DAO escribiendo y el reset del form (o el pop desde otro lugar).
+      //
+      // Hotfix post-smoke 2026-06-19 (bug "pantalla gris muerto"): cuando
+      // el back lo dispara `_cancel`/`_submit` programáticamente vía
+      // `Navigator.maybePop()`, el flujo previo cancelaba el pop (canPop
+      // false por `_saving=true`) y `onPopInvokedWithResult` reseteaba
+      // `_kind = null` en plena edición. En el siguiente rebuild,
+      // `_buildForm()` crasheaba en `final k = _kind!;` y Flutter
+      // renderizaba `ErrorWidget` gris pleno sin AppBar. Solución:
+      //   1) `_cancel`/`_submit` ahora hacen `setState(_saving = false)`
+      //      antes del `maybePop`, así canPop pasa a true y el pop ocurre.
+      //   2) El callback de PopScope solo resetea el form en alta con kind
+      //      ya elegido (caso "back desde KindPicker → todo limpio").
+      //      Nunca toca `_kind` cuando `_isEdit`.
       canPop: (_isEdit || _kind == null) && !_saving,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
+        if (_isEdit) return; // no resetear nada en edit
+        if (_kind == null) return; // ya estamos en KindPicker
         // Back desde el form alta: vuelve al KindPicker con todo limpio.
         setState(() {
           _kind = null;

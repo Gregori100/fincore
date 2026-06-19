@@ -4,7 +4,7 @@ publish_to: 'none'
 
 # 0.2.0+5: pickers migrados a DropdownMenu (M3) para que el overlay
 # respete el ancho del field y no se desborde.
-version: 0.3.0+32
+version: 0.3.6+38
 
 environment:
   sdk: ^3.7.2
@@ -40,6 +40,12 @@ dependencies:
 
   # Lectura de versionName + versionCode en runtime (Settings "Acerca de").
   package_info_plus: ^8.0.0
+
+  # M1 del quality review v2 (2026-06-19): `characters` viene transitiva del
+  # Flutter SDK, pero `lib/data/backup.dart` la importa directamente para
+  # truncados grapheme-safe. Declararla acá evita el warning del lint
+  # `depend_on_referenced_packages` y blinda contra cambios futuros en el SDK.
+  characters: ^1.4.0
 
 dev_dependencies:
   flutter_test:

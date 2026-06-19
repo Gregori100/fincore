@@ -2,6 +2,7 @@ import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 
 /// Pequeño hint debajo de un AccountPicker que muestra el saldo actual
@@ -39,7 +40,17 @@ class AccountBalanceHint extends StatelessWidget {
       child: StreamBuilder<double>(
         stream: deps.stateService.watchAccountBalance(selected.id, selected.type),
         builder: (context, snapshot) {
-          final balance = snapshot.data ?? 0.0;
+          // Hotfix post-smoke 2026-06-19 (bug "saldo en 0" al abrir el form
+          // de alta y seleccionar cuenta): el primer frame del StreamBuilder
+          // siempre tiene `snapshot.data == null`. El antiguo `?? 0.0`
+          // pintaba "Saldo: $0.00" antes de que llegara el valor real, lo
+          // que confundía a Diego al registrar movimientos. Mostramos
+          // `Skeleton` hasta que el stream emita (consistente con el resto
+          // de la UI: _BalanceLabel y _TotalCard del Dashboard).
+          if (!snapshot.hasData) {
+            return const Skeleton(width: 90, height: 12);
+          }
+          final balance = snapshot.data!;
           if (isCredit) {
             final available = (selected.creditLimit ?? 0) - balance;
             return Row(

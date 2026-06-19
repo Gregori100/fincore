@@ -50,10 +50,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final stamp = DateFormat('yyyy-MM-dd').format(DateTime.now());
     final file = File('${tempDir.path}/fincore-backup-$stamp.json');
     await file.writeAsString(json);
+    // RF-010 del sprint flutter-local-hardening-v2: timeout defensivo para
+    // que `_working = true` no quede colgado si el share sheet del sistema
+    // se cuelga (Android puede no resolver el Future si el usuario cierra
+    // la app destino bruscamente). 2 minutos es holgado para cualquier
+    // selección humana; al disparar, tratamos como cancelado.
     final result = await Share.shareXFiles(
       [XFile(file.path)],
       subject: 'Respaldo FinCore $stamp',
       text: 'Guardá este archivo en lugar seguro.',
+    ).timeout(
+      const Duration(minutes: 2),
+      onTimeout: () => const ShareResult('timeout', ShareResultStatus.unavailable),
     );
     return result.status == ShareResultStatus.success;
   }

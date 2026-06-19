@@ -479,6 +479,26 @@ void main() {
     }
   });
 
+  test('Import con name de 200 chars exactos pasa validación de longitud', () async {
+    // RF-003 del sprint flutter-local-hardening-v2: el límite es inclusivo
+    // (`value.length > max` rechaza). Sin este test, una regresión a `>=`
+    // pasaría desapercibida.
+    //
+    // M3 del quality review v2 (2026-06-19): assert directo sobre el
+    // `ImportReport`. El patrón previo (try/catch que solo valida que el
+    // código no sea `string_too_long`) daba verde aunque el import lanzara
+    // por otro motivo. Acá exigimos que el import complete sin excepción y
+    // que efectivamente persista 1 categoría con el nombre boundary.
+    final boundary = 'A' * 200;
+    final report = await backup.importFromJson(
+      buildPayload(categoryName: boundary),
+    );
+    expect(report.categoriesCount, equals(1));
+    final categories = await categoriesDao.listAll();
+    expect(categories.single.name, equals(boundary));
+    expect(categories.single.name.length, equals(200));
+  });
+
   test('wipeAll vacía las 3 tablas y deja la BD lista para reseed', () async {
     await seed();
     expect((await accountsDao.listAll()).length, greaterThan(0));

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:characters/characters.dart';
 import 'package:drift/drift.dart';
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/data/database.dart';
@@ -449,8 +450,13 @@ class BackupService {
 
   void _validateUuid(String field, String value) {
     if (!_uuidRegex.hasMatch(value)) {
-      // Trunco el valor a 16 chars para que el mensaje no explote con basura.
-      final preview = value.length <= 16 ? value : '${value.substring(0, 16)}…';
+      // RF-011 del sprint flutter-local-hardening-v2: `substring(0, 16)` opera
+      // sobre code units UTF-16. Si llega un emoji o un char multi-byte,
+      // partir entre code units puede dejar un surrogate huérfano y romper
+      // el snackbar. `characters.take(16)` corta por grapheme clusters.
+      final chars = value.characters;
+      final preview =
+          chars.length <= 16 ? value : '${chars.take(16).toString()}…';
       throw BackupError(
         'invalid_uuid_format',
         'El campo $field tiene un ID inválido (esperado UUID v4 o v7, recibido: "$preview").',
@@ -481,7 +487,10 @@ class BackupService {
       // B1 (quality review 2026-06-19): un timestamp inválido no debe abortar
       // el import sin error tipado. Lanzamos BackupError para que el wrapper
       // común haga rollback y el snackbar muestre mensaje amigable.
-      final preview = raw.length <= 32 ? raw : '${raw.substring(0, 32)}…';
+      // RF-011 del sprint flutter-local-hardening-v2: truncado grapheme-safe.
+      final chars = raw.characters;
+      final preview =
+          chars.length <= 32 ? raw : '${chars.take(32).toString()}…';
       throw BackupError(
         'invalid_date_format',
         'El respaldo tiene un timestamp inválido: "$preview".',

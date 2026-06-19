@@ -336,13 +336,12 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         // válida en su momento. Sin embargo, debt_payment/transfer siguen
         // sin aceptar categoría: si el entry heredado la tenía (caso raro),
         // limpiamos.
-        // Equivalente a categoriesDao.findActiveById (RF-015): traer la
-        // categoría solo si está activa. EntriesDao no llega al DAO de
-        // categorías por la jerarquía actual; hacemos la query inline.
-        final active = await (select(categories)
-              ..where((c) =>
-                  c.id.equals(effectiveCategoryId) & c.deletedAt.isNull()))
-            .getSingleOrNull();
+        // RF-008 del sprint flutter-local-hardening-v2: delegación al helper
+        // canónico de CategoriesDao (RF-015) ahora que CategoriesDao se
+        // registra en @DriftDatabase(daos: [...]) y queda accesible vía
+        // `attachedDatabase.categoriesDao` sin instanciar manualmente.
+        final active = await attachedDatabase.categoriesDao
+            .findActiveById(effectiveCategoryId);
         if (active == null) {
           forceClearCategory = true;
         } else if (existing.kind == 'transfer' ||

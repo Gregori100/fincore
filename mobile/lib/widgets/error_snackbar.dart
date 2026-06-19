@@ -93,15 +93,15 @@ SnackBar _buildFincoreSnackBar({
   required ScaffoldMessengerState messenger,
   required IconData icon,
   required Color background,
+  required Color foreground,
   required String message,
   required Duration duration,
 }) {
-  // RF-019: el fondo `warning` (#EBBD52) con texto blanco daba contraste
-  // ~3.8:1 (debajo del umbral WCAG AA de 4.5:1). Con texto sobre canvas
-  // oscuro queda en ~10:1. Para success/error mantenemos texto blanco
-  // porque sus contrastes con blanco ya son aceptables.
-  final foreground =
-      background == FincoreColors.warning ? FincoreColors.canvas : Colors.white;
+  // RF-009 del sprint flutter-local-hardening-v2: el foreground se inyecta
+  // explícitamente desde el helper público (show*Snackbar) que conoce la
+  // intención del mensaje. Antes se inferia con `background == warning`,
+  // lo que rompe si algún caller pasa una variante con
+  // `withValues(alpha: ...)` u otra modificación del color base.
   return SnackBar(
     content: Material(
       color: Colors.transparent,
@@ -153,6 +153,7 @@ void showErrorSnackbar(BuildContext context, Object error) {
     messenger: messenger,
     icon: Icons.error_outline,
     background: FincoreColors.negative,
+    foreground: Colors.white,
     message: message,
     duration: const Duration(seconds: 4),
   ));
@@ -167,6 +168,7 @@ void showSuccessSnackbar(BuildContext context, String message) {
     messenger: messenger,
     icon: Icons.check_circle_outline,
     background: FincoreColors.positive,
+    foreground: Colors.white,
     message: message,
     duration: const Duration(seconds: 3),
   ));
@@ -181,6 +183,9 @@ void showWarningSnackbar(BuildContext context, String message) {
     messenger: messenger,
     icon: Icons.warning_amber_outlined,
     background: FincoreColors.warning,
+    // RF-019 del sprint anterior: fondo warning (#EBBD52) requiere texto
+    // sobre canvas oscuro (~10:1 contraste) en vez de blanco (~3.8:1 < AA).
+    foreground: FincoreColors.canvas,
     message: message,
     duration: const Duration(seconds: 3),
   ));

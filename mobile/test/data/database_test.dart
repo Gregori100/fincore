@@ -609,6 +609,27 @@ void main() {
       final entries = await entriesDao.watchPage().first;
       expect(entries.first.entry.categoryId, equals(null));
     });
+
+    test('watchPage no incluye badge para categorías archivadas (RF-005)', () async {
+      // Defensa contra la regresión post-smoke del sprint anterior: el join
+      // de drift en watchPage filtra `categories.deletedAt.isNull()`, así
+      // que un entry con categoryId apuntando a una categoría archivada
+      // retorna `category = null`.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+        categoryId: catSueldo,
+      );
+      // El entry persiste con su categoryId; archivamos la categoría.
+      await categoriesDao.archive(catSueldo);
+      final entries = await entriesDao.watchPage().first;
+      expect(entries, hasLength(1));
+      expect(entries.first.entry.categoryId, equals(catSueldo),
+          reason: 'categoryId del entry se preserva tras archive');
+      expect(entries.first.category, equals(null),
+          reason: 'el join filtra categorías archivadas → no hay badge');
+    });
   });
 
   group('seed.dart', () {

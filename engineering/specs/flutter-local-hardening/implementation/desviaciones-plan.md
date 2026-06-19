@@ -19,6 +19,18 @@ Diferencias entre `plan/tasks.md` y la implementación real, con razón y mitiga
 
 El `branch-quality-review` ejecutado al cierre detectó 3 bloqueantes que se resolvieron en la misma sesión, alineado con el patrón del sprint anterior (`flutter-local-mvp`). Detalle en `engineering/quality-review/flutter-local-hardening/2026-06-19-1019-branch-quality-review.md` + sección "Post-review" en `progreso.md`. APK bumpeado a `0.3.0+31` para que pueda reinstalarse sobre `0.3.0+30` sin downgrade.
 
+## Fase 1 — `isNull` ambiguo en filtros drift
+
+- **Plan original**: usar `c.deletedAt.isNull()` para filtrar registros activos en queries inline.
+- **Real**: en algunos contextos `isNull()` chocaba con métodos análogos heredados; el analyzer marcaba la llamada como ambigua. Se reemplazó por `c.deletedAt.equals(null)` donde aplicó (equivalente en SQL: `IS NULL`).
+- **Sin impacto en RFs**: el resultado en la BD es idéntico (`WHERE deleted_at IS NULL`). El cambio es solo cosmético al call site para que el analyzer compile.
+
+## Fase 1 — `_buildPayload` → `buildPayload`
+
+- **Plan original**: helper privado `_buildPayload(...)` reutilizado por los tests de import.
+- **Real**: el helper estaba declarado en el cuerpo del test (top-level dentro del archivo `backup_test.dart`) y el lint `non_constant_identifier_names` no aplica, pero el lint `unused_element` y el guardrail de Dart marcan los identificadores con `_` que se exportan implícitamente entre grupos `setUp/test`. Se renombró a `buildPayload` (sin guion bajo) para que su uso desde cualquier `test(...)` quede sin warning.
+- **Sin impacto en RFs**: cambio puramente de naming en el test helper; no toca el código productivo.
+
 ## Fase 3 — `attachedDatabase.categoriesDao`
 
 - **Plan original**: en `EntriesDao.updateEntry`, delegar la validación de categoría activa a `attachedDatabase.categoriesDao.findActiveById(id)`.
