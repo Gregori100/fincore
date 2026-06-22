@@ -367,4 +367,41 @@ void main() {
         reason: 'El último valor debería ser el balance post-income (250)');
     await sub2.cancel();
   });
+
+  test(
+      'RF-012 v3: subscribe → unsubscribe → resubscribe preserva el cache del stream',
+      () async {
+    // El v2 documentó la decisión "por diseño NO se cierra al perder el último
+    // listener" (ver `_ReplayBalanceStream`). Este test la blinda: el cache
+    // debe seguir entregando el mismo Stream tras un ciclo completo, y el
+    // listener nuevo debe recibir un valor sin esperar a que cambie nada.
+    final s1 = state.watchAccountBalance(bolsa, 'cash');
+
+    // L2-H2 quality review v3: 100 ms para alinearse con el resto del archivo
+    // y reducir el riesgo de flake en CI lento.
+    final received1 = <double>[];
+    final sub1 = s1.listen(received1.add);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(received1.last, 0);
+
+    // Cancelar TODOS los listeners deja al `_ReplayBalanceStream` con
+    // `_listeners` vacío pero el upstream sigue vivo y `_last` cacheado.
+    await sub1.cancel();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    // Re-suscribir tras ciclo: el cache debe haber preservado el Stream.
+    final s2 = state.watchAccountBalance(bolsa, 'cash');
+    expect(identical(s1, s2), isTrue,
+        reason:
+            'El cache de _ReplayBalanceStream NO debería liberarse al perder el último listener. '
+            'Si esta aserción falla, alguien reintrodujo onLastListenerCanceled y rompió la decisión del v2.');
+
+    // Y el listener nuevo recibe inmediatamente sin que ocurra otro cambio.
+    final received2 = <double>[];
+    final sub2 = s2.listen(received2.add);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(received2, isNotEmpty);
+    expect(received2.last, 0);
+    await sub2.cancel();
+  });
 }

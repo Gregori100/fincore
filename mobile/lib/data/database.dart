@@ -2,7 +2,6 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
-import 'package:fincore/data/daos/entries_dao.dart';
 
 part 'database.g.dart';
 

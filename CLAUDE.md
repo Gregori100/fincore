@@ -37,7 +37,7 @@ dart run build_runner build --delete-conflicting-outputs
 # Desarrollo
 flutter run -d linux                    # iterar UI en desktop
 flutter run -d android                  # cel conectado por USB
-flutter test                            # 56 tests
+flutter test                            # 110 tests
 flutter analyze                         # 0 errores
 
 # Build release para sideload
@@ -234,16 +234,26 @@ cd mobile
 flutter test
 ```
 
-Cobertura: **56 tests verdes** en 4 suites:
+Cobertura: **110 tests verdes** distribuidos entre capa de datos (68) y widget tests (16) más helpers (3).
 
-- `test/data/database_test.dart` (29): schema, PRAGMA FK, AccountsDao, CategoriesDao, EntriesDao por los 5 kinds, seed.
-- `test/data/financial_state_test.dart` (12): BO/DE/CR, stream reactivo, archive, balance sincrónico vs stream.
-- `test/data/backup_test.dart` (7): round-trip, JSON inválido, version > 1, missing Bolsa, FK rota, idempotencia, BD vacía.
+Capa de datos:
+
+- `test/data/database_test.dart` (30): schema, PRAGMA FK, AccountsDao, CategoriesDao, EntriesDao por los 5 kinds, seed, regresión RF-005 del v2.
+- `test/data/financial_state_test.dart` (22): BO/DE/CR, stream reactivo, archive, balance sincrónico, cache invalidation, broadcast multi-suscriptor, replay-1 + RF-012 v3 (preservación de cache tras subscribe/unsubscribe).
+- `test/data/backup_test.dart` (8): round-trip, JSON inválido, version > 1, missing Bolsa, FK rota, idempotencia, BD vacía + M3 v2 (200 chars exactos).
 - `test/data/invariants_test.dart` (8): libreta libre, RN-011, OverpayDebt, archivadas, categorías incompatibles.
+
+Capa UI (v3):
+
+- `test/helpers/widget_test_harness_test.dart` (3): smoke del `pumpFincoreApp`.
+- `test/screens/entry_form_screen_test.dart` (2): cancel + submit en edit. Blinda regresión gray screen.
+- `test/screens/dashboard_screen_test.dart` (2): BD vacía + con datos.
+- `test/screens/entry_form_kinds_test.dart` (5): un test por kind, valida labels según RN-011.
+- `test/screens/list_screens_test.dart` (4): accounts + categories render + tap → form de edición.
 
 **Tests usan SQLite in-memory** (`NativeDatabase.memory()`). En Linux desktop el override de `libsqlite3.so.0` está en `test/helpers/sqlite_override.dart` (patrón dogear).
 
-**Widget tests (T043-T045) aplazados**: documentado en `engineering/specs/flutter-local-mvp/implementation/desviaciones-plan.md`. Para próximos sprints, agregar al menos `entry_form_screen` bootstrap test.
+**Widget tests (sprint `flutter-local-hardening-v3`)**: el harness `mobile/test/helpers/widget_test_harness.dart` (`pumpFincoreApp(tester, {initialRoute, seed, seedBolsa})`) monta la app con BD in-memory para widget tests. Cubre las pantallas core con 16 tests: dashboard, entry_form (cancel/submit en edit + los 5 kinds), accounts list, categories list. Reusable para sprints futuros de UI. Detalles en `engineering/specs/flutter-local-hardening-v3/implementation/`.
 
 ## Convenciones del repo
 
@@ -253,6 +263,7 @@ Cobertura: **56 tests verdes** en 4 suites:
   1. `pubspec.yaml`: `version: X.Y.Z+N`
   2. `android/app/build.gradle.kts`: `versionCode = N` + `versionName = "X.Y.Z"`
   - `lib/screens/settings_screen.dart` ya no tiene `kAppVersion` hardcoded: lee de `PackageInfo.fromPlatform()` vía `package_info_plus` (RF-016).
+  - **Validación local** (sprint `flutter-local-hardening-v3`): `scripts/verify-apk.sh` compara `versionCode` del APK (con prefix 2000 del `--split-per-abi` arm64) contra `+N` esperado por `pubspec.yaml`. Correr antes de `adb install -r` para evitar `INSTALL_FAILED_VERSION_DOWNGRADE` por olvido de sincronía entre pubspec/gradle.
 - Las preguntas/desviaciones/decisiones de cada sprint viven en `engineering/specs/<slug>/`.
 - Skills `spec-*` se usan para definir/planear/implementar/clarificar specs. `branch-quality-review` se invoca al cierre de cada sprint.
 
