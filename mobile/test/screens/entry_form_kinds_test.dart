@@ -58,7 +58,9 @@ void main() {
     // la primera línea de defensa contra ruptura del KindPicker. La capa
     // siguiente (validar contenido del DropdownMenu) queda fuera de v4.
 
-    testWidgets('Ingreso muestra solo "Cuenta destino"', (tester) async {
+    testWidgets(
+        'Ingreso muestra "Cuenta destino" + dropdown solo con cash/debit (RF-019 v1)',
+        (tester) async {
       final harness = await pumpFincoreApp(tester, seed: seedAccounts);
       await pushNewEntry(tester);
       await selectKind(tester, 'Ingreso');
@@ -69,10 +71,21 @@ void main() {
       expect(find.text('Tarjeta'), findsNothing);
       expect(find.text('Pagás desde'), findsNothing);
 
+      // RF-019 v1: validar contenido del DropdownMenu. Ingreso solo acepta
+      // dest cash/debit → Bolsa + Banamex; Visa (credit) NO debe aparecer.
+      await openDropdownByLabel(tester, 'Cuenta destino');
+      await verifyDropdownItems(
+        tester,
+        shouldShow: ['Bolsa', 'Banamex'],
+        shouldNotShow: ['Visa'],
+      );
+
       await harness.dispose();
     });
 
-    testWidgets('Gasto muestra solo "Cuenta origen"', (tester) async {
+    testWidgets(
+        'Gasto muestra "Cuenta origen" + dropdown solo con cash/debit (RF-019 v1)',
+        (tester) async {
       final harness = await pumpFincoreApp(tester, seed: seedAccounts);
       await pushNewEntry(tester);
       await selectKind(tester, 'Gasto');
@@ -81,10 +94,19 @@ void main() {
       expect(find.text('Cuenta destino'), findsNothing);
       expect(find.text('Tarjeta'), findsNothing);
 
+      // RF-019 v1: origen cash/debit → Bolsa + Banamex; Visa NO.
+      await openDropdownByLabel(tester, 'Cuenta origen');
+      await verifyDropdownItems(
+        tester,
+        shouldShow: ['Bolsa', 'Banamex'],
+        shouldNotShow: ['Visa'],
+      );
+
       await harness.dispose();
     });
 
-    testWidgets('Gasto a tarjeta muestra "Tarjeta" como origen',
+    testWidgets(
+        'Gasto a tarjeta muestra "Tarjeta" + dropdown solo con credit (RF-019 v1)',
         (tester) async {
       final harness = await pumpFincoreApp(tester, seed: seedAccounts);
       await pushNewEntry(tester);
@@ -93,6 +115,14 @@ void main() {
       expect(find.text('Tarjeta'), findsOneWidget);
       expect(find.text('Cuenta destino'), findsNothing);
       expect(find.text('Pagás desde'), findsNothing);
+
+      // RF-019 v1: origen credit → Visa; Bolsa + Banamex NO.
+      await openDropdownByLabel(tester, 'Tarjeta');
+      await verifyDropdownItems(
+        tester,
+        shouldShow: ['Visa'],
+        shouldNotShow: ['Bolsa', 'Banamex'],
+      );
 
       await harness.dispose();
     });
@@ -107,10 +137,17 @@ void main() {
       expect(find.text('Tarjeta a pagar'), findsOneWidget);
       expect(find.text('Cuenta destino'), findsNothing);
 
+      // Nota RF-019 v1: la verificación de contenido del DropdownMenu queda
+      // fuera del scope porque los kinds con 2 dropdowns sufren
+      // contaminación de overlays Material 3 entre tests del mismo isolate
+      // (los Overlays no se desmontan con `harness.dispose()`). Cleanup
+      // robusto del OverlayManager queda diferido a sprint dedicado.
+
       await harness.dispose();
     });
 
-    testWidgets('Transferencia muestra "Cuenta origen" + "Cuenta destino"',
+    testWidgets(
+        'Transferencia muestra "Cuenta origen" + "Cuenta destino"',
         (tester) async {
       final harness = await pumpFincoreApp(tester, seed: seedAccounts);
       await pushNewEntry(tester);
@@ -122,5 +159,11 @@ void main() {
 
       await harness.dispose();
     });
+
+    // Nota RF-019 v1: los dropdowns de Transferencia (ambos cash/debit) no
+    // se verifican individualmente porque comparten el mismo problema de
+    // contaminación de overlays entre tests del isolate que documentamos en
+    // Pago de tarjeta. La cobertura del filtro RN-011 sobre cash/debit ya
+    // queda blindada por Ingreso y Gasto.
   });
 }

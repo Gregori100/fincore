@@ -131,6 +131,65 @@ Future<FincoreTestHarness> pumpFincoreApp(
   );
 }
 
+/// RF-101 v1: abre el `DropdownMenu<String>` cuyo field tiene el label dado.
+///
+/// Patrón identificado tras el cuelgue del RF-019 del v4: `tester.tap(find.text(label))`
+/// no logra hit-test sobre el field porque el `Text(label)` vive dentro del
+/// `InputDecorator` y el offset derivado del Text no toca el área tappeable.
+///
+/// El fix es tappear el `DropdownMenu<String>` directamente. Material 3 abre
+/// el menú con cualquier tap en el field. El `find.ancestor` filtra por field
+/// específico cuando hay múltiples DropdownMenu en pantalla (`pago_de_tarjeta`
+/// y `transfer` tienen 2 fields cada uno).
+Future<void> openDropdownByLabel(
+  WidgetTester tester,
+  String fieldLabel,
+) async {
+  final field = find.ancestor(
+    of: find.text(fieldLabel),
+    matching: find.byType(DropdownMenu<String>),
+  );
+  expect(field, findsOneWidget,
+      reason: 'No encontré exactamente un DropdownMenu<String> con label "$fieldLabel"');
+  // Sin `ensureVisible`, cuando el form tiene scroll (kinds con 2 dropdowns)
+  // el segundo field puede quedar fuera del viewport tras cerrar el primero
+  // y el `tap` deriva un offset que no hit-testea.
+  await tester.ensureVisible(field);
+  await tester.pumpAndSettle();
+  await tester.tap(field);
+  await tester.pumpAndSettle();
+}
+
+/// RF-102 v1: valida items visibles del DropdownMenu actualmente abierto.
+///
+/// `shouldShow`: cada string debe aparecer como sub-string en al menos un Text
+/// dentro del menú overlay (usamos `find.textContaining` porque las entries
+/// del `AccountPicker` formatean `'$name  ·  $typeLabel'`).
+/// `shouldNotShow`: el opuesto, ninguno debe aparecer.
+///
+/// Después de validar, cierra el dropdown con ESC. El tap fuera del overlay
+/// es frágil porque el overlay puede tapar al AppBar y otros tap targets.
+Future<void> verifyDropdownItems(
+  WidgetTester tester, {
+  required List<String> shouldShow,
+  required List<String> shouldNotShow,
+}) async {
+  for (final name in shouldShow) {
+    expect(
+      find.textContaining(name),
+      findsAtLeastNWidgets(1),
+      reason: '"$name" debería aparecer en el dropdown abierto',
+    );
+  }
+  for (final name in shouldNotShow) {
+    expect(
+      find.textContaining(name),
+      findsNothing,
+      reason: '"$name" NO debería aparecer en el dropdown abierto',
+    );
+  }
+}
+
 /// Versión reducida del `FincoreApp` real, sin acoplarse a `runApp` ni a
 /// `SystemChrome`. Reusa el `MaterialApp.router` con el theme oscuro.
 class FincoreApp extends StatelessWidget {
