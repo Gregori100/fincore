@@ -14,6 +14,7 @@ void main() {
   setUpAll(initSqliteOverride);
 
   late FincoreDatabase db;
+  late FinancialStateService state;
   late BackupService backup;
   late AccountsDao accountsDao;
   late CategoriesDao categoriesDao;
@@ -21,11 +22,11 @@ void main() {
 
   setUp(() async {
     db = FincoreDatabase(NativeDatabase.memory());
-    final state = FinancialStateService(db);
+    state = FinancialStateService(db);
     accountsDao = AccountsDao(db);
     categoriesDao = CategoriesDao(db);
-    entriesDao = EntriesDao(db, state);
-    backup = BackupService(db);
+    entriesDao = EntriesDao(db);
+    backup = BackupService(db, state);
   });
 
   tearDown(() async {

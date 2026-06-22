@@ -47,6 +47,9 @@ fi
 
 # --- Leer version: X.Y.Z+N de pubspec.yaml -----------------------------------
 PUBSPEC_VERSION="$(grep -E '^version:' "$PUBSPEC" | head -n 1 | awk '{print $2}')"
+# L3-H4 (quality review v3, RF-017 v4): tolerar `version: '0.3.7+39'` con
+# comillas simples o dobles. `tr` elimina ambos tipos sin romper si no hay.
+PUBSPEC_VERSION="$(printf '%s' "$PUBSPEC_VERSION" | tr -d "'\"")"
 if [[ -z "$PUBSPEC_VERSION" ]]; then
   echo "ERROR: no pude parsear 'version:' de $PUBSPEC" >&2
   exit 1
@@ -71,13 +74,15 @@ fi
 EXPECTED_CODE=$((ABI_PREFIX + PUBSPEC_CODE))
 
 # --- Buscar aapt2 -------------------------------------------------------------
+# L3-H2 (quality review v3, RF-016 v4): `find` en lugar de glob de `ls` para
+# tolerar paths con espacios (típico de macOS `/Users/Nombre Con Espacios/...`).
 AAPT2=""
 if command -v aapt2 >/dev/null 2>&1; then
   AAPT2="$(command -v aapt2)"
 elif [[ -n "${ANDROID_HOME:-}" && -d "$ANDROID_HOME/build-tools" ]]; then
-  AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1)"
+  AAPT2="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt2 -type f 2>/dev/null | sort -V | tail -n 1)"
 elif [[ -d "$HOME/Android/Sdk/build-tools" ]]; then
-  AAPT2="$(ls -d "$HOME"/Android/Sdk/build-tools/*/aapt2 2>/dev/null | sort -V | tail -n 1)"
+  AAPT2="$(find "$HOME/Android/Sdk/build-tools" -maxdepth 2 -name aapt2 -type f 2>/dev/null | sort -V | tail -n 1)"
 fi
 
 if [[ -z "$AAPT2" || ! -x "$AAPT2" ]]; then
@@ -102,8 +107,11 @@ BADGING_FULL="$("$AAPT2" dump badging "$APK_PATH" 2>&1)" || {
 # L3-H3 (quality review v3): buscar versionCode en TODA la salida (no solo
 # línea 1). Versiones futuras de aapt2 podrían reordenar las líneas; el script
 # resiste ese cambio.
-APK_CODE="$(printf '%s' "$BADGING_FULL" | sed -n "s/.*versionCode='\\([0-9]*\\)'.*/\\1/p" | head -n 1)"
-APK_NAME="$(printf '%s' "$BADGING_FULL" | sed -n "s/.*versionName='\\([^']*\\)'.*/\\1/p" | head -n 1)"
+# L3-H5 (quality review v3, RF-018 v4): tolerar comillas simples y dobles
+# en la salida de aapt2. Versiones modernas usan simples; aapt2 pre-30 a veces
+# emitía dobles. El charset `['"]` cubre ambas.
+APK_CODE="$(printf '%s' "$BADGING_FULL" | sed -n "s/.*versionCode=['\"]\\([0-9]*\\)['\"].*/\\1/p" | head -n 1)"
+APK_NAME="$(printf '%s' "$BADGING_FULL" | sed -n "s/.*versionName=['\"]\\([^'\"]*\\)['\"].*/\\1/p" | head -n 1)"
 
 if [[ -z "$APK_CODE" ]]; then
   echo "ERROR: no pude extraer versionCode del APK." >&2

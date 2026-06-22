@@ -37,7 +37,7 @@ dart run build_runner build --delete-conflicting-outputs
 # Desarrollo
 flutter run -d linux                    # iterar UI en desktop
 flutter run -d android                  # cel conectado por USB
-flutter test                            # 110 tests
+flutter test                            # 112 tests
 flutter analyze                         # 0 errores
 
 # Build release para sideload
@@ -234,12 +234,12 @@ cd mobile
 flutter test
 ```
 
-Cobertura: **110 tests verdes** distribuidos entre capa de datos (68) y widget tests (16) más helpers (3).
+Cobertura: **112 tests verdes** distribuidos entre capa de datos (70) y widget tests (16) más helpers (3).
 
 Capa de datos:
 
 - `test/data/database_test.dart` (30): schema, PRAGMA FK, AccountsDao, CategoriesDao, EntriesDao por los 5 kinds, seed, regresión RF-005 del v2.
-- `test/data/financial_state_test.dart` (22): BO/DE/CR, stream reactivo, archive, balance sincrónico, cache invalidation, broadcast multi-suscriptor, replay-1 + RF-012 v3 (preservación de cache tras subscribe/unsubscribe).
+- `test/data/financial_state_test.dart` (24): BO/DE/CR (con replay-1 desde v4), stream reactivo, archive, balance sincrónico, cache invalidation, broadcast multi-suscriptor, replay-1 + RF-012 v3 + RF-008/009 v4.
 - `test/data/backup_test.dart` (8): round-trip, JSON inválido, version > 1, missing Bolsa, FK rota, idempotencia, BD vacía + M3 v2 (200 chars exactos).
 - `test/data/invariants_test.dart` (8): libreta libre, RN-011, OverpayDebt, archivadas, categorías incompatibles.
 
@@ -252,6 +252,8 @@ Capa UI (v3):
 - `test/screens/list_screens_test.dart` (4): accounts + categories render + tap → form de edición.
 
 **Tests usan SQLite in-memory** (`NativeDatabase.memory()`). En Linux desktop el override de `libsqlite3.so.0` está en `test/helpers/sqlite_override.dart` (patrón dogear).
+
+**Convención del tearDown** (sprint `flutter-local-hardening-v4`, DV-5): NO llamar `state.invalidateAll()` antes de `db.close()` en tearDowns. El `database.close()` es suficiente: drift cancela las queries upstream y los streams se completan limpio. Llamar `invalidateAll()` mientras un widget tree sigue montado (caso del harness) cierra los `MultiStreamController` con listeners activos y deja microtasks pendientes que cuelgan `pumpAndSettle` del siguiente test del isolate. `invalidateAll()` queda como API runtime (para `BackupService.wipeAll()` etc.), no como protocolo de cleanup en tests.
 
 **Widget tests (sprint `flutter-local-hardening-v3`)**: el harness `mobile/test/helpers/widget_test_harness.dart` (`pumpFincoreApp(tester, {initialRoute, seed, seedBolsa})`) monta la app con BD in-memory para widget tests. Cubre las pantallas core con 16 tests: dashboard, entry_form (cancel/submit en edit + los 5 kinds), accounts list, categories list. Reusable para sprints futuros de UI. Detalles en `engineering/specs/flutter-local-hardening-v3/implementation/`.
 

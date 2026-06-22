@@ -2092,6 +2092,7 @@ abstract class _$FincoreDatabase extends GeneratedDatabase {
   late final CategoriesDao categoriesDao = CategoriesDao(
     this as FincoreDatabase,
   );
+  late final EntriesDao entriesDao = EntriesDao(this as FincoreDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();

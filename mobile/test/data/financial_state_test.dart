@@ -23,7 +23,7 @@ void main() {
     db = FincoreDatabase(NativeDatabase.memory());
     state = FinancialStateService(db);
     accountsDao = AccountsDao(db);
-    entriesDao = EntriesDao(db, state);
+    entriesDao = EntriesDao(db);
     backup = BackupService(db, state);
 
     bolsa = await accountsDao.createBolsa();
@@ -122,7 +122,12 @@ void main() {
     );
     expect(await state.watchBo().first, 500);
     await entriesDao.cancel(id);
-    expect(await state.watchBo().first, 0);
+    // RF-007 v4 introdujo replay-1 en watchBo(): el siguiente `.first` ahora
+    // recibe el último valor cacheado (500). Usar `firstWhere(v == 0)` para
+    // esperar a que drift propague el cambio post-cancel.
+    // M1 quality review v4: `.timeout(5s)` por defensiva — si drift no emite
+    // 0 por un bug, el test falla con stack útil en lugar de colgar el isolate.
+    expect(await state.watchBo().firstWhere((v) => v == 0).timeout(const Duration(seconds: 5)), 0);
   });
 
   test('Cuenta archivada NO aparece en BO', () async {
@@ -131,10 +136,12 @@ void main() {
       amount: 300,
       occurredAt: DateTime.now(),
     );
+    // Primer subscribe: cache vacío, el primer evento viene de drift (300).
     expect(await state.watchBo().first, 300);
     // Archive ahora cancela el income en cascada, sin precondición de saldo.
     await accountsDao.archive(debit);
-    expect(await state.watchBo().first, 0);
+    // RF-007 v4: replay-1 puede entregar el valor cacheado (300). Esperar 0.
+    expect(await state.watchBo().firstWhere((v) => v == 0).timeout(const Duration(seconds: 5)), 0);
   });
 
   test('Stream reactivo: insert entry mientras escucha → emite valor nuevo', () async {
@@ -155,7 +162,9 @@ void main() {
 
   test('CR cuando no hay credit accounts es 0', () async {
     await accountsDao.archive(credit); // archive en cascada
-    expect(await state.watchCr().first, 0);
+    // RF-007 v4: si watchCr() ya emitió antes (50000 inicial), el replay-1
+    // entrega ese valor. Esperar a que llegue 0 vía firstWhere.
+    expect(await state.watchCr().firstWhere((v) => v == 0).timeout(const Duration(seconds: 5)), 0);
   });
 
   test('CR ignora cuentas con credit_limit NULL', () async {
@@ -168,9 +177,11 @@ void main() {
       paymentDay: 1,
     );
     // CR ahora debería ser 50000 + 30000.
-    expect(await state.watchCr().first, 80000);
+    // RF-007 v4: con replay-1, esperar el valor esperado vía firstWhere para
+    // no recibir un valor cacheado intermedio. `.timeout(5s)` defensivo (M1 v4).
+    expect(await state.watchCr().firstWhere((v) => v == 80000).timeout(const Duration(seconds: 5)), 80000);
     await accountsDao.archive(id);
-    expect(await state.watchCr().first, 50000);
+    expect(await state.watchCr().firstWhere((v) => v == 50000).timeout(const Duration(seconds: 5)), 50000);
   });
 
   test('accountBalanceNow sincrónico devuelve mismo valor que stream', () async {
@@ -403,5 +414,58 @@ void main() {
     expect(received2, isNotEmpty);
     expect(received2.last, 0);
     await sub2.cancel();
+  });
+
+  test(
+      'RF-009 v4: watchBo/watchDe/watchCr cachean stream con replay-1 (L2-H1)',
+      () async {
+    // Antes del v4, las 3 cards superiores del Dashboard (BO/DE/CR) usaban
+    // `customSelect.watchSingle()` directo, single-listener y sin replay.
+    // Si el Dashboard se desmontaba con un evento en vuelo (escenario:
+    // `context.go('/dashboard')` desde reportes), el siguiente subscribe
+    // mostraba Skeleton hasta el próximo cambio en journal_entries.
+    //
+    // Este test blinda que ahora retornan el mismo Stream identitario y
+    // que un resubscribe tardío recibe el último valor por replay-1.
+    final bo1 = state.watchBo();
+    final de1 = state.watchDe();
+    final cr1 = state.watchCr();
+    final bo2 = state.watchBo();
+    expect(identical(bo1, bo2), isTrue,
+        reason: 'watchBo() debería retornar el mismo Stream cacheado');
+    expect(identical(state.watchDe(), de1), isTrue);
+    expect(identical(state.watchCr(), cr1), isTrue);
+
+    // Sembrar 1 income, primer listener captura el valor.
+    await entriesDao.registerIncome(
+      accountDestinationId: bolsa,
+      amount: 500,
+      occurredAt: DateTime.now(),
+    );
+    final received1 = <double>[];
+    final sub1 = bo1.listen(received1.add);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(received1.last, 500);
+
+    // Cancelar y resubscribir: replay-1 entrega el último valor cacheado.
+    await sub1.cancel();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    final received2 = <double>[];
+    final sub2 = state.watchBo().listen(received2.add);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(received2, isNotEmpty,
+        reason: 'watchBo() resuscrita debería recibir el último valor por replay-1');
+    expect(received2.last, 500);
+    await sub2.cancel();
+  });
+
+  test(
+      'RF-008 v4: invalidateAll libera los caches BO/DE/CR (próximo watch arma uno nuevo)',
+      () async {
+    final bo1 = state.watchBo();
+    state.invalidateAll();
+    final bo2 = state.watchBo();
+    expect(identical(bo1, bo2), isFalse,
+        reason: 'Tras invalidateAll(), watchBo() debería armar un Stream nuevo');
   });
 }

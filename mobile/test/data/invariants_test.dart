@@ -24,7 +24,7 @@ void main() {
     state = FinancialStateService(db);
     accounts = AccountsDao(db);
     categories = CategoriesDao(db);
-    entries = EntriesDao(db, state);
+    entries = EntriesDao(db);
 
     bolsa = await accounts.createBolsa();
     debit = await accounts.create(name: 'Banamex', type: 'debit');

@@ -42,6 +42,22 @@ void main() {
       await db.into(db.accounts).insert(Factories.credit(name: 'Visa'));
     }
 
+    // RF-019 v4 evaluado: agregar `openDropdownAndVerify` que tap el field +
+    // valida items del dropdown causa timeout. `tester.tap(find.text(label))`
+    // no toca el widget tappeable del DropdownMenu (el Text del label vive
+    // dentro del InputDecorator y el hit-test no llega al field). Cerrar el
+    // dropdown con tap fuera también fragmentado.
+    //
+    // Patrón correcto requiere `find.byType(DropdownMenu<String>)` filtrado
+    // por field, tap en el ícono expand específico, ESC para cerrar. Es
+    // mecánico pero verboso (~30 min por kind). Se defiere a un sprint
+    // dedicado de UI testing depth — el gap L1-H3 sigue documentado en
+    // pendientes del v4 y v3.
+    //
+    // La cobertura actual valida labels textuales de los pickers, que es
+    // la primera línea de defensa contra ruptura del KindPicker. La capa
+    // siguiente (validar contenido del DropdownMenu) queda fuera de v4.
+
     testWidgets('Ingreso muestra solo "Cuenta destino"', (tester) async {
       final harness = await pumpFincoreApp(tester, seed: seedAccounts);
       await pushNewEntry(tester);
@@ -49,7 +65,6 @@ void main() {
 
       // El AccountPicker dest tiene `label: Text('Cuenta destino')`.
       expect(find.text('Cuenta destino'), findsOneWidget);
-      // No debería haber `Cuenta origen` ni `Tarjeta` ni `Pagás desde`.
       expect(find.text('Cuenta origen'), findsNothing);
       expect(find.text('Tarjeta'), findsNothing);
       expect(find.text('Pagás desde'), findsNothing);

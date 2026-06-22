@@ -26,7 +26,7 @@ void main() {
     stateService = FinancialStateService(db);
     accountsDao = AccountsDao(db);
     categoriesDao = CategoriesDao(db);
-    entriesDao = EntriesDao(db, stateService);
+    entriesDao = EntriesDao(db);
   });
 
   tearDown(() async {
@@ -471,7 +471,6 @@ void main() {
     late AccountsDao accountsDao;
     late CategoriesDao categoriesDao;
     late EntriesDao entriesDao;
-    late FinancialStateService stateService;
     late String bolsaId;
     late String debitId;
     late String catComida;
@@ -479,10 +478,9 @@ void main() {
 
     setUp(() async {
       db = FincoreDatabase(NativeDatabase.memory());
-      stateService = FinancialStateService(db);
       accountsDao = AccountsDao(db);
       categoriesDao = CategoriesDao(db);
-      entriesDao = EntriesDao(db, stateService);
+      entriesDao = EntriesDao(db);
       bolsaId = await accountsDao.createBolsa();
       debitId = await accountsDao.create(name: 'Banamex', type: 'debit');
       catComida = await categoriesDao.create(

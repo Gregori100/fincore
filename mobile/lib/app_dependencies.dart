@@ -32,17 +32,16 @@ class AppDependencies {
   /// instancia de FincoreDatabase (que main.dart abre con drift_flutter,
   /// y los tests abren con NativeDatabase.memory()).
   factory AppDependencies.fromDatabase(FincoreDatabase database) {
-    // M2 del quality review v2 (2026-06-19): usar las instancias del codegen
-    // (`database.accountsDao` / `database.categoriesDao`) que vienen del
-    // `@DriftDatabase(daos: [AccountsDao, CategoriesDao])`, en vez de
-    // instanciar manualmente. Evita que existan dos instancias paralelas
-    // del mismo DAO (una desde acá y otra desde `attachedDatabase`).
-    // `EntriesDao` queda manual porque su constructor requiere
-    // `FinancialStateService` y drift codegen no sabe construirlo.
+    // M2 quality review v2 + RF-005 v4: los 3 DAOs vienen del codegen del
+    // `@DriftDatabase(daos: [AccountsDao, CategoriesDao, EntriesDao])`. Evita
+    // dobles instancias entre `attachedDatabase.xDao` y constructores
+    // manuales. `EntriesDao` quedó incluido tras extraer
+    // `accountBalanceAtomic` como función pura (RF-001 v4) y eliminar la
+    // dependencia del DAO con `FinancialStateService`.
     final stateService = FinancialStateService(database);
     final accountsDao = database.accountsDao;
     final categoriesDao = database.categoriesDao;
-    final entriesDao = EntriesDao(database, stateService);
+    final entriesDao = database.entriesDao;
     final backupService = BackupService(database, stateService);
     return AppDependencies(
       database: database,

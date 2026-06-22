@@ -90,11 +90,15 @@ void main() {
 
       expect(find.byType(EntryFormScreen), findsOneWidget);
 
-      // El TextFormField del monto trae "150.0" como valor inicial.
-      // Lo reemplazamos por 200.
-      final amountField = find.widgetWithText(TextFormField, '150.0');
+      // RF-012 v4 (L1-H4 quality review v3): el monto inicial se busca por
+      // ancestor del label "Monto" en lugar de por el texto del valor
+      // ("150.0"), que dependía del formato textual y se rompía si
+      // AmountFormatter cambiaba la representación.
+      final amountField = find
+          .ancestor(of: find.text('Monto'), matching: find.byType(TextFormField))
+          .first;
       expect(amountField, findsOneWidget,
-          reason: 'Monto inicial 150.0 no encontrado en el form de edit');
+          reason: 'TextFormField con label "Monto" no encontrado');
       await tester.enterText(amountField, '200');
       await tester.pumpAndSettle();
 

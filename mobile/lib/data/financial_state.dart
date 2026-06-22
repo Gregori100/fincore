@@ -24,7 +24,24 @@ class FinancialStateService {
   /// Key formato: `'$accountId:$accountType'`. Se invalida en dos eventos:
   /// - `archive(id)` de una cuenta → `invalidateAccount(id)` borra las keys.
   /// - `wipeAll()` → `invalidateAll()` vacía el Map.
+  ///
+  /// Convención (L2-H4 quality review v3): la key incluye `accountType` y
+  /// `invalidateAccount` asume que el `type` de una cuenta es inmutable
+  /// post-creación. Hoy `AccountsDao.updateAccount` no permite cambiar el
+  /// `type` (campo protected), así que el invariante se cumple. Si en el
+  /// futuro se habilita el cambio de tipo, agregar lógica explícita de
+  /// invalidación cruzada de keys.
   final Map<String, _ReplayBalanceStream> _balanceCache = {};
+
+  /// Caches lazy para los streams agregados (BO/DE/CR). RF-007 del sprint
+  /// flutter-local-hardening-v4 + L2-H1 del quality review v3: `watchBo`,
+  /// `watchDe`, `watchCr` también necesitan replay-1 para no caer en el
+  /// patrón "Skeleton eterno" si el Dashboard se desmonta con un evento del
+  /// stream en vuelo (escenario típico: `context.go('/dashboard')` que
+  /// resetea el stack desde una pantalla de reportes futura).
+  _ReplayBalanceStream? _boCache;
+  _ReplayBalanceStream? _deCache;
+  _ReplayBalanceStream? _crCache;
 
   /// Saldo derivado de una cuenta específica.
   ///
@@ -83,33 +100,31 @@ class FinancialStateService {
       entry.dispose();
     }
     _balanceCache.clear();
+    // RF-008 v4: liberar también los caches agregados (BO/DE/CR). Tras un
+    // wipeAll/import, los datos del usuario cambian completamente: el
+    // próximo `watchBo()` etc. arma streams nuevos sin valores residuales.
+    _boCache?.dispose();
+    _boCache = null;
+    _deCache?.dispose();
+    _deCache = null;
+    _crCache?.dispose();
+    _crCache = null;
   }
 
   /// Versión sincrónica para validaciones (ej. archive con saldo != 0).
-  Future<double> accountBalanceNow(String accountId) async {
-    final account = await (_db.select(_db.accounts)
-          ..where((a) => a.id.equals(accountId)))
-        .getSingleOrNull();
-    if (account == null) return 0;
-    final isCredit = account.type == 'credit';
-    final sql = isCredit
-        ? 'SELECT COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) '
-            '- COALESCE(SUM(CASE WHEN account_destination_id = ? THEN amount ELSE 0 END), 0) AS balance '
-            'FROM journal_entries WHERE deleted_at IS NULL'
-        : 'SELECT COALESCE(SUM(CASE WHEN account_destination_id = ? THEN amount ELSE 0 END), 0) '
-            '- COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) AS balance '
-            'FROM journal_entries WHERE deleted_at IS NULL';
-    final row = await _db
-        .customSelect(
-          sql,
-          variables: [Variable.withString(accountId), Variable.withString(accountId)],
-        )
-        .getSingle();
-    return row.read<double>('balance');
-  }
+  /// Wrapper del helper top-level [accountBalanceAtomic] preservado por
+  /// compatibilidad de API: los tests existentes y otros callers siguen
+  /// usando `state.accountBalanceNow(id)` sin cambios.
+  Future<double> accountBalanceNow(String accountId) =>
+      accountBalanceAtomic(_db, accountId);
 
   /// BO = Σ saldo de cuentas (cash + debit) activas.
+  /// Wrappeado en `_ReplayBalanceStream` (RF-007 v4) para replay-1.
   Stream<double> watchBo() {
+    return (_boCache ??= _ReplayBalanceStream(_buildBoSource())).stream;
+  }
+
+  Stream<double> _buildBoSource() {
     const sql = '''
       SELECT COALESCE(SUM(saldo), 0) AS total FROM (
         SELECT a.id,
@@ -129,6 +144,10 @@ class FinancialStateService {
 
   /// DE = Σ deuda de cuentas credit activas.
   Stream<double> watchDe() {
+    return (_deCache ??= _ReplayBalanceStream(_buildDeSource())).stream;
+  }
+
+  Stream<double> _buildDeSource() {
     const sql = '''
       SELECT COALESCE(SUM(deuda), 0) AS total FROM (
         SELECT a.id,
@@ -148,6 +167,10 @@ class FinancialStateService {
 
   /// CR = Σ (credit_limit − deuda) para cuentas credit activas con credit_limit set.
   Stream<double> watchCr() {
+    return (_crCache ??= _ReplayBalanceStream(_buildCrSource())).stream;
+  }
+
+  Stream<double> _buildCrSource() {
     const sql = '''
       SELECT COALESCE(SUM(libre), 0) AS total FROM (
         SELECT a.id,
@@ -165,6 +188,58 @@ class FinancialStateService {
         .map((row) => row.read<double>('total'))
         .watchSingle();
   }
+}
+
+/// Calcula el balance de una cuenta de forma sincrónica, sin tocar el cache
+/// de streams. Pura sobre el database: dos callers la usan sin compartir estado:
+///
+/// 1. [FinancialStateService.accountBalanceNow] — wrapper para callers que ya
+///    tienen el `state` inyectado (Settings, archive, tests).
+/// 2. [EntriesDao.registerDebtPayment] — chequea OverpayDebt dentro de la
+///    transacción del insert. Necesitaba `FinancialStateService` solo para
+///    esto; extraer la función permitió quitar el field `_state` del DAO
+///    (RF-001 a RF-003 del sprint flutter-local-hardening-v4) y registrarlo
+///    en `@DriftDatabase(daos: [...])`.
+///
+/// Reglas idénticas a `watchAccountBalance`:
+/// - cuenta no encontrada o archivada → 0.
+/// - cash/debit: Σ destination − Σ origin.
+/// - credit: Σ origin − Σ destination (deuda).
+Future<double> accountBalanceAtomic(
+  GeneratedDatabase db,
+  String accountId,
+) async {
+  // B1 quality review v4: filtrar `deleted_at IS NULL` para que una cuenta
+  // archivada retorne 0 (consistente con `watchAccountBalance` y la decisión
+  // del MVP: cuentas archivadas no aparecen en balance). Hoy no hay caller
+  // que ataque cuentas archivadas (EntriesDao valida tipo antes), pero el
+  // guard preventivo blinda futuras integraciones.
+  final accountRow = await db
+      .customSelect(
+        'SELECT type FROM accounts WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+        variables: [Variable.withString(accountId)],
+      )
+      .getSingleOrNull();
+  if (accountRow == null) return 0;
+  final type = accountRow.read<String>('type');
+  final isCredit = type == 'credit';
+  final sql = isCredit
+      ? 'SELECT COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) '
+          '- COALESCE(SUM(CASE WHEN account_destination_id = ? THEN amount ELSE 0 END), 0) AS balance '
+          'FROM journal_entries WHERE deleted_at IS NULL'
+      : 'SELECT COALESCE(SUM(CASE WHEN account_destination_id = ? THEN amount ELSE 0 END), 0) '
+          '- COALESCE(SUM(CASE WHEN account_origin_id = ? THEN amount ELSE 0 END), 0) AS balance '
+          'FROM journal_entries WHERE deleted_at IS NULL';
+  final row = await db
+      .customSelect(
+        sql,
+        variables: [
+          Variable.withString(accountId),
+          Variable.withString(accountId),
+        ],
+      )
+      .getSingle();
+  return row.read<double>('balance');
 }
 
 /// Cache de stream replay-1: envuelve un `customSelect.watchSingle()` (single
@@ -227,6 +302,14 @@ class _ReplayBalanceStream {
       _last = value;
       // Forward del valor a todos los listeners activos. Iterar sobre una
       // copia por si algún listener cancela durante el dispatch.
+      //
+      // RF-014 v4 evaluado y descartado: agregar guard `if (!hasListener)`
+      // causa que tests pumpAndSettle se cuelguen porque `hasListener`
+      // retorna false transitivamente durante la inicialización del
+      // controller en `Stream.multi`. El L2-H3 era riesgo teórico sin
+      // reporte; el comportamiento actual con `onCancel` ya saca controllers
+      // cancelados del Set. La protección queda diferida hasta que aparezca
+      // un caso real reproducible.
       for (final controller in _listeners.toList()) {
         controller.addSync(value);
       }

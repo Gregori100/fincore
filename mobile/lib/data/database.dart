@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
+import 'package:fincore/data/daos/entries_dao.dart';
 
 part 'database.g.dart';
 
@@ -88,16 +89,15 @@ class JournalEntries extends Table {
 // =============================================================================
 // FincoreDatabase
 // =============================================================================
-// Solo AccountsDao y CategoriesDao se registran en `daos:` porque sus
-// constructores aceptan únicamente `(GeneratedDatabase db)`. EntriesDao requiere
-// además `FinancialStateService` (inyectado vía AppDependencies) y drift codegen
-// no sabe construirlo, así que sigue accediéndose solo a través de
-// AppDependencies. RF-008 sólo necesita `attachedDatabase.categoriesDao` para
-// reemplazar la query inline en EntriesDao.updateEntry, lo cual ya queda
-// cubierto con este registro parcial.
+// Los 3 DAOs se registran en `daos:` desde el sprint flutter-local-hardening-v4
+// (RF-004): EntriesDao quedó accesible vía codegen tras extraer
+// `accountBalanceAtomic` como función pura en `financial_state.dart` (RF-001).
+// Antes del v4, `EntriesDao` requería `FinancialStateService` y se instanciaba
+// manualmente en `AppDependencies`; ahora `attachedDatabase.entriesDao` es la
+// fuente única.
 @DriftDatabase(
   tables: [Accounts, Categories, JournalEntries],
-  daos: [AccountsDao, CategoriesDao],
+  daos: [AccountsDao, CategoriesDao, EntriesDao],
 )
 class FincoreDatabase extends _$FincoreDatabase {
   FincoreDatabase([QueryExecutor? executor])

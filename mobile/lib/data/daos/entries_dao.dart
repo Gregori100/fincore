@@ -35,8 +35,12 @@ const _validKinds = {'income', 'expense', 'credit_expense', 'debt_payment', 'tra
 @DriftAccessor(tables: [JournalEntries, Accounts, Categories])
 class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     with _$EntriesDaoMixin {
-  final FinancialStateService _state;
-  EntriesDao(super.db, this._state);
+  // RF-001 a RF-003 del sprint flutter-local-hardening-v4: EntriesDao ya NO
+  // recibe FinancialStateService. La única operación que lo requería
+  // (`accountBalanceNow` en `registerDebtPayment`) ahora usa la función pura
+  // `accountBalanceAtomic` de `financial_state.dart`. Constructor compatible
+  // con `@DriftDatabase(daos: [...])` codegen.
+  EntriesDao(super.db);
 
   /// Lista paginada con filtros. Stream reactivo: drift reemite al cambiar
   /// cualquier tabla involucrada.
@@ -201,7 +205,8 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     // del botón Guardar podrían ambos pasar el check con la misma deuda y
     // dejar la tarjeta con saldo a favor.
     return transaction(() async {
-      final deuda = await _state.accountBalanceNow(accountDestinationId);
+      final deuda =
+          await accountBalanceAtomic(attachedDatabase, accountDestinationId);
       if (amount > deuda) {
         throw const EntriesDaoError(
           'overpay_debt',
