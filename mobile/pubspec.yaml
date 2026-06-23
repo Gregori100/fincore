@@ -4,7 +4,7 @@ publish_to: 'none'
 
 # 0.2.0+5: pickers migrados a DropdownMenu (M3) para que el overlay
 # respete el ancho del field y no se desborde.
-version: 0.3.9+41
+version: 0.3.10+42
 
 environment:
   sdk: ^3.7.2

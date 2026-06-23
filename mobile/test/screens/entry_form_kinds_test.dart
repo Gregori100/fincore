@@ -137,11 +137,14 @@ void main() {
       expect(find.text('Tarjeta a pagar'), findsOneWidget);
       expect(find.text('Cuenta destino'), findsNothing);
 
-      // Nota RF-019 v1: la verificación de contenido del DropdownMenu queda
-      // fuera del scope porque los kinds con 2 dropdowns sufren
-      // contaminación de overlays Material 3 entre tests del mismo isolate
-      // (los Overlays no se desmontan con `harness.dispose()`). Cleanup
-      // robusto del OverlayManager queda diferido a sprint dedicado.
+      // RF-202 v2 cancelado: Material 3 DropdownMenu prerenderea los items
+      // de TODOS los DropdownMenu del tree, no solo el actualmente abierto.
+      // En kinds con 2 dropdowns (Pago de tarjeta + Transferencia), el
+      // `find.textContaining` del helper `verifyDropdownItems` encuentra
+      // items del OTRO dropdown sin importar cuál se abrió. DV-1 v1 queda
+      // definitivamente diferido — la única salida sería migrar a un widget
+      // custom con Keys específicos, lo cual cambia código de producción
+      // solo para tests. ROI negativo.
 
       await harness.dispose();
     });
