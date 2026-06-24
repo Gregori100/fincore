@@ -1,3 +1,4 @@
+import 'package:fincore/screens/reports_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../helpers/widget_test_harness.dart';
@@ -46,6 +47,26 @@ void main() {
       );
       // El movimiento aparece en la lista por descripción.
       expect(find.text('Salario'), findsOneWidget);
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'AppBar tiene IconButton "Reportes" que navega a /reports (RF-017)',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+
+      // El IconButton del AppBar tiene tooltip "Reportes" (único, no confunde
+      // con el icono de Categorías ni Settings).
+      final reportsButton = find.byTooltip('Reportes');
+      expect(reportsButton, findsOneWidget,
+          reason: 'El AppBar del Dashboard debería tener un IconButton Reportes');
+
+      await tester.tap(reportsButton);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ReportsScreen), findsOneWidget,
+          reason: 'Tap del IconButton Reportes navega a /reports');
 
       await harness.dispose();
     });

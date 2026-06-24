@@ -57,6 +57,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.bar_chart),
+            tooltip: 'Reportes',
+            onPressed: () => context.push('/reports'),
+          ),
+          IconButton(
             icon: const Icon(Icons.label_outline),
             tooltip: 'Categorías',
             onPressed: () => context.push('/categories'),

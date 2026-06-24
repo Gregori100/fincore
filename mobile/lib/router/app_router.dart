@@ -8,6 +8,7 @@ import 'package:fincore/screens/dashboard_screen.dart';
 import 'package:fincore/screens/entries_list_screen.dart';
 import 'package:fincore/screens/entry_form_screen.dart';
 import 'package:fincore/screens/first_run_screen.dart';
+import 'package:fincore/screens/reports_screen.dart';
 import 'package:fincore/screens/settings_screen.dart';
 import 'package:fincore/screens/splash_screen.dart';
 import 'package:flutter/widgets.dart';
@@ -98,6 +99,7 @@ GoRouter buildAppRouter({
           ),
         ],
       ),
+      GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
     ],
   );

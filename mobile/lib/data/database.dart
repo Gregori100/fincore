@@ -132,6 +132,16 @@ class FincoreDatabase extends _$FincoreDatabase {
           await customStatement(
             'CREATE INDEX idx_entries_kind ON journal_entries(kind)',
           );
+          // Nota futura (M7 del quality review v1 del sprint
+          // flutter-reports-v1): si `ReportsService.spendingByCategory`
+          // degrada con journal grande (>10k entries), considerar agregar
+          // un índice compuesto parcial:
+          //   CREATE INDEX idx_entries_kind_occurred_active
+          //   ON journal_entries(kind, occurred_at)
+          //   WHERE deleted_at IS NULL;
+          // Hoy `idx_entries_kind` + filtro de rango es suficiente para el
+          // tamaño del journal típico de single-user. Bumpear schemaVersion
+          // y agregar rama en `onUpgrade` si se decide aplicar.
           // schemaVersion 2 (RF-011 del sprint flutter-local-hardening):
           // índice parcial para `watchPage` que ordena por occurred_at DESC y
           // filtra deleted_at IS NULL. Sin esto la lista de movimientos

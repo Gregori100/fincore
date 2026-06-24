@@ -110,6 +110,15 @@ ThemeData fincoreDarkTheme() {
 
     chipTheme: ChipThemeData(
       backgroundColor: FincoreColors.surfaceElevated,
+      // Quality review v1 — el ChoiceChip de M3 usaba `secondary` del
+      // colorScheme para selectedColor + state overlay, lo cual mapeaba a
+      // FincoreColors.positive (#50CC8E verde de ingresos) y desentonaba
+      // de la paleta del feature. Override explícito al accent:
+      selectedColor: FincoreColors.accent.withValues(alpha: 0.18),
+      checkmarkColor: FincoreColors.accent,
+      // surfaceTintColor transparente evita el tint M3 verde-grisáceo
+      // que se aplicaba al chip elevado al tappear.
+      surfaceTintColor: Colors.transparent,
       labelStyle: const TextStyle(color: FincoreColors.textPrimary, fontSize: 13),
       side: const BorderSide(color: FincoreColors.border),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

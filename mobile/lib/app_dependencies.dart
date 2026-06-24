@@ -4,13 +4,14 @@ import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
+import 'package:fincore/data/reports.dart';
 import 'package:flutter/widgets.dart';
 
 /// Bag de servicios disponibles vía `AppDependencies.of(context)`.
 /// Construidos una vez en `main.dart` y propagados por el InheritedWidget.
 ///
 /// Versión local-first: sin apiClient, sin tokenStorage, sin authState,
-/// sin auth*. Solo database + DAOs + StateService + BackupService.
+/// sin auth*. Solo database + DAOs + StateService + BackupService + ReportsService.
 class AppDependencies {
   final FincoreDatabase database;
   final AccountsDao accountsDao;
@@ -18,6 +19,7 @@ class AppDependencies {
   final EntriesDao entriesDao;
   final FinancialStateService stateService;
   final BackupService backupService;
+  final ReportsService reportsService;
 
   const AppDependencies({
     required this.database,
@@ -26,6 +28,7 @@ class AppDependencies {
     required this.entriesDao,
     required this.stateService,
     required this.backupService,
+    required this.reportsService,
   });
 
   /// Builder de conveniencia: construye toda la cadena de servicios desde una
@@ -43,6 +46,7 @@ class AppDependencies {
     final categoriesDao = database.categoriesDao;
     final entriesDao = database.entriesDao;
     final backupService = BackupService(database, stateService);
+    final reportsService = ReportsService(database);
     return AppDependencies(
       database: database,
       accountsDao: accountsDao,
@@ -50,6 +54,7 @@ class AppDependencies {
       entriesDao: entriesDao,
       stateService: stateService,
       backupService: backupService,
+      reportsService: reportsService,
     );
   }
 
