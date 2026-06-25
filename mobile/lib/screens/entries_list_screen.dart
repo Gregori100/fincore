@@ -50,8 +50,14 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
   // `_currentLimit` crece +100 en cada `_loadMore` y `offset` queda en 0
   // por construcción — drift re-emite la lista completa al nuevo limit,
   // manteniendo reactividad sin riesgo de duplicados.
+  //
+  // Tope `_kMaxLimit = 2000` (patch post-quality-review): tras 20 páginas
+  // cargadas el scroll deja de pedir más y el footer le pide al usuario que
+  // acote filtros. Previene el caso patológico de query lenta + memoria alta
+  // sin requerir paginación con offset real (sprint dedicado pendiente).
   int _currentLimit = _kPageSize;
   bool _reachedEnd = false;
+  bool _reachedMaxLimit = false;
   bool _loadingMore = false;
   final ScrollController _scrollController = ScrollController();
 
@@ -65,7 +71,6 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_stream != null) return;
-    // Lee query params del router en la primera hidratación.
     final route = GoRouterState.of(context);
     final params = route.uri.queryParameters;
     if (params.isNotEmpty) {
@@ -104,11 +109,12 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
   void _resetPagination() {
     _currentLimit = _kPageSize;
     _reachedEnd = false;
+    _reachedMaxLimit = false;
     _loadingMore = false;
   }
 
   void _onScroll() {
-    if (_reachedEnd || _loadingMore) return;
+    if (_reachedEnd || _reachedMaxLimit || _loadingMore) return;
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
     if (pos.pixels >= pos.maxScrollExtent - _kScrollLoadMoreThreshold) {
@@ -117,6 +123,13 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
   }
 
   void _loadMore() {
+    // Tope post-quality-review: si la próxima página supera `_kMaxLimit`,
+    // marcamos `_reachedMaxLimit` y el footer cambia. El usuario debe
+    // acotar filtros para ver entries adicionales.
+    if (_currentLimit + _kPageSize > _kMaxLimit) {
+      setState(() => _reachedMaxLimit = true);
+      return;
+    }
     setState(() {
       _currentLimit += _kPageSize;
       _loadingMore = true;
@@ -274,6 +287,7 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
                   controller: _scrollController,
                   loadingMore: _loadingMore,
                   reachedEnd: _reachedEnd,
+                  reachedMaxLimit: _reachedMaxLimit,
                 );
               },
             ),
@@ -470,25 +484,27 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Lista de movimientos con scroll infinito (sprint
-/// flutter-movements-pagination-v1). Si `loadingMore` o `reachedEnd`, agrega
-/// un item final con `_PaginationFooter` que comunica el estado.
+/// Lista de movimientos con scroll infinito. Si `loadingMore`, `reachedEnd`
+/// o `reachedMaxLimit`, agrega un item final con `_PaginationFooter` que
+/// comunica el estado.
 class _EntriesList extends StatelessWidget {
   final List<EntryWithRelations> entries;
   final ScrollController controller;
   final bool loadingMore;
   final bool reachedEnd;
+  final bool reachedMaxLimit;
 
   const _EntriesList({
     required this.entries,
     required this.controller,
     required this.loadingMore,
     required this.reachedEnd,
+    required this.reachedMaxLimit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasFooter = loadingMore || reachedEnd;
+    final hasFooter = loadingMore || reachedEnd || reachedMaxLimit;
     final itemCount = entries.length + (hasFooter ? 1 : 0);
     return ListView.separated(
       controller: controller,
@@ -500,6 +516,7 @@ class _EntriesList extends StatelessWidget {
           return _PaginationFooter(
             loadingMore: loadingMore,
             reachedEnd: reachedEnd,
+            reachedMaxLimit: reachedMaxLimit,
           );
         }
         return _Row(item: entries[i]);
@@ -508,28 +525,38 @@ class _EntriesList extends StatelessWidget {
   }
 }
 
-/// Footer condicional del scroll infinito:
+/// Footer condicional del scroll infinito. Estados en orden de precedencia:
 /// - `loadingMore` → "Cargando…" sin animación.
+/// - `reachedMaxLimit` → mensaje pidiendo acotar filtros.
 /// - `reachedEnd` → "Fin de los movimientos del rango.".
-/// Los dos flags son mutuamente excluyentes; `loadingMore` tiene precedencia
-/// si por race se solapan momentáneamente.
 class _PaginationFooter extends StatelessWidget {
   final bool loadingMore;
   final bool reachedEnd;
+  final bool reachedMaxLimit;
 
   const _PaginationFooter({
     required this.loadingMore,
     required this.reachedEnd,
+    required this.reachedMaxLimit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final text = loadingMore ? 'Cargando…' : 'Fin de los movimientos del rango.';
+    final String text;
+    if (loadingMore) {
+      text = 'Cargando…';
+    } else if (reachedMaxLimit) {
+      text = 'Llegaste a $_kMaxLimit movimientos cargados.\n'
+          'Acotá filtros para ver entries más viejos.';
+    } else {
+      text = 'Fin de los movimientos del rango.';
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
       child: Center(
         child: Text(
           text,
+          textAlign: TextAlign.center,
           style: const TextStyle(
             color: FincoreColors.textSubtle,
             fontSize: 12,
@@ -542,6 +569,11 @@ class _PaginationFooter extends StatelessWidget {
 
 /// Tamaño de página: cada `_loadMore` aumenta `_currentLimit` en este valor.
 const int _kPageSize = 100;
+
+/// Tope máximo del `_currentLimit` acumulado. Tras superarlo, el scroll
+/// infinito se detiene y el footer pide acotar filtros. Patch post-quality-
+/// review v1 para evitar el caso patológico de query lenta + memoria alta.
+const int _kMaxLimit = 2000;
 
 /// Threshold en píxeles desde el final del scroll donde se dispara
 /// `_loadMore` automáticamente.

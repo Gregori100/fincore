@@ -45,7 +45,13 @@ publish_to: 'none'
 # movimientos del rango", reset al cambiar filtros. Eliminados
 # kind/accountId deprecados del DAO. Eliminado _TruncatedFooter viejo.
 # +3 tests data del DAO (offset/limit). 217/217 verdes.
-version: 0.6.0+52
+# 0.6.1+53: patch riesgos del sprint paginación. (1) Tope `_kMaxLimit=2000`
+# en `_currentLimit` con footer especializado pidiendo acotar filtros.
+# (2) Cobertura del scroll infinito con integration_test (3 tests verdes
+# en runtime real) tras descubrir que el cuelgue de pumpAndSettle con
+# `categoryIds` en query params es por interacción de drift +
+# AppDependencies completo en el harness — diagnóstico documentado.
+version: 0.6.1+53
 
 environment:
   sdk: ^3.7.2
@@ -90,6 +96,13 @@ dependencies:
 
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+
+  # Integration tests: runtime real en device/emulator, sin pumpAndSettle
+  # frágil. Diagnóstico R2 del quality review v1 confirmó que el harness
+  # `pumpFincoreApp` cuelga `watchPage` con filtros de categoryIds — los
+  # integration tests evitan ese path corriendo en runtime real.
+  integration_test:
     sdk: flutter
 
   flutter_lints: ^5.0.0
