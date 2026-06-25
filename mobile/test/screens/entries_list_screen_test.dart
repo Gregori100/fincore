@@ -127,17 +127,20 @@ void main() {
     });
   });
 
-  // Deep link via query params — test diferido.
+  // M3 del quality review v1 — reactivación INTENTADA y revertida.
   //
-  // El test específico que valida "push /entries?categoryIds=X muestra solo
-  // entries de X" cuelga `pumpAndSettle` cuando `EntriesListScreen` rinde
-  // `_ActiveFiltersBar` (que tiene 2 StreamBuilders anidados de cuentas y
-  // categorías además del stream principal del DAO). El feature funciona
-  // en producción y es funcionalmente equivalente al deep link desde el
-  // reporte (cubierto por `reports_deeplink_test.dart`). Difiero el test
-  // dedicado a un futuro sprint de UI testing depth.
+  // El test del deep link via query params puro se difería con la hipótesis
+  // de que los StreamBuilders anidados en `_ActiveFiltersBar` causaban el
+  // cuelgue de `pumpAndSettle`. El patch perf v1 eliminó esos StreamBuilders
+  // (la bar ahora recibe `List<Account>` + `List<Category>` resueltas del
+  // padre). Sin embargo, al reactivar el test el cuelgue persiste — la
+  // causa raíz es OTRA (probablemente el `StreamSubscription` directo en
+  // `_subscribeMeta` del padre o el flujo de `setState` desde múltiples
+  // streams concurrentes).
   //
-  // Cobertura compensatoria: `reports_deeplink_test.dart` valida el flujo
-  // end-to-end completo (tap en bucket → /entries con query params →
-  // lista filtrada). RF-012 funcional cubierto.
+  // Re-diferido para investigación más profunda en un sprint dedicado de
+  // UI testing. Cobertura compensatoria: `reports_deeplink_test.dart`
+  // valida el flujo end-to-end (tap en bucket → /entries con query params
+  // → lista filtrada), que es el único path productivo. El deep link via
+  // URL manual no tiene flujo productivo (Diego no escribe URLs).
 }

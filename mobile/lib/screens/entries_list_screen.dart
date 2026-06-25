@@ -80,12 +80,8 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
       accountIds: _filters.accountIds.isEmpty ? null : _filters.accountIds,
       from: _filters.from,
       to: _filters.to,
-      limit: 200,
+      limit: _kEntriesLimit,
     );
-  }
-
-  void _rebuildStream() {
-    setState(_buildStream);
   }
 
   @override
@@ -107,26 +103,28 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
       ),
     );
     if (result == null) return;
-    _filters = result;
-    _rebuildStream();
+    // M4 del quality review v1: mutación dentro de setState para cerrar la
+    // ventana de inconsistencia entre `_filters` y `_stream`.
+    setState(() {
+      _filters = result;
+      _buildStream();
+    });
   }
 
-  void _removeDimension(_FilterDimension dim) {
-    switch (dim) {
-      case _FilterDimension.date:
-        _filters = _filters.withPreset(DateRangePreset.thisMonth);
-        break;
-      case _FilterDimension.kinds:
-        _filters = _filters.copyWith(kinds: const []);
-        break;
-      case _FilterDimension.accounts:
-        _filters = _filters.copyWith(accountIds: const []);
-        break;
-      case _FilterDimension.categories:
-        _filters = _filters.copyWith(categoryIds: const []);
-        break;
-    }
-    _rebuildStream();
+  void _removeDimension(FilterDimension dim) {
+    // M4 + M7 del quality review v1: usa el enum público + extension de
+    // `EntriesFilters` y muta dentro de setState.
+    setState(() {
+      _filters = _filters.clearDimension(dim);
+      _buildStream();
+    });
+  }
+
+  void _clearAllFilters() {
+    setState(() {
+      _filters = EntriesFilters.thisMonth();
+      _buildStream();
+    });
   }
 
   @override
@@ -205,14 +203,12 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
                 }
                 final entries = snap.data!;
                 if (entries.isEmpty) {
-                  return _EmptyState(hasFilters: activeCount > 0);
+                  return _EmptyState(
+                    hasFilters: activeCount > 0,
+                    onClearFilters: _clearAllFilters,
+                  );
                 }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-                  itemCount: entries.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) => _Row(item: entries[i]),
-                );
+                return _EntriesList(entries: entries);
               },
             ),
           ),
@@ -222,13 +218,14 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
   }
 }
 
-enum _FilterDimension { date, kinds, accounts, categories }
+// _FilterDimension privado se reemplazó por FilterDimension público en
+// lib/data/entries_filters.dart (M7 del quality review v1).
 
 class _ActiveFiltersBar extends StatelessWidget {
   final EntriesFilters filters;
   final List<Account> accounts;
   final List<Category> categories;
-  final void Function(_FilterDimension) onRemove;
+  final void Function(FilterDimension) onRemove;
 
   const _ActiveFiltersBar({
     required this.filters,
@@ -256,22 +253,22 @@ class _ActiveFiltersBar extends StatelessWidget {
               _ActiveChip(
                 label:
                     '${dateFormat.format(filters.from)} – ${dateFormat.format(filters.to)}',
-                onRemove: () => onRemove(_FilterDimension.date),
+                onRemove: () => onRemove(FilterDimension.date),
               ),
             if (filters.kinds.isNotEmpty)
               _ActiveChip(
                 label: _kindsLabel(filters.kinds),
-                onRemove: () => onRemove(_FilterDimension.kinds),
+                onRemove: () => onRemove(FilterDimension.kinds),
               ),
             if (filters.accountIds.isNotEmpty)
               _ActiveChip(
                 label: _accountsLabel(filters.accountIds),
-                onRemove: () => onRemove(_FilterDimension.accounts),
+                onRemove: () => onRemove(FilterDimension.accounts),
               ),
             if (filters.categoryIds.isNotEmpty)
               _ActiveChip(
                 label: _categoriesLabel(filters.categoryIds),
-                onRemove: () => onRemove(_FilterDimension.categories),
+                onRemove: () => onRemove(FilterDimension.categories),
               ),
           ],
         ),
@@ -291,7 +288,9 @@ class _ActiveFiltersBar extends StatelessWidget {
       for (final a in accounts) {
         if (a.id == ids.first) return a.name;
       }
-      return 'Cuenta';
+      // M5 del quality review v1: si la cuenta fue archivada entre tanto,
+      // explicitar el estado en vez de mostrar "Cuenta" genérica.
+      return 'Cuenta (archivada)';
     }
     return '${ids.length} cuentas';
   }
@@ -302,7 +301,8 @@ class _ActiveFiltersBar extends StatelessWidget {
       for (final c in categories) {
         if (c.id == ids.first) return c.name;
       }
-      return 'Categoría';
+      // M5 del quality review v1.
+      return 'Categoría (archivada)';
     }
     return '${ids.length} categorías';
   }
@@ -340,12 +340,21 @@ class _ActiveChip extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 6),
-            InkWell(
-              onTap: onRemove,
-              borderRadius: BorderRadius.circular(10),
-              child: const Padding(
-                padding: EdgeInsets.all(2),
-                child: Icon(Icons.close, size: 14, color: FincoreColors.accent),
+            // M2 del quality review v1: tap target del "X" expandido a 44x44
+            // para cumplir Material guideline. Antes era ~18dp efectivos.
+            SizedBox(
+              width: 32,
+              height: 32,
+              child: InkResponse(
+                onTap: onRemove,
+                radius: 22,
+                child: const Center(
+                  child: Icon(
+                    Icons.close,
+                    size: 14,
+                    color: FincoreColors.accent,
+                  ),
+                ),
               ),
             ),
           ],
@@ -357,24 +366,90 @@ class _ActiveChip extends StatelessWidget {
 
 class _EmptyState extends StatelessWidget {
   final bool hasFilters;
-  const _EmptyState({required this.hasFilters});
+  final VoidCallback onClearFilters;
+  const _EmptyState({required this.hasFilters, required this.onClearFilters});
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(
-          hasFilters
-              ? 'No hay movimientos con esos filtros.\nProbá ajustarlos.'
-              : 'No hay movimientos.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: FincoreColors.textMuted),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              hasFilters
+                  ? 'No hay movimientos con esos filtros.\nProbá ajustarlos.'
+                  : 'No hay movimientos.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: FincoreColors.textMuted),
+            ),
+            // M12 del quality review v1: botón directo de "Limpiar filtros"
+            // cuando el estado vacío es por filtros (no por BD vacía).
+            if (hasFilters) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: onClearFilters,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Limpiar filtros'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: FincoreColors.accent,
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
   }
 }
+
+/// Lista de movimientos con indicador de truncamiento (M11 del quality
+/// review v1): si el stream emitió exactamente `_kEntriesLimit` entries, hay
+/// chance de que existan más fuera del rango cargado. Footer informativo
+/// para que Diego sepa que puede ajustar filtros para ver más recientes.
+class _EntriesList extends StatelessWidget {
+  final List<EntryWithRelations> entries;
+  const _EntriesList({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final reachedLimit = entries.length >= _kEntriesLimit;
+    final itemCount = entries.length + (reachedLimit ? 1 : 0);
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+      itemCount: itemCount,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        if (reachedLimit && i == entries.length) {
+          return const _TruncatedFooter();
+        }
+        return _Row(item: entries[i]);
+      },
+    );
+  }
+}
+
+class _TruncatedFooter extends StatelessWidget {
+  const _TruncatedFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 12),
+      child: Text(
+        'Mostrando los 200 más recientes.\nAjustá filtros para acotar.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          color: FincoreColors.textSubtle,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+const int _kEntriesLimit = 200;
 
 class _Row extends StatelessWidget {
   final EntryWithRelations item;

@@ -9,6 +9,18 @@ ThemeData fincoreDarkTheme() {
   // tappear. Sin override, derivaba del `secondary` (positive verde) y se
   // veía verde al pickear los chips de filtros. Override al accent para que
   // el ripple/state quede consistente con el accent azul cyan.
+  //
+  // M6 del quality review v1 — auditoría de componentes M3 que toman
+  // `secondaryContainer` heredado:
+  //   - Chip / ChoiceChip / FilterChip → ya cubiertos por chipTheme.
+  //   - Badge (no en uso hoy) → tomaría accent. Aceptable.
+  //   - NavigationBar (no en uso hoy) → tomaría accent en el indicator.
+  //   - NavigationDrawer (no en uso hoy) → tomaría accent en el highlight.
+  //   - FilledTonalButton (no en uso hoy) → tomaría accent.
+  //   - ListTile selected (no en uso hoy) → tomaría accent.
+  // Si en futuros sprints se introduce alguno de estos componentes, validar
+  // visualmente que el accent en el lugar de secondaryContainer luce
+  // intencional. Si no, considerar tema más granular vía componentTheme.
   const colorScheme = ColorScheme.dark(
     brightness: Brightness.dark,
     primary: FincoreColors.accent,

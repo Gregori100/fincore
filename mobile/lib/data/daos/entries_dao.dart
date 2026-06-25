@@ -1,7 +1,14 @@
 import 'package:drift/drift.dart';
+import 'package:fincore/constants/filter_tokens.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/uuid.dart';
+
+// Re-export para que callers que ya importan `entries_dao.dart` (por
+// compatibilidad con código previo) sigan teniendo acceso al token sin
+// cambiar el import. Marcado para retirar en sprint posterior junto con
+// la deprecación de `kind`/`accountId` singulares.
+export 'package:fincore/constants/filter_tokens.dart' show kUncategorizedFilterToken;
 
 part 'entries_dao.g.dart';
 
@@ -32,21 +39,9 @@ class EntryWithRelations {
 
 const _validKinds = {'income', 'expense', 'credit_expense', 'debt_payment', 'transfer'};
 
-/// Token especial en `categoryIds` de `EntriesDao.watchPage` que matchea
-/// entries con `category_id IS NULL` o cuyo categoryId apunta a una categoría
-/// archivada (`categories.deleted_at IS NOT NULL`). Consistente con el bucket
-/// "Sin categoría" del reporte de gasto por categoría (RN-R03/R04 del sprint
-/// `flutter-reports-v1`).
-///
-/// Introducido en el sprint `flutter-movements-filters-v1` (RF-004) para que
-/// la UI del panel de filtros y el deep link desde el reporte puedan filtrar
-/// por "Sin categoría" de forma simbólica vía un string en la lista.
-///
-/// Implementación: el `LEFT JOIN ... AND categories.deleted_at IS NULL` del
-/// `watchPage` deja `categories.id` en NULL para los dos casos cubiertos;
-/// el filtro `categoryIds.contains(kUncategorizedFilterToken)` se traduce a
-/// `WHERE categories.id IS NULL` sobre la columna del JOIN.
-const String kUncategorizedFilterToken = '__null__';
+// `kUncategorizedFilterToken` se movió a `lib/constants/filter_tokens.dart`
+// tras el quality review v1 (M1). El re-export al inicio del archivo
+// mantiene la compatibilidad con callers que importan desde el DAO.
 
 @DriftAccessor(tables: [JournalEntries, Accounts, Categories])
 class EntriesDao extends DatabaseAccessor<FincoreDatabase>

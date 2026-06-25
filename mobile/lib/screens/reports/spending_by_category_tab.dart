@@ -1,7 +1,6 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/constants/date_range_presets.dart';
-import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
@@ -313,20 +312,16 @@ class _SpendingBucketRow extends StatelessWidget {
   });
 
   /// Construye el deep link a `/entries` con el filtro equivalente al bucket
-  /// (sprint flutter-movements-filters-v1, RF-016 + RN-M08): mismo rango +
-  /// tipo "Gastos" (expense + credit_expense) + categoría (o token
-  /// "Sin categoría" si el bucket es el especial).
+  /// (sprint flutter-movements-filters-v1, RF-016 + RN-M08). M8 del quality
+  /// review v1: la composición y la serialización se encapsulan en
+  /// `EntriesFilters.forCategoryBucket` + `.toDeepLink()` para desacoplar al
+  /// reporte del formato interno de filtros.
   String _buildDeepLink() {
-    final categoryToken = bucket.categoryId ?? kUncategorizedFilterToken;
-    final filters = EntriesFilters(
-      datePreset: DateRangePreset.custom,
+    return EntriesFilters.forCategoryBucket(
+      categoryId: bucket.categoryId,
       from: from,
       to: to,
-      kinds: const ['expense', 'credit_expense'],
-      categoryIds: [categoryToken],
-    );
-    final params = filters.serialize();
-    return Uri(path: '/entries', queryParameters: params).toString();
+    ).toDeepLink();
   }
 
   @override

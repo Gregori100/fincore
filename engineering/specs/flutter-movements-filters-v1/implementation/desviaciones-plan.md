@@ -80,3 +80,51 @@ Esto resulta en URLs más cortas:
 - Eliminan los asserts del bottom sheet viejo.
 
 El test del flujo de filtros completo se cubre en `entries_filters_screen_test.dart` (panel aislado) + `reports_deeplink_test.dart` (end-to-end).
+
+## Desviación-6: `kinds` multi-select reemplaza al preset "Gastos" combinado
+
+**Plan original (RF-008 + CA-06 del spec)**: la sección "Tipo" del panel debía ser **selección única (radio-like)** con un chip especial "Gastos" que mapeara internamente a `kinds = ['expense', 'credit_expense']`. Las opciones eran: Todos / Ingreso / **Gastos** / Pago de tarjeta / Transferencia.
+
+**Implementación real (versión 0.5.3+50)**: **multi-select** con los 5 kinds individuales: Ingreso / Gasto / **Gasto a tarjeta** / Pago de tarjeta / Transferencia. Sin chip "Todos" (cero chips seleccionados = todos). Sin preset "Gastos" combinado.
+
+**Razón del cambio**: feedback de Diego durante el smoke del 0.5.0+47. *"Veo gastos, pero falta el de gasto por tarjeta de credito, o agrupaste en 1 mismo filtro? eso esta mal, debio de haber sido seleccion multiple."* La agrupación arbitraria ocultaba que `credit_expense` es un kind real y disociado de `expense`.
+
+**Impacto**:
+- **CA-06 queda invalidado**: *"filtro 'Gastos' muestra `expense + credit_expense` y ningún otro"* — ya no hay filtro llamado "Gastos". Reescritura sugerida: *"con `kinds = ['expense', 'credit_expense']` (ambos chips marcados), la lista muestra entries con `kind IN ('expense', 'credit_expense')` y ningún otro."*
+- El deep link desde el reporte sigue pre-cargando `kinds: ['expense', 'credit_expense']` (mismo SQL que antes), pero la UI los muestra como 2 chips marcados en el panel (en lugar del preset "Gastos" inexistente).
+- Diego puede combinar arbitrariamente (ej. *"Ingresos + Transferencias"*) o usar un único kind (ej. solo *"Gasto a tarjeta"*).
+
+**Cobertura test**:
+- `entries_dao_filters_test.dart` valida los kinds en multi-select.
+- `entries_filters_screen_test.dart` valida que tap en chip propaga el kind individual al resultado de `Aplicar`.
+- Test smoke SM-04 confirma la combinación en cel real.
+
+**Reversible**: para volver a single-select + preset "Gastos" basta reintroducir el enum `_TypePreset` que existía en el primer release del sprint (0.5.0+47). Decisión cerrada con Diego — no se anticipa reversión.
+
+## Desviación-7: `accountIds` multi-select reemplaza al `accountId` single-select + chip "Todas"
+
+**Plan original (RF-009 + RF-012 del spec)**: la sección "Cuenta" del panel debía ser **single-select** con un chip "Todas" al inicio para desactivar el filtro. El modelo del query param era `accountId` (singular). `EntriesDao.watchPage` aceptaba `accountId: String?`.
+
+**Implementación real (versión 0.5.3+50)**: **multi-select** sin chip "Todas". Ningún chip marcado equivale a "todas las cuentas". Modelo `EntriesFilters.accountIds: List<String>` (plural). Query param `accountIds=` (csv). `EntriesDao.watchPage` acepta `accountIds: List<String>?` con `accountId` deprecado.
+
+**Razón del cambio**: feedback de Diego durante el smoke del 0.5.0+47. *"Que se puedan combinar: 1 o varias cuentas, 1 o varios tipos."* Consistencia con `kinds` (Desviación-6) y `categoryIds` (que ya era multi-select desde el spec original). Caso de uso real: *"cuánto gasté en Bolsa + Banamex este mes"*.
+
+**Impacto**:
+- **RF-009 queda invalidado** y debe reescribirse como: *"Sección Cuenta del panel: chips inline multi-select con `accountsDao.watchActive()`. Ningún chip marcado equivale a sin filtro de cuenta. Sin chip 'Todas' explícito (redundante con cero chips marcados)."*
+- **RF-012 inconsistencia**: el param se llama `accountIds` (plural csv), no `accountId` (singular). Actualizar el spec.
+- SQL del DAO: el OR entre `accountOriginId.isIn(...) | accountDestinationId.isIn(...)` matchea cualquier cuenta seleccionada. Para transfers, eso significa que aparecen en el filtro de cualquiera de las 2 cuentas (origen o destino).
+
+**Cobertura test**:
+- `entries_dao_filters_test.dart` valida multi-account en distintos kinds.
+- M14 del quality review v1 agrega 2 tests explícitos del transfer apareciendo en `accountIds=[origin]` y en `accountIds=[destination]` separadamente.
+
+**Reversible**: para volver a single-select + chip "Todas" se debe revertir el modelo a `accountId: String?` (con `accountIds` deprecado en su lugar). Decisión cerrada con Diego — no se anticipa reversión.
+
+## Desviaciones del patch v3 (sprint patch quality review v1)
+
+Para preservar trazabilidad, el patch v3 (que cambió kinds + accountIds a multi-select) también incluyó:
+
+- **Eliminación del chip "Todos"** de la sección Tipo (consistencia: ningún chip = todos).
+- **Eliminación del chip "Todas"** de la sección Cuenta (consistencia: ningún chip = todas).
+- **Labels del bar de filtros activos**: cambio de "Gastos" → "1 tipo"/"N tipos" para reflejar la naturaleza multi-select sin presets.
+- **Label "Cuenta"/"Categoría" → "Cuenta (archivada)"/"Categoría (archivada)"** (M5 del quality review v1): para resolver el caso donde la categoría/cuenta del filtro fue archivada entre tanto.

@@ -267,6 +267,28 @@ void main() {
       // Excluye solo el credit_expense que es origin=credit (sin bolsa ni debit).
       expect(entries.length, 6);
     });
+
+    test(
+        'M14: transfer debit→bolsa aparece en accountIds=[debit] (origin)',
+        () async {
+      final entries = await entriesDao
+          .watchPage(accountIds: [debit], kinds: ['transfer'], limit: 100)
+          .first;
+      expect(entries, hasLength(1));
+      expect(entries.first.entry.accountOriginId, debit);
+      expect(entries.first.entry.accountDestinationId, bolsa);
+    });
+
+    test(
+        'M14: mismo transfer aparece en accountIds=[bolsa] (destination)',
+        () async {
+      final entries = await entriesDao
+          .watchPage(accountIds: [bolsa], kinds: ['transfer'], limit: 100)
+          .first;
+      expect(entries, hasLength(1));
+      expect(entries.first.entry.accountOriginId, debit);
+      expect(entries.first.entry.accountDestinationId, bolsa);
+    });
   });
 
   group('watchPage — soft-delete (RN-M07)', () {

@@ -1,19 +1,26 @@
 import 'package:fincore/constants/date_range_presets.dart';
+import 'package:fincore/constants/filter_tokens.dart';
 
 /// Snapshot inmutable de filtros aplicados a la lista de movimientos.
 ///
-/// Sirve tres usos en el sprint `flutter-movements-filters-v1`:
+/// Tres usos:
 /// 1. State del `EntriesListScreen` (qué filtros están activos hoy).
 /// 2. Argumento al abrir el panel `EntriesFiltersScreen` (state inicial).
 /// 3. Serialización a / desde query params del router para el deep link
 ///    desde `/reports`.
 ///
 /// Inmutable: usar [copyWith] para producir variantes. La factory
-/// [EntriesFilters.thisMonth] retorna el default al abrir `/entries`.
+/// [EntriesFilters.thisMonth] retorna el default al abrir `/entries`. La
+/// factory [EntriesFilters.forCategoryBucket] arma el filtro equivalente al
+/// bucket del reporte (M8 del quality review v1).
 ///
 /// Patch v3 — `kinds`, `accountIds` y `categoryIds` son listas multi-select.
 /// Si un usuario quiere ver "Gasto + Gasto a tarjeta", selecciona ambos
 /// chips; ya no existe un preset "Gastos" combinado.
+///
+/// M9 del quality review v1: las 3 listas internas se guardan vía
+/// `List.unmodifiable` para impedir mutación accidental por callers que
+/// obtengan la referencia.
 class EntriesFilters {
   final DateRangePreset datePreset;
   final DateTime from;
@@ -22,14 +29,16 @@ class EntriesFilters {
   final List<String> accountIds;
   final List<String> categoryIds;
 
-  const EntriesFilters({
+  EntriesFilters({
     required this.datePreset,
     required this.from,
     required this.to,
-    this.kinds = const [],
-    this.accountIds = const [],
-    this.categoryIds = const [],
-  });
+    List<String> kinds = const [],
+    List<String> accountIds = const [],
+    List<String> categoryIds = const [],
+  })  : kinds = List.unmodifiable(kinds),
+        accountIds = List.unmodifiable(accountIds),
+        categoryIds = List.unmodifiable(categoryIds);
 
   /// Default al abrir `/entries` sin query params: rango = mes calendario
   /// corriente, sin restricciones de tipo / cuentas / categorías.
@@ -43,11 +52,26 @@ class EntriesFilters {
     );
   }
 
+  /// Factory para el deep link desde un bucket del reporte de gasto por
+  /// categoría (M8 del quality review v1). Encapsula la composición de:
+  /// `datePreset = custom`, `from`/`to` exactos del reporte, kinds = Gasto
+  /// + Gasto a tarjeta, categoryIds = id del bucket o token Sin categoría.
+  factory EntriesFilters.forCategoryBucket({
+    required String? categoryId,
+    required DateTime from,
+    required DateTime to,
+  }) {
+    return EntriesFilters(
+      datePreset: DateRangePreset.custom,
+      from: from,
+      to: to,
+      kinds: const ['expense', 'credit_expense'],
+      categoryIds: [categoryId ?? kUncategorizedFilterToken],
+    );
+  }
+
   /// Cuenta cuántas dimensiones tienen al menos un valor distinto del default.
   /// Usado para el badge numérico en el AppBar. Max 4.
-  ///
-  /// El default `thisMonth` cuenta como dimensión NO activa: si el usuario
-  /// abre la pantalla por primera vez, el badge es 0.
   int get activeCount {
     var count = 0;
     if (datePreset != DateRangePreset.thisMonth) count++;
@@ -85,6 +109,29 @@ class EntriesFilters {
       currentTo: to,
     );
     return copyWith(datePreset: preset, from: newFrom, to: newTo);
+  }
+
+  /// Limpia una dimensión específica devolviendo un nuevo filtro. Reemplaza
+  /// el enum privado `_FilterDimension` que duplicaba el modelo (M7 del
+  /// quality review v1).
+  EntriesFilters clearDimension(FilterDimension dim) {
+    switch (dim) {
+      case FilterDimension.date:
+        return withPreset(DateRangePreset.thisMonth);
+      case FilterDimension.kinds:
+        return copyWith(kinds: const []);
+      case FilterDimension.accounts:
+        return copyWith(accountIds: const []);
+      case FilterDimension.categories:
+        return copyWith(categoryIds: const []);
+    }
+  }
+
+  /// Convierte los filtros a una URL de deep link `/entries?...`. Encapsula
+  /// la dependencia del consumidor (reporte) con el formato interno del
+  /// `serialize()` (M8 del quality review v1).
+  String toDeepLink() {
+    return Uri(path: '/entries', queryParameters: serialize()).toString();
   }
 
   /// Serializa los filtros a query params del router. Omite campos default
@@ -149,6 +196,13 @@ class EntriesFilters {
         .toSet()
         .toList(growable: false);
 
+    // B5 del quality review v1: defensa en profundidad.
+    // - SQL injection ya está mitigado por drift (parametrización).
+    // - Aceptamos cualquier string non-empty como ID. Si el ID no existe en
+    //   BD, el filtro retorna 0 entries silenciosamente — comportamiento
+    //   defensivo aceptable.
+    // - Validación estricta de UUID v7 quedaría como sprint dedicado si
+    //   surge necesidad de feedback explícito ("ID no encontrado").
     final accountIds =
         _parseCsv(params['accountIds']).toSet().toList(growable: false);
 
@@ -165,6 +219,10 @@ class EntriesFilters {
     );
   }
 }
+
+/// Dimensiones que el usuario puede quitar individualmente desde los chips
+/// de filtros activos arriba de la lista (M7 del quality review v1).
+enum FilterDimension { date, kinds, accounts, categories }
 
 const _kValidKinds = {
   'income',

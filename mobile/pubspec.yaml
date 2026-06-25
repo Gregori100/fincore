@@ -30,7 +30,16 @@ publish_to: 'none'
 # eliminó por feedback de Diego. Tipo ahora muestra los 5 kinds individuales
 # (incluido "Gasto a tarjeta") con multi-select. Cuenta también pasa a
 # multi-select. DAO acepta accountIds: List<String>?.
-version: 0.5.3+50
+# 0.5.4+51: correcciones del quality review v1 — kUncategorizedFilterToken
+# movido a lib/constants/filter_tokens.dart, FilterDimension público con
+# extension clearDimension, EntriesFilters.forCategoryBucket + toDeepLink
+# encapsulan el deep link del reporte, copyWith con List.unmodifiable,
+# mutaciones de _filters dentro de setState, chip de cuenta/categoría
+# archivada con "(archivada)", tap target del X expandido a 32x32 con
+# splash 22, indicador "mostrando 200 más recientes" cuando se alcanza
+# el limit, botón "Limpiar filtros" en estado vacío con filtros activos.
+# +2 tests del transfer single-account (M14). 215/215 verdes.
+version: 0.5.4+51
 
 environment:
   sdk: ^3.7.2

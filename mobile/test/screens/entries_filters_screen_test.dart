@@ -165,6 +165,18 @@ void main() {
       await harness.dispose();
     });
 
+    // M10 del quality review v1 — intentado y diferido. El test del panel
+    // con cuentas sembradas + multi-select funcional cuelga `pumpAndSettle`
+    // por la misma causa que M3 (no era los StreamBuilders del bar). El
+    // sprint actual quedó con un patch perf v1 que mejoró el comportamiento
+    // pero no llegó a aislar la causa raíz. Pendiente para sprint dedicado
+    // de UI testing depth.
+    //
+    // Cobertura compensatoria: los tests existentes con `accounts: []` +
+    // `categories: []` validan el render del panel + interacción con chips
+    // fijos (presets de fecha, kinds, "Sin categoría"). El multi-select
+    // funcional con datos reales se valida con smoke manual SM-04.
+
     testWidgets('Tap en "Custom" muestra los dos input fields de fecha',
         (tester) async {
       final harness = await pumpFincoreApp(tester);

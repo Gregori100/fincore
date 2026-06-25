@@ -65,11 +65,20 @@
 
 **Cuando**: futuro sprint.
 
-### P-08: Eliminar el parámetro `kind: String?` deprecado del DAO
+### P-08: Eliminar parámetros deprecados del DAO
 
-**Hoy**: `watchPage(kind: String?, kinds: List<String>?, ...)` con `kind` deprecado.
+**Hoy**: `watchPage(kind: String?, kinds: List<String>?, accountId: String?, accountIds: List<String>?, ...)`. Los singulares `kind` y `accountId` quedaron `@Deprecated` durante el sprint para mantener compatibilidad con tests previos.
 
-**Cuando**: cuando ningún caller use `kind`. Hoy todos están migrados; en el próximo sprint que toque el DAO se puede eliminar la firma deprecada y dejar solo `kinds`.
+**Cuándo eliminar (B4 del quality review v1)**: cuando se cumpla la condición de cero callers en el codebase:
+```bash
+cd mobile
+grep -rn "watchPage(kind:\|watchPage(accountId:" lib/ test/ | grep -v "@Deprecated"
+# Debe retornar 0 matches.
+```
+
+Hoy todos los callers productivos están migrados (la migración la hizo el sprint en F2). El test de compatibilidad (`compatibilidad: kind: String (deprecado) sigue funcionando`) sigue invocando explícitamente el param viejo — al eliminar, ese test se borra o se reescribe para validar que la deprecación funciona via análisis estático.
+
+**Sprint sugerido**: próximo sprint que toque `entries_dao.dart` por otro motivo (paginación, búsqueda full-text, etc.). Cambio aditivo + 1 test eliminado, ~10 min.
 
 ### P-09: Refactor de `_ActiveFiltersBar` para no usar StreamBuilders internos
 

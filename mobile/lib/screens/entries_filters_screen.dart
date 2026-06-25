@@ -1,7 +1,7 @@
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/constants/date_range_presets.dart';
+import 'package:fincore/constants/filter_tokens.dart';
 import 'package:fincore/constants/kinds.dart';
-import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/theme/fincore_colors.dart';
