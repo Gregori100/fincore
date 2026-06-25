@@ -14,7 +14,23 @@ publish_to: 'none'
 # + tests de cruce enero/diciembre, desviaciones-6 y -7 documentadas.
 # 0.4.3+46: chipTheme global con selectedColor + surfaceTintColor del accent
 # (en vez del secondary verde del colorScheme). Post-smoke con Diego.
-version: 0.4.3+46
+# 0.5.0+47: sprint flutter-movements-filters-v1 — panel full-screen de filtros
+# de movimientos con 4 dimensiones (fecha presets, tipo combinado "Gastos",
+# cuenta single, categorías multi-select), chips de filtros activos con X
+# arriba de la lista, deep link desde el reporte (tap en bucket pre-carga
+# filtros equivalentes). Multi-kind + multi-categoría + token "Sin categoría"
+# en el DAO. Default cambia de "sin filtro" a "Este mes" calendario.
+# 0.5.1+48: perf v1 — eliminar SkeletonCard animado del load state de
+# /entries y migrar _ActiveFiltersBar + EntriesFiltersScreen a listas
+# resueltas (sin StreamBuilders anidados). Reduce re-renders en el cel real.
+# 0.5.2+49: chip color fix v2 — override `secondaryContainer` del
+# colorScheme al accent. El ripple/state de los ChoiceChip ya no deriva
+# del positive verde sino del accent azul cyan.
+# 0.5.3+50: filtros multi-select reales — el preset "Gastos" combinado se
+# eliminó por feedback de Diego. Tipo ahora muestra los 5 kinds individuales
+# (incluido "Gasto a tarjeta") con multi-select. Cuenta también pasa a
+# multi-select. DAO acepta accountIds: List<String>?.
+version: 0.5.3+50
 
 environment:
   sdk: ^3.7.2

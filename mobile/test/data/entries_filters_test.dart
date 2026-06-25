@@ -1,0 +1,166 @@
+import 'package:fincore/constants/date_range_presets.dart';
+import 'package:fincore/data/entries_filters.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Tests del modelo `EntriesFilters` (sprint flutter-movements-filters-v1,
+/// RF-006 apoyo). Cubre factory thisMonth + round-trip serialize/parse +
+/// validación defensiva de URL malformada + deduplicación.
+void main() {
+  group('EntriesFilters — defaults', () {
+    test('factory thisMonth con ref fijo', () {
+      final f = EntriesFilters.thisMonth(DateTime(2026, 6, 15));
+      expect(f.datePreset, DateRangePreset.thisMonth);
+      expect(f.from, DateTime(2026, 6, 1));
+      expect(f.to, DateTime(2026, 6, 30, 23, 59, 59, 999));
+      expect(f.kinds, isEmpty);
+      expect(f.accountIds, isEmpty);
+      expect(f.categoryIds, isEmpty);
+    });
+
+    test('activeCount = 0 en default thisMonth', () {
+      final f = EntriesFilters.thisMonth(DateTime(2026, 6, 15));
+      expect(f.activeCount, 0);
+    });
+
+    test('activeCount cuenta dimensiones, no items', () {
+      final base = EntriesFilters.thisMonth(DateTime(2026, 6, 15));
+      final f = base.copyWith(
+        kinds: ['expense', 'credit_expense'],
+        accountIds: ['a1', 'a2'],
+        categoryIds: ['c1', 'c2', 'c3'],
+      );
+      // kinds (1) + accountIds (1) + categoryIds (1) = 3 dimensiones.
+      expect(f.activeCount, 3);
+    });
+
+    test('activeCount cuenta datePreset != thisMonth como activo', () {
+      final f = EntriesFilters.thisMonth(DateTime(2026, 6, 15))
+          .withPreset(DateRangePreset.lastMonth, DateTime(2026, 6, 15));
+      expect(f.activeCount, 1);
+    });
+  });
+
+  group('EntriesFilters — withPreset', () {
+    test('cambio a lastMonth recalcula rango', () {
+      final base = EntriesFilters.thisMonth(DateTime(2026, 6, 15));
+      final f = base.withPreset(DateRangePreset.lastMonth, DateTime(2026, 6, 15));
+      expect(f.from, DateTime(2026, 5, 1));
+      expect(f.to, DateTime(2026, 5, 31, 23, 59, 59, 999));
+    });
+
+    test('cambio a custom preserva rango previo', () {
+      final base = EntriesFilters.thisMonth(DateTime(2026, 6, 15));
+      final f = base.withPreset(DateRangePreset.custom, DateTime(2026, 6, 15));
+      expect(f.from, DateTime(2026, 6, 1));
+      expect(f.to, DateTime(2026, 6, 30, 23, 59, 59, 999));
+      expect(f.datePreset, DateRangePreset.custom);
+    });
+  });
+
+  group('EntriesFilters — serialize / parse round-trip', () {
+    test('default thisMonth → URL vacío', () {
+      final f = EntriesFilters.thisMonth(DateTime(2026, 6, 15));
+      expect(f.serialize(), isEmpty);
+    });
+
+    test('lastMonth + kinds → URL serializa preset + kinds', () {
+      final f = EntriesFilters.thisMonth(DateTime(2026, 6, 15))
+          .withPreset(DateRangePreset.lastMonth, DateTime(2026, 6, 15))
+          .copyWith(kinds: ['expense', 'credit_expense']);
+      final s = f.serialize();
+      expect(s['datePreset'], 'last_month');
+      expect(s['kinds'], 'expense,credit_expense');
+      expect(s.containsKey('from'), isFalse,
+          reason: 'preset no-custom no serializa fechas');
+    });
+
+    test('custom serializa from + to ISO 8601', () {
+      final f = EntriesFilters(
+        datePreset: DateRangePreset.custom,
+        from: DateTime(2026, 3, 5),
+        to: DateTime(2026, 4, 10, 23, 59, 59, 999),
+      );
+      final s = f.serialize();
+      expect(s['datePreset'], 'custom');
+      expect(s['from'], DateTime(2026, 3, 5).toIso8601String());
+      expect(s['to'], DateTime(2026, 4, 10, 23, 59, 59, 999).toIso8601String());
+    });
+
+    test('round-trip: serialize → parse devuelve filtros equivalentes', () {
+      final ref = DateTime(2026, 6, 15);
+      final original = EntriesFilters.thisMonth(ref)
+          .withPreset(DateRangePreset.lastMonth, ref)
+          .copyWith(
+            kinds: ['expense', 'credit_expense'],
+            accountIds: ['acc-1', 'acc-2'],
+            categoryIds: ['cat-1', 'cat-2'],
+          );
+      final s = original.serialize();
+      final parsed = EntriesFilters.parse(s, ref);
+      expect(parsed.datePreset, original.datePreset);
+      expect(parsed.from, original.from);
+      expect(parsed.to, original.to);
+      expect(parsed.kinds, original.kinds);
+      expect(parsed.accountIds, original.accountIds);
+      expect(parsed.categoryIds, original.categoryIds);
+    });
+  });
+
+  group('EntriesFilters — parse defensivo', () {
+    test('URL vacío → thisMonth default', () {
+      final ref = DateTime(2026, 6, 15);
+      final f = EntriesFilters.parse({}, ref);
+      expect(f.datePreset, DateRangePreset.thisMonth);
+    });
+
+    test('preset desconocido → fallback thisMonth', () {
+      final ref = DateTime(2026, 6, 15);
+      final f = EntriesFilters.parse({'datePreset': 'invalido'}, ref);
+      expect(f.datePreset, DateRangePreset.thisMonth);
+    });
+
+    test('custom con fechas inválidas → fallback thisMonth', () {
+      final ref = DateTime(2026, 6, 15);
+      final f = EntriesFilters.parse({
+        'datePreset': 'custom',
+        'from': 'no-es-fecha',
+        'to': 'tampoco',
+      }, ref);
+      expect(f.from, DateTime(2026, 6, 1));
+      expect(f.to, DateTime(2026, 6, 30, 23, 59, 59, 999));
+    });
+
+    test('custom con from > to → fallback thisMonth', () {
+      final ref = DateTime(2026, 6, 15);
+      final f = EntriesFilters.parse({
+        'datePreset': 'custom',
+        'from': DateTime(2026, 6, 20).toIso8601String(),
+        'to': DateTime(2026, 6, 10).toIso8601String(),
+      }, ref);
+      expect(f.from, DateTime(2026, 6, 1));
+      expect(f.to, DateTime(2026, 6, 30, 23, 59, 59, 999));
+    });
+
+    test('kinds con duplicados se deduplica', () {
+      final f = EntriesFilters.parse({
+        'kinds': 'expense,expense,credit_expense',
+      });
+      expect(f.kinds.length, 2);
+      expect(f.kinds.toSet(), {'expense', 'credit_expense'});
+    });
+
+    test('kinds inválidos se filtran', () {
+      final f = EntriesFilters.parse({
+        'kinds': 'expense,bogus,credit_expense',
+      });
+      expect(f.kinds.toSet(), {'expense', 'credit_expense'});
+    });
+
+    test('categoryIds con duplicados se deduplica', () {
+      final f = EntriesFilters.parse({
+        'categoryIds': 'cat-1,cat-1,cat-2,__null__',
+      });
+      expect(f.categoryIds.toSet(), {'cat-1', 'cat-2', '__null__'});
+    });
+  });
+}

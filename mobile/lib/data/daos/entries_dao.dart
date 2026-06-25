@@ -32,6 +32,22 @@ class EntryWithRelations {
 
 const _validKinds = {'income', 'expense', 'credit_expense', 'debt_payment', 'transfer'};
 
+/// Token especial en `categoryIds` de `EntriesDao.watchPage` que matchea
+/// entries con `category_id IS NULL` o cuyo categoryId apunta a una categoría
+/// archivada (`categories.deleted_at IS NOT NULL`). Consistente con el bucket
+/// "Sin categoría" del reporte de gasto por categoría (RN-R03/R04 del sprint
+/// `flutter-reports-v1`).
+///
+/// Introducido en el sprint `flutter-movements-filters-v1` (RF-004) para que
+/// la UI del panel de filtros y el deep link desde el reporte puedan filtrar
+/// por "Sin categoría" de forma simbólica vía un string en la lista.
+///
+/// Implementación: el `LEFT JOIN ... AND categories.deleted_at IS NULL` del
+/// `watchPage` deja `categories.id` en NULL para los dos casos cubiertos;
+/// el filtro `categoryIds.contains(kUncategorizedFilterToken)` se traduce a
+/// `WHERE categories.id IS NULL` sobre la columna del JOIN.
+const String kUncategorizedFilterToken = '__null__';
+
 @DriftAccessor(tables: [JournalEntries, Accounts, Categories])
 class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     with _$EntriesDaoMixin {
@@ -44,14 +60,37 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
 
   /// Lista paginada con filtros. Stream reactivo: drift reemite al cambiar
   /// cualquier tabla involucrada.
+  ///
+  /// - `kinds`: lista de kinds a incluir (`WHERE kind IN (...)`). Si null o
+  ///   vacía, no filtra por kind.
+  /// - `categoryIds`: lista de category ids a incluir (`WHERE category_id IN
+  ///   (...)`). Soporta el token especial [kUncategorizedFilterToken] para
+  ///   matchear NULL + categorías archivadas. Si null o vacía, no filtra por
+  ///   categoría.
+  /// - `kind` (deprecado): wrapper temporal del sprint
+  ///   `flutter-movements-filters-v1` (RF-017). Se mapea internamente a
+  ///   `kinds = [kind]` si `kinds` no fue pasado. Eliminar en sprint posterior.
   Stream<List<EntryWithRelations>> watchPage({
+    @Deprecated('Usa `kinds: [<kind>]` en su lugar. Será eliminado en sprint posterior.')
     String? kind,
+    List<String>? kinds,
+    @Deprecated('Usa `accountIds: [<id>]` en su lugar. Será eliminado en sprint posterior.')
     String? accountId,
+    List<String>? accountIds,
+    List<String>? categoryIds,
     DateTime? from,
     DateTime? to,
     int offset = 0,
     int limit = 50,
   }) {
+    // Compatibilidad temporal con los viejos params single-value.
+    final effectiveKinds = (kinds != null && kinds.isNotEmpty)
+        ? kinds
+        : (kind != null ? [kind] : null);
+    final effectiveAccountIds = (accountIds != null && accountIds.isNotEmpty)
+        ? accountIds
+        : (accountId != null ? [accountId] : null);
+
     final origin = alias(accounts, 'origin');
     final dest = alias(accounts, 'dest');
 
@@ -62,6 +101,9 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       // muestre "Sin categoría" en entries cuyo categoryId apunta a una
       // categoría con deletedAt != null. Sin este filtro, los listados del
       // Dashboard y de Movimientos siguen pintando el badge de la archivada.
+      // Bonus del sprint flutter-movements-filters-v1: este JOIN también
+      // permite que el filtro `__null__` use `categories.id.isNull()` para
+      // cubrir NULL + archivadas en una sola condición.
       leftOuterJoin(
         categories,
         categories.id.equalsExp(journalEntries.categoryId) &
@@ -70,12 +112,36 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     ])
       ..where(journalEntries.deletedAt.isNull());
 
-    if (kind != null) query.where(journalEntries.kind.equals(kind));
-    if (accountId != null) {
+    // Multi-kind via WHERE kind IN (...) — RF-002, RN-M01.
+    if (effectiveKinds != null && effectiveKinds.isNotEmpty) {
+      query.where(journalEntries.kind.isIn(effectiveKinds));
+    }
+    // Multi-cuenta via WHERE (origin IN (...) OR destination IN (...)).
+    if (effectiveAccountIds != null && effectiveAccountIds.isNotEmpty) {
       query.where(
-        journalEntries.accountOriginId.equals(accountId) |
-            journalEntries.accountDestinationId.equals(accountId),
+        journalEntries.accountOriginId.isIn(effectiveAccountIds) |
+            journalEntries.accountDestinationId.isIn(effectiveAccountIds),
       );
+    }
+    // Multi-categoría con token especial __null__ — RF-003, RN-M02/M03.
+    if (categoryIds != null && categoryIds.isNotEmpty) {
+      final hasNullToken = categoryIds.contains(kUncategorizedFilterToken);
+      final realIds = categoryIds
+          .where((id) => id != kUncategorizedFilterToken)
+          .toList(growable: false);
+      if (hasNullToken && realIds.isEmpty) {
+        // Solo "Sin categoría": NULL en journal o categoría archivada. El
+        // LEFT JOIN con filtro `deleted_at IS NULL` deja categories.id en
+        // NULL para ambos casos.
+        query.where(categories.id.isNull());
+      } else if (hasNullToken) {
+        query.where(
+          journalEntries.categoryId.isIn(realIds) |
+              categories.id.isNull(),
+        );
+      } else {
+        query.where(journalEntries.categoryId.isIn(realIds));
+      }
     }
     if (from != null) {
       query.where(journalEntries.occurredAt.isBiggerOrEqualValue(from));

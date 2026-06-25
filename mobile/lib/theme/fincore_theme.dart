@@ -4,6 +4,11 @@ import 'package:flutter/material.dart';
 /// Tema único oscuro de FinCore. Mapea la paleta `FincoreColors` (réplica de
 /// las CSS variables de la Vue web) a un `ColorScheme.dark` custom de Material 3.
 ThemeData fincoreDarkTheme() {
+  // chip color fix v2: `secondaryContainer` se usa por Material 3 como
+  // background del ChoiceChip seleccionado + base del ripple/overlay al
+  // tappear. Sin override, derivaba del `secondary` (positive verde) y se
+  // veía verde al pickear los chips de filtros. Override al accent para que
+  // el ripple/state quede consistente con el accent azul cyan.
   const colorScheme = ColorScheme.dark(
     brightness: Brightness.dark,
     primary: FincoreColors.accent,
@@ -12,6 +17,8 @@ ThemeData fincoreDarkTheme() {
     onPrimaryContainer: FincoreColors.canvas,
     secondary: FincoreColors.positive,
     onSecondary: FincoreColors.canvas,
+    secondaryContainer: FincoreColors.accent,
+    onSecondaryContainer: FincoreColors.canvas,
     tertiary: FincoreColors.warning,
     onTertiary: FincoreColors.canvas,
     error: FincoreColors.negative,

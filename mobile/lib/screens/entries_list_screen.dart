@@ -1,17 +1,33 @@
+import 'dart:async';
+
 import 'package:fincore/app_dependencies.dart';
+import 'package:fincore/constants/date_range_presets.dart';
 import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/database.dart';
+import 'package:fincore/data/entries_filters.dart';
+import 'package:fincore/screens/entries_filters_screen.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/category_badge.dart' as cb;
-import 'package:fincore/widgets/skeleton.dart';
 import 'package:fincore/models/category.dart' as model;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+/// Pantalla de movimientos con filtros avanzados (sprint
+/// `flutter-movements-filters-v1`).
+///
+/// Lee query params del router al montar para soportar deep link desde
+/// `/reports`. El default sin query params es "Este mes" calendario
+/// completo (cambio respecto al sprint anterior — RT-02 del plan).
+///
+/// Optimización del sprint patch (perf v1): cuentas y categorías se mantienen
+/// como `List<>` resueltas en state vía `StreamSubscription` directa, en vez
+/// de `StreamBuilder` anidados en `_ActiveFiltersBar` y en el panel. Esto
+/// elimina re-suscripciones en cada rebuild del padre y baja el costo
+/// percibido en el cel.
 class EntriesListScreen extends StatefulWidget {
   const EntriesListScreen({super.key});
 
@@ -20,65 +36,102 @@ class EntriesListScreen extends StatefulWidget {
 }
 
 class _EntriesListScreenState extends State<EntriesListScreen> {
+  EntriesFilters _filters = EntriesFilters.thisMonth();
   Stream<List<EntryWithRelations>>? _stream;
-  Stream<List<Account>>? _accountsStream;
-  String? _kindFilter;
-  String? _accountFilter;
+
+  // Estado resuelto de cuentas y categorías (mantenidos por subscriptions
+  // directas, sin StreamBuilder en los hijos).
+  List<Account> _accounts = const [];
+  List<Category> _categories = const [];
+  StreamSubscription<List<Account>>? _accountsSub;
+  StreamSubscription<List<Category>>? _categoriesSub;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_stream != null) return;
-    final deps = AppDependencies.of(context);
-    _stream = deps.entriesDao.watchPage(limit: 200);
-    _accountsStream = deps.accountsDao.watchActive();
+    // Lee query params del router en la primera hidratación (RF-012).
+    final route = GoRouterState.of(context);
+    final params = route.uri.queryParameters;
+    if (params.isNotEmpty) {
+      _filters = EntriesFilters.parse(params);
+    }
+    _buildStream();
+    _subscribeMeta();
   }
 
-  void _rebuildStream() {
+  void _subscribeMeta() {
     final deps = AppDependencies.of(context);
-    setState(() {
-      _stream = deps.entriesDao.watchPage(
-        kind: _kindFilter,
-        accountId: _accountFilter,
-        limit: 200,
-      );
+    _accountsSub ??= deps.accountsDao.watchActive().listen((rows) {
+      if (!mounted) return;
+      setState(() => _accounts = rows);
+    });
+    _categoriesSub ??= deps.categoriesDao.watchActive().listen((rows) {
+      if (!mounted) return;
+      setState(() => _categories = rows);
     });
   }
 
-  void _openFilters() {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: FincoreColors.canvas,
-      useSafeArea: true,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) {
-        return StreamBuilder<List<Account>>(
-          stream: _accountsStream,
-          builder: (context, snap) {
-            final accounts = snap.data ?? const <Account>[];
-            return _FiltersSheet(
-              kind: _kindFilter,
-              accountId: _accountFilter,
-              accounts: accounts,
-              onApply: (kind, accountId) {
-                _kindFilter = kind;
-                _accountFilter = accountId;
-                Navigator.of(context).pop();
-                _rebuildStream();
-              },
-            );
-          },
-        );
-      },
+  void _buildStream() {
+    final deps = AppDependencies.of(context);
+    _stream = deps.entriesDao.watchPage(
+      kinds: _filters.kinds.isEmpty ? null : _filters.kinds,
+      categoryIds: _filters.categoryIds.isEmpty ? null : _filters.categoryIds,
+      accountIds: _filters.accountIds.isEmpty ? null : _filters.accountIds,
+      from: _filters.from,
+      to: _filters.to,
+      limit: 200,
     );
+  }
+
+  void _rebuildStream() {
+    setState(_buildStream);
+  }
+
+  @override
+  void dispose() {
+    _accountsSub?.cancel();
+    _categoriesSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _openFilters() async {
+    final result = await Navigator.of(context).push<EntriesFilters>(
+      MaterialPageRoute(
+        builder: (_) => EntriesFiltersScreen(
+          initial: _filters,
+          accounts: _accounts,
+          categories: _categories,
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+    if (result == null) return;
+    _filters = result;
+    _rebuildStream();
+  }
+
+  void _removeDimension(_FilterDimension dim) {
+    switch (dim) {
+      case _FilterDimension.date:
+        _filters = _filters.withPreset(DateRangePreset.thisMonth);
+        break;
+      case _FilterDimension.kinds:
+        _filters = _filters.copyWith(kinds: const []);
+        break;
+      case _FilterDimension.accounts:
+        _filters = _filters.copyWith(accountIds: const []);
+        break;
+      case _FilterDimension.categories:
+        _filters = _filters.copyWith(categoryIds: const []);
+        break;
+    }
+    _rebuildStream();
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasFilters = _kindFilter != null || _accountFilter != null;
+    final activeCount = _filters.activeCount;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Movimientos'),
@@ -88,20 +141,31 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: hasFilters ? 'Filtros (activos)' : 'Filtros',
+            tooltip: activeCount > 0 ? 'Filtros ($activeCount)' : 'Filtros',
             icon: Stack(
+              clipBehavior: Clip.none,
               children: [
-                const Icon(Icons.filter_list),
-                if (hasFilters)
+                const Icon(Icons.tune),
+                if (activeCount > 0)
                   Positioned(
-                    right: 0,
-                    top: 0,
+                    right: -6,
+                    top: -4,
                     child: Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
                         color: FincoreColors.accent,
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      constraints: const BoxConstraints(minWidth: 16),
+                      child: Text(
+                        '$activeCount',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: FincoreColors.canvas,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
@@ -118,34 +182,195 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
         foregroundColor: FincoreColors.canvas,
         child: const Icon(Icons.add),
       ),
-      body: StreamBuilder<List<EntryWithRelations>>(
-        stream: _stream,
-        builder: (context, snap) {
-          if (!snap.hasData) {
-            return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-              itemCount: 5,
-              separatorBuilder: (_, __) => const SizedBox(height: 8),
-              itemBuilder: (_, __) => const SkeletonCard(),
-            );
-          }
-          final entries = snap.data!;
-          if (entries.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text('No hay movimientos.',
-                    style: TextStyle(color: FincoreColors.textMuted)),
+      body: Column(
+        children: [
+          if (activeCount > 0)
+            _ActiveFiltersBar(
+              filters: _filters,
+              accounts: _accounts,
+              categories: _categories,
+              onRemove: _removeDimension,
+            ),
+          Expanded(
+            child: StreamBuilder<List<EntryWithRelations>>(
+              stream: _stream,
+              builder: (context, snap) {
+                // Loading state estático (perf v1): SkeletonCard tiene
+                // AnimationController.repeat() perpetuo que come ~60fps de
+                // CPU con 5 instancias × 4 controllers cada una = 20
+                // animations. Reemplazamos por un SizedBox vacío para que
+                // se vea limpio mientras drift emite el primer evento.
+                if (!snap.hasData) {
+                  return const SizedBox.shrink();
+                }
+                final entries = snap.data!;
+                if (entries.isEmpty) {
+                  return _EmptyState(hasFilters: activeCount > 0);
+                }
+                return ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+                  itemCount: entries.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) => _Row(item: entries[i]),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _FilterDimension { date, kinds, accounts, categories }
+
+class _ActiveFiltersBar extends StatelessWidget {
+  final EntriesFilters filters;
+  final List<Account> accounts;
+  final List<Category> categories;
+  final void Function(_FilterDimension) onRemove;
+
+  const _ActiveFiltersBar({
+    required this.filters,
+    required this.accounts,
+    required this.categories,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final dateFormat = DateFormat('d MMM', 'es_MX');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: FincoreColors.border, width: 1),
+        ),
+      ),
+      child: SizedBox(
+        height: 36,
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          children: [
+            if (filters.datePreset != DateRangePreset.thisMonth)
+              _ActiveChip(
+                label:
+                    '${dateFormat.format(filters.from)} – ${dateFormat.format(filters.to)}',
+                onRemove: () => onRemove(_FilterDimension.date),
               ),
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
-            itemCount: entries.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (_, i) => _Row(item: entries[i]),
-          );
-        },
+            if (filters.kinds.isNotEmpty)
+              _ActiveChip(
+                label: _kindsLabel(filters.kinds),
+                onRemove: () => onRemove(_FilterDimension.kinds),
+              ),
+            if (filters.accountIds.isNotEmpty)
+              _ActiveChip(
+                label: _accountsLabel(filters.accountIds),
+                onRemove: () => onRemove(_FilterDimension.accounts),
+              ),
+            if (filters.categoryIds.isNotEmpty)
+              _ActiveChip(
+                label: _categoriesLabel(filters.categoryIds),
+                onRemove: () => onRemove(_FilterDimension.categories),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _kindsLabel(List<String> kinds) {
+    if (kinds.length == 1) {
+      return parseJournalKind(kinds.first).label;
+    }
+    return '${kinds.length} tipos';
+  }
+
+  String _accountsLabel(List<String> ids) {
+    if (ids.length == 1) {
+      for (final a in accounts) {
+        if (a.id == ids.first) return a.name;
+      }
+      return 'Cuenta';
+    }
+    return '${ids.length} cuentas';
+  }
+
+  String _categoriesLabel(List<String> ids) {
+    if (ids.length == 1) {
+      if (ids.first == kUncategorizedFilterToken) return 'Sin categoría';
+      for (final c in categories) {
+        if (c.id == ids.first) return c.name;
+      }
+      return 'Categoría';
+    }
+    return '${ids.length} categorías';
+  }
+}
+
+class _ActiveChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onRemove;
+
+  const _ActiveChip({required this.label, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: FincoreColors.accent.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: FincoreColors.accent),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: FincoreColors.accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 6),
+            InkWell(
+              onTap: onRemove,
+              borderRadius: BorderRadius.circular(10),
+              child: const Padding(
+                padding: EdgeInsets.all(2),
+                child: Icon(Icons.close, size: 14, color: FincoreColors.accent),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final bool hasFilters;
+  const _EmptyState({required this.hasFilters});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          hasFilters
+              ? 'No hay movimientos con esos filtros.\nProbá ajustarlos.'
+              : 'No hay movimientos.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: FincoreColors.textMuted),
+        ),
       ),
     );
   }
@@ -241,154 +466,4 @@ class _Row extends StatelessWidget {
         JournalKind.expense || JournalKind.creditExpense => '-${formatAmount(amount)}',
         JournalKind.debtPayment || JournalKind.transfer => formatAmount(amount),
       };
-}
-
-class _FiltersSheet extends StatefulWidget {
-  final String? kind;
-  final String? accountId;
-  final List<Account> accounts;
-  final void Function(String? kind, String? accountId) onApply;
-
-  const _FiltersSheet({
-    required this.kind,
-    required this.accountId,
-    required this.accounts,
-    required this.onApply,
-  });
-
-  @override
-  State<_FiltersSheet> createState() => _FiltersSheetState();
-}
-
-class _FiltersSheetState extends State<_FiltersSheet> {
-  late String? _kind = widget.kind;
-  late String? _accountId = widget.accountId;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasFilters = _kind != null || _accountId != null;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text('Filtros',
-                        style: TextStyle(
-                            color: FincoreColors.textPrimary,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600)),
-                  ),
-                  // Reserva siempre el alto del botón para que el header
-                  // no cambie de tamaño al aparecer/desaparecer "Limpiar".
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 150),
-                    opacity: hasFilters ? 1 : 0,
-                    child: IgnorePointer(
-                      ignoring: !hasFilters,
-                      child: TextButton.icon(
-                        onPressed: () => setState(() {
-                          _kind = null;
-                          _accountId = null;
-                        }),
-                        icon: const Icon(Icons.refresh, size: 16),
-                        label: const Text('Limpiar'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: FincoreColors.textMuted,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              const Text('Tipo', style: TextStyle(color: FincoreColors.textMuted, fontSize: 13)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _Chip(label: 'Todos', selected: _kind == null, onTap: () => setState(() => _kind = null)),
-                  ...JournalKind.values.map((k) => _Chip(
-                        label: k.label,
-                        selected: _kind == k.apiValue,
-                        onTap: () => setState(() => _kind = k.apiValue),
-                      )),
-                ],
-              ),
-              const SizedBox(height: 28),
-              DropdownButtonFormField<String?>(
-                value: _accountId,
-                isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Cuenta'),
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('Todas')),
-                  ...widget.accounts.map((a) => DropdownMenuItem<String?>(
-                        value: a.id,
-                        child: Text(a.name),
-                      )),
-                ],
-                onChanged: (v) => setState(() => _accountId = v),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancelar'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () => widget.onApply(_kind, _accountId),
-                      child: const Text('Aplicar'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Chip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  const _Chip({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected ? FincoreColors.accent.withValues(alpha: 0.2) : FincoreColors.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? FincoreColors.accent : FincoreColors.border),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-              color: selected ? FincoreColors.accent : FincoreColors.textMuted,
-              fontSize: 13,
-              fontWeight: FontWeight.w500),
-        ),
-      ),
-    );
-  }
 }

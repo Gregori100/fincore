@@ -1,12 +1,16 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/constants/category_catalog.dart';
+import 'package:fincore/constants/date_range_presets.dart';
+import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/reports.dart';
-import 'package:fincore/screens/reports/range_presets.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
+import 'package:fincore/widgets/date_field_outlined.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 /// Tab "Gasto por categoría" del reporte. Header con chips de presets
@@ -24,19 +28,19 @@ class SpendingByCategoryTab extends StatefulWidget {
 class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
   late DateTime _from;
   late DateTime _to;
-  ReportRangePreset _preset = ReportRangePreset.thisMonth;
+  DateRangePreset _preset = DateRangePreset.thisMonth;
   Stream<SpendingReport>? _reportStream;
 
   @override
   void initState() {
     super.initState();
-    final r = reportRangeForPreset(ReportRangePreset.thisMonth, DateTime.now());
+    final r = dateRangeForPreset(DateRangePreset.thisMonth, DateTime.now());
     _from = r.$1;
     _to = r.$2;
   }
 
-  void _selectPreset(ReportRangePreset preset) {
-    final r = reportRangeForPreset(
+  void _selectPreset(DateRangePreset preset) {
+    final r = dateRangeForPreset(
       preset,
       DateTime.now(),
       currentFrom: _from,
@@ -120,7 +124,7 @@ class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('d MMM y', 'es_MX');
-    final isCustom = _preset == ReportRangePreset.custom;
+    final isCustom = _preset == DateRangePreset.custom;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       children: [
@@ -130,7 +134,7 @@ class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final p in ReportRangePreset.values)
+            for (final p in DateRangePreset.values)
               ChoiceChip(
                 label: Text(p.label),
                 selected: _preset == p,
@@ -171,7 +175,7 @@ class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
           Row(
             children: [
               Expanded(
-                child: _DateFieldOutlined(
+                child: DateFieldOutlined(
                   label: 'Desde',
                   value: _from,
                   format: dateFormat,
@@ -180,7 +184,7 @@ class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: _DateFieldOutlined(
+                child: DateFieldOutlined(
                   label: 'Hasta',
                   value: _to,
                   format: dateFormat,
@@ -230,6 +234,8 @@ class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
                   _SpendingBucketRow(
                     bucket: report.buckets[i],
                     maxTotal: report.buckets.first.total,
+                    from: report.from,
+                    to: report.to,
                   ),
                 ],
               ],
@@ -296,11 +302,32 @@ class _TotalCard extends StatelessWidget {
 class _SpendingBucketRow extends StatelessWidget {
   final SpendingBucket bucket;
   final double maxTotal;
+  final DateTime from;
+  final DateTime to;
 
   const _SpendingBucketRow({
     required this.bucket,
     required this.maxTotal,
+    required this.from,
+    required this.to,
   });
+
+  /// Construye el deep link a `/entries` con el filtro equivalente al bucket
+  /// (sprint flutter-movements-filters-v1, RF-016 + RN-M08): mismo rango +
+  /// tipo "Gastos" (expense + credit_expense) + categoría (o token
+  /// "Sin categoría" si el bucket es el especial).
+  String _buildDeepLink() {
+    final categoryToken = bucket.categoryId ?? kUncategorizedFilterToken;
+    final filters = EntriesFilters(
+      datePreset: DateRangePreset.custom,
+      from: from,
+      to: to,
+      kinds: const ['expense', 'credit_expense'],
+      categoryIds: [categoryToken],
+    );
+    final params = filters.serialize();
+    return Uri(path: '/entries', queryParameters: params).toString();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -312,6 +339,7 @@ class _SpendingBucketRow extends StatelessWidget {
     final widthFactor = maxTotal > 0 ? (bucket.total / maxTotal).clamp(0.0, 1.0) : 0.0;
     final percentLabel = '${(bucket.percent * 100).toStringAsFixed(0)}%';
     return BaseCard(
+      onTap: () => context.push(_buildDeepLink()),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -503,47 +531,3 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-/// Campo tappeable estilo Material 3 outlined input que muestra una fecha
-/// y abre un DatePicker al tap. Reemplaza al pill original cuando el
-/// usuario elige `ReportRangePreset.custom`.
-class _DateFieldOutlined extends StatelessWidget {
-  final String label;
-  final DateTime value;
-  final DateFormat format;
-  final VoidCallback onTap;
-
-  const _DateFieldOutlined({
-    required this.label,
-    required this.value,
-    required this.format,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          suffixIcon: const Icon(
-            Icons.calendar_today,
-            size: 18,
-            color: FincoreColors.textSubtle,
-          ),
-        ),
-        child: Text(
-          format.format(value),
-          style: const TextStyle(
-            color: FincoreColors.textPrimary,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-}
