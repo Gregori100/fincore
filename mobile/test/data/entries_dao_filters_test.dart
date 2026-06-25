@@ -324,15 +324,79 @@ void main() {
       }
     });
 
-    test('compatibilidad: kind: String (deprecado) sigue funcionando', () async {
-      // ignore: deprecated_member_use_from_same_package
-      final entries = await entriesDao.watchPage(
-        // ignore: deprecated_member_use_from_same_package
-        kind: 'income',
+  });
+
+  group('watchPage — paginación (sprint flutter-movements-pagination-v1)', () {
+    /// Genera N entries expense con fechas decrecientes para que `occurred_at
+    /// DESC` los ordene predeciblemente.
+    Future<void> seedNExpenses(int n) async {
+      for (var i = 0; i < n; i++) {
+        await entriesDao.registerExpense(
+          accountOriginId: bolsa,
+          amount: 10.0 + i,
+          occurredAt: DateTime(2025, 1, 1).add(Duration(minutes: n - i)),
+          description: 'pag_$i',
+        );
+      }
+    }
+
+    test('UT-01: 150 entries + limit=100 retorna exactamente 100', () async {
+      await seedNExpenses(150);
+      final entries = await entriesDao
+          .watchPage(
+        kinds: ['expense'],
         limit: 100,
-      ).first;
-      expect(entries, hasLength(1));
-      expect(entries.first.entry.kind, 'income');
+        from: DateTime(2025, 1, 1),
+        to: DateTime(2025, 1, 2),
+      )
+          .first;
+      expect(entries, hasLength(100));
+    });
+
+    test('UT-02: 50 entries + limit=100 retorna 50 (menos que limit)',
+        () async {
+      await seedNExpenses(50);
+      final entries = await entriesDao
+          .watchPage(
+        kinds: ['expense'],
+        limit: 100,
+        from: DateTime(2025, 1, 1),
+        to: DateTime(2025, 1, 2),
+      )
+          .first;
+      expect(entries, hasLength(50));
+    });
+
+    test(
+        'UT-03: páginas con offset=0/limit=100 y offset=100/limit=100 no se solapan',
+        () async {
+      await seedNExpenses(150);
+      final page1 = await entriesDao
+          .watchPage(
+            kinds: ['expense'],
+            limit: 100,
+            offset: 0,
+            from: DateTime(2025, 1, 1),
+            to: DateTime(2025, 1, 2),
+          )
+          .first;
+      final page2 = await entriesDao
+          .watchPage(
+            kinds: ['expense'],
+            limit: 100,
+            offset: 100,
+            from: DateTime(2025, 1, 1),
+            to: DateTime(2025, 1, 2),
+          )
+          .first;
+      expect(page1, hasLength(100));
+      expect(page2, hasLength(50));
+      final ids1 = page1.map((e) => e.entry.id).toSet();
+      final ids2 = page2.map((e) => e.entry.id).toSet();
+      expect(ids1.intersection(ids2), isEmpty,
+          reason: 'Las dos páginas no deben compartir entries');
+      expect(ids1.union(ids2), hasLength(150),
+          reason: 'Juntas deben cubrir los 150 entries');
     });
   });
 }

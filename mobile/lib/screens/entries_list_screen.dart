@@ -46,11 +46,26 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
   StreamSubscription<List<Account>>? _accountsSub;
   StreamSubscription<List<Category>>? _categoriesSub;
 
+  // Sprint flutter-movements-pagination-v1: scroll infinito acumulativo.
+  // `_currentLimit` crece +100 en cada `_loadMore` y `offset` queda en 0
+  // por construcción — drift re-emite la lista completa al nuevo limit,
+  // manteniendo reactividad sin riesgo de duplicados.
+  int _currentLimit = _kPageSize;
+  bool _reachedEnd = false;
+  bool _loadingMore = false;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_stream != null) return;
-    // Lee query params del router en la primera hidratación (RF-012).
+    // Lee query params del router en la primera hidratación.
     final route = GoRouterState.of(context);
     final params = route.uri.queryParameters;
     if (params.isNotEmpty) {
@@ -80,12 +95,39 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
       accountIds: _filters.accountIds.isEmpty ? null : _filters.accountIds,
       from: _filters.from,
       to: _filters.to,
-      limit: _kEntriesLimit,
+      limit: _currentLimit,
     );
+  }
+
+  /// Resetea los flags de paginación. Llamar como prefijo de `_buildStream`
+  /// cuando cambia el filtro (panel "Aplicar", chip "X", "Limpiar todo").
+  void _resetPagination() {
+    _currentLimit = _kPageSize;
+    _reachedEnd = false;
+    _loadingMore = false;
+  }
+
+  void _onScroll() {
+    if (_reachedEnd || _loadingMore) return;
+    if (!_scrollController.hasClients) return;
+    final pos = _scrollController.position;
+    if (pos.pixels >= pos.maxScrollExtent - _kScrollLoadMoreThreshold) {
+      _loadMore();
+    }
+  }
+
+  void _loadMore() {
+    setState(() {
+      _currentLimit += _kPageSize;
+      _loadingMore = true;
+      _buildStream();
+    });
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _accountsSub?.cancel();
     _categoriesSub?.cancel();
     super.dispose();
@@ -103,19 +145,19 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
       ),
     );
     if (result == null) return;
-    // M4 del quality review v1: mutación dentro de setState para cerrar la
-    // ventana de inconsistencia entre `_filters` y `_stream`.
+    // Mutación dentro de setState para cerrar la ventana de inconsistencia
+    // entre `_filters` y `_stream` (M4 del quality review v1).
     setState(() {
       _filters = result;
+      _resetPagination();
       _buildStream();
     });
   }
 
   void _removeDimension(FilterDimension dim) {
-    // M4 + M7 del quality review v1: usa el enum público + extension de
-    // `EntriesFilters` y muta dentro de setState.
     setState(() {
       _filters = _filters.clearDimension(dim);
+      _resetPagination();
       _buildStream();
     });
   }
@@ -123,7 +165,28 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
   void _clearAllFilters() {
     setState(() {
       _filters = EntriesFilters.thisMonth();
+      _resetPagination();
       _buildStream();
+    });
+  }
+
+  /// Reacciona al snapshot del Stream para mantener los flags de paginación
+  /// coherentes con el contenido emitido. Programado vía postFrameCallback
+  /// para no llamar setState desde el build.
+  void _onSnapshotReceived(int receivedCount) {
+    final shouldMarkEnd = receivedCount < _currentLimit && !_reachedEnd;
+    final shouldClearLoading = receivedCount >= _currentLimit && _loadingMore;
+    if (!shouldMarkEnd && !shouldClearLoading) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        if (shouldMarkEnd) {
+          _reachedEnd = true;
+          _loadingMore = false;
+        } else if (shouldClearLoading) {
+          _loadingMore = false;
+        }
+      });
     });
   }
 
@@ -193,22 +256,25 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
             child: StreamBuilder<List<EntryWithRelations>>(
               stream: _stream,
               builder: (context, snap) {
-                // Loading state estático (perf v1): SkeletonCard tiene
-                // AnimationController.repeat() perpetuo que come ~60fps de
-                // CPU con 5 instancias × 4 controllers cada una = 20
-                // animations. Reemplazamos por un SizedBox vacío para que
-                // se vea limpio mientras drift emite el primer evento.
+                // Loading state estático (perf v1).
                 if (!snap.hasData) {
                   return const SizedBox.shrink();
                 }
                 final entries = snap.data!;
+                // Reconciliar flags de paginación con el snapshot recibido.
+                _onSnapshotReceived(entries.length);
                 if (entries.isEmpty) {
                   return _EmptyState(
                     hasFilters: activeCount > 0,
                     onClearFilters: _clearAllFilters,
                   );
                 }
-                return _EntriesList(entries: entries);
+                return _EntriesList(
+                  entries: entries,
+                  controller: _scrollController,
+                  loadingMore: _loadingMore,
+                  reachedEnd: _reachedEnd,
+                );
               },
             ),
           ),
@@ -404,25 +470,37 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// Lista de movimientos con indicador de truncamiento (M11 del quality
-/// review v1): si el stream emitió exactamente `_kEntriesLimit` entries, hay
-/// chance de que existan más fuera del rango cargado. Footer informativo
-/// para que Diego sepa que puede ajustar filtros para ver más recientes.
+/// Lista de movimientos con scroll infinito (sprint
+/// flutter-movements-pagination-v1). Si `loadingMore` o `reachedEnd`, agrega
+/// un item final con `_PaginationFooter` que comunica el estado.
 class _EntriesList extends StatelessWidget {
   final List<EntryWithRelations> entries;
-  const _EntriesList({required this.entries});
+  final ScrollController controller;
+  final bool loadingMore;
+  final bool reachedEnd;
+
+  const _EntriesList({
+    required this.entries,
+    required this.controller,
+    required this.loadingMore,
+    required this.reachedEnd,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final reachedLimit = entries.length >= _kEntriesLimit;
-    final itemCount = entries.length + (reachedLimit ? 1 : 0);
+    final hasFooter = loadingMore || reachedEnd;
+    final itemCount = entries.length + (hasFooter ? 1 : 0);
     return ListView.separated(
+      controller: controller,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
       itemCount: itemCount,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
-        if (reachedLimit && i == entries.length) {
-          return const _TruncatedFooter();
+        if (hasFooter && i == entries.length) {
+          return _PaginationFooter(
+            loadingMore: loadingMore,
+            reachedEnd: reachedEnd,
+          );
         }
         return _Row(item: entries[i]);
       },
@@ -430,26 +508,44 @@ class _EntriesList extends StatelessWidget {
   }
 }
 
-class _TruncatedFooter extends StatelessWidget {
-  const _TruncatedFooter();
+/// Footer condicional del scroll infinito:
+/// - `loadingMore` → "Cargando…" sin animación.
+/// - `reachedEnd` → "Fin de los movimientos del rango.".
+/// Los dos flags son mutuamente excluyentes; `loadingMore` tiene precedencia
+/// si por race se solapan momentáneamente.
+class _PaginationFooter extends StatelessWidget {
+  final bool loadingMore;
+  final bool reachedEnd;
+
+  const _PaginationFooter({
+    required this.loadingMore,
+    required this.reachedEnd,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 12),
-      child: Text(
-        'Mostrando los 200 más recientes.\nAjustá filtros para acotar.',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: FincoreColors.textSubtle,
-          fontSize: 12,
+    final text = loadingMore ? 'Cargando…' : 'Fin de los movimientos del rango.';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: FincoreColors.textSubtle,
+            fontSize: 12,
+          ),
         ),
       ),
     );
   }
 }
 
-const int _kEntriesLimit = 200;
+/// Tamaño de página: cada `_loadMore` aumenta `_currentLimit` en este valor.
+const int _kPageSize = 100;
+
+/// Threshold en píxeles desde el final del scroll donde se dispara
+/// `_loadMore` automáticamente.
+const double _kScrollLoadMoreThreshold = 300;
 
 class _Row extends StatelessWidget {
   final EntryWithRelations item;

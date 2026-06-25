@@ -58,19 +58,14 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
   ///
   /// - `kinds`: lista de kinds a incluir (`WHERE kind IN (...)`). Si null o
   ///   vacía, no filtra por kind.
+  /// - `accountIds`: lista de cuentas a incluir (`WHERE origin IN (...) OR
+  ///   destination IN (...)`). Si null o vacía, no filtra por cuenta.
   /// - `categoryIds`: lista de category ids a incluir (`WHERE category_id IN
   ///   (...)`). Soporta el token especial [kUncategorizedFilterToken] para
   ///   matchear NULL + categorías archivadas. Si null o vacía, no filtra por
   ///   categoría.
-  /// - `kind` (deprecado): wrapper temporal del sprint
-  ///   `flutter-movements-filters-v1` (RF-017). Se mapea internamente a
-  ///   `kinds = [kind]` si `kinds` no fue pasado. Eliminar en sprint posterior.
   Stream<List<EntryWithRelations>> watchPage({
-    @Deprecated('Usa `kinds: [<kind>]` en su lugar. Será eliminado en sprint posterior.')
-    String? kind,
     List<String>? kinds,
-    @Deprecated('Usa `accountIds: [<id>]` en su lugar. Será eliminado en sprint posterior.')
-    String? accountId,
     List<String>? accountIds,
     List<String>? categoryIds,
     DateTime? from,
@@ -78,13 +73,9 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     int offset = 0,
     int limit = 50,
   }) {
-    // Compatibilidad temporal con los viejos params single-value.
-    final effectiveKinds = (kinds != null && kinds.isNotEmpty)
-        ? kinds
-        : (kind != null ? [kind] : null);
-    final effectiveAccountIds = (accountIds != null && accountIds.isNotEmpty)
-        ? accountIds
-        : (accountId != null ? [accountId] : null);
+    final effectiveKinds = (kinds != null && kinds.isNotEmpty) ? kinds : null;
+    final effectiveAccountIds =
+        (accountIds != null && accountIds.isNotEmpty) ? accountIds : null;
 
     final origin = alias(accounts, 'origin');
     final dest = alias(accounts, 'dest');

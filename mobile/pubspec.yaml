@@ -39,7 +39,13 @@ publish_to: 'none'
 # splash 22, indicador "mostrando 200 más recientes" cuando se alcanza
 # el limit, botón "Limpiar filtros" en estado vacío con filtros activos.
 # +2 tests del transfer single-account (M14). 215/215 verdes.
-version: 0.5.4+51
+# 0.6.0+52: sprint flutter-movements-pagination-v1 — scroll infinito en
+# /entries con _currentLimit creciente (default 100, +100 por carga
+# automática a 300px del final), footer "Cargando…" / "Fin de los
+# movimientos del rango", reset al cambiar filtros. Eliminados
+# kind/accountId deprecados del DAO. Eliminado _TruncatedFooter viejo.
+# +3 tests data del DAO (offset/limit). 217/217 verdes.
+version: 0.6.0+52
 
 environment:
   sdk: ^3.7.2
