@@ -8,6 +8,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/date_field_outlined.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 /// Panel full-screen de filtros de movimientos (sprint
@@ -40,11 +41,26 @@ class EntriesFiltersScreen extends StatefulWidget {
 
 class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
   late EntriesFilters _editing;
+  late final TextEditingController _minAmountCtrl;
+  late final TextEditingController _maxAmountCtrl;
 
   @override
   void initState() {
     super.initState();
     _editing = widget.initial;
+    _minAmountCtrl = TextEditingController(
+      text: widget.initial.minAmount?.toString() ?? '',
+    );
+    _maxAmountCtrl = TextEditingController(
+      text: widget.initial.maxAmount?.toString() ?? '',
+    );
+  }
+
+  @override
+  void dispose() {
+    _minAmountCtrl.dispose();
+    _maxAmountCtrl.dispose();
+    super.dispose();
   }
 
   void _selectDatePreset(DateRangePreset preset) {
@@ -134,11 +150,36 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
   void _clearAll() {
     setState(() {
       _editing = EntriesFilters.thisMonth();
+      _minAmountCtrl.text = '';
+      _maxAmountCtrl.text = '';
     });
   }
 
+  /// Parsea ambos controllers, valida `min <= max` cuando ambos están
+  /// presentes (RN-A05), y emite el resultado al caller. Si la validación
+  /// falla, muestra snackbar warning y NO emite — el panel queda abierto
+  /// para que Diego corrija (mismo patrón del date picker custom).
   void _apply() {
-    Navigator.of(context).pop<EntriesFilters>(_editing);
+    final minText = _minAmountCtrl.text.trim();
+    final maxText = _maxAmountCtrl.text.trim();
+    final min = minText.isEmpty ? null : double.tryParse(minText);
+    final max = maxText.isEmpty ? null : double.tryParse(maxText);
+
+    if (min != null && max != null && min > max) {
+      showWarningSnackbar(
+        context,
+        'El rango de monto no es válido. Revisá los montos.',
+      );
+      return;
+    }
+
+    final withAmount = _editing.copyWith(
+      minAmount: min,
+      maxAmount: max,
+      clearMinAmount: minText.isEmpty,
+      clearMaxAmount: maxText.isEmpty,
+    );
+    Navigator.of(context).pop<EntriesFilters>(withAmount);
   }
 
   void _cancel() {
@@ -246,6 +287,47 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
                   selected: _editing.accountIds.contains(a.id),
                   onTap: () => _toggleAccount(a.id),
                 ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ===========================================================
+          // Sección Monto (sprint flutter-movements-amount-filter-v1)
+          // ===========================================================
+          const _SectionTitle('Monto'),
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _minAmountCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Mínimo',
+                    prefixText: r'$ ',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _maxAmountCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Máximo',
+                    prefixText: r'$ ',
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 24),

@@ -4,6 +4,7 @@ import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -65,10 +66,25 @@ class EntriesActiveFiltersBar extends StatelessWidget {
                 label: _categoriesLabel(filters.categoryIds),
                 onRemove: () => onRemove(FilterDimension.categories),
               ),
+            if (filters.minAmount != null || filters.maxAmount != null)
+              _ActiveChip(
+                label: _amountLabel(filters.minAmount, filters.maxAmount),
+                onRemove: () => onRemove(FilterDimension.amount),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  String _amountLabel(double? min, double? max) {
+    if (min != null && max != null) {
+      return '${formatAmount(min)} – ${formatAmount(max)}';
+    }
+    if (min != null) {
+      return '≥ ${formatAmount(min)}';
+    }
+    return '≤ ${formatAmount(max!)}';
   }
 
   String _kindsLabel(List<String> kinds) {

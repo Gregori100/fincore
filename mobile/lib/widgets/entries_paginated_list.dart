@@ -83,6 +83,8 @@ class _EntriesPaginatedListState extends State<EntriesPaginatedList> {
     if (!_listEquals(a.kinds, b.kinds)) return true;
     if (!_listEquals(a.accountIds, b.accountIds)) return true;
     if (!_listEquals(a.categoryIds, b.categoryIds)) return true;
+    if (a.minAmount != b.minAmount) return true;
+    if (a.maxAmount != b.maxAmount) return true;
     return false;
   }
 
@@ -105,6 +107,8 @@ class _EntriesPaginatedListState extends State<EntriesPaginatedList> {
           widget.filters.accountIds.isEmpty ? null : widget.filters.accountIds,
       from: widget.filters.from,
       to: widget.filters.to,
+      minAmount: widget.filters.minAmount,
+      maxAmount: widget.filters.maxAmount,
       limit: _currentLimit,
     );
   }

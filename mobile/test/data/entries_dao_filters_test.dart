@@ -399,4 +399,93 @@ void main() {
           reason: 'Juntas deben cubrir los 150 entries');
     });
   });
+
+  // ===========================================================================
+  // watchPage — amount (RN-A01..A08) — sprint
+  // `flutter-movements-amount-filter-v1`
+  // ===========================================================================
+  //
+  // El seed `seedEntries()` arriba siembra entries con montos:
+  //   5000 (income), 200, 150, 300, 100, 800 (credit_expense), 500 (transfer)
+  // Rango temporal del filtro: junio 2026.
+  group('watchPage — amount (RN-A01..A08)', () {
+    final from = DateTime(2026, 6, 1);
+    final to = DateTime(2026, 6, 30, 23, 59, 59);
+
+    test('UT-01: solo minAmount = 300 → entries con amount >= 300', () async {
+      final results = await entriesDao
+          .watchPage(from: from, to: to, minAmount: 300)
+          .first;
+      final amounts = results.map((e) => e.entry.amount).toList();
+      // Esperados: 5000, 800, 500 (transfer), 300.
+      expect(amounts, containsAll([5000.0, 800.0, 500.0, 300.0]));
+      expect(amounts.every((a) => a >= 300), isTrue,
+          reason: 'Todos los entries deben tener amount >= 300');
+      expect(amounts.contains(200.0), isFalse);
+      expect(amounts.contains(150.0), isFalse);
+      expect(amounts.contains(100.0), isFalse);
+    });
+
+    test('UT-02: solo maxAmount = 200 → entries con amount <= 200', () async {
+      final results = await entriesDao
+          .watchPage(from: from, to: to, maxAmount: 200)
+          .first;
+      final amounts = results.map((e) => e.entry.amount).toList();
+      // Esperados: 200, 150, 100.
+      expect(amounts, containsAll([200.0, 150.0, 100.0]));
+      expect(amounts.every((a) => a <= 200), isTrue,
+          reason: 'Todos los entries deben tener amount <= 200');
+      expect(amounts.contains(5000.0), isFalse);
+      expect(amounts.contains(800.0), isFalse);
+    });
+
+    test('UT-03: rango min=150 max=500 → entries en [150, 500]', () async {
+      final results = await entriesDao
+          .watchPage(from: from, to: to, minAmount: 150, maxAmount: 500)
+          .first;
+      final amounts = results.map((e) => e.entry.amount).toList();
+      // Esperados: 500 (transfer), 300, 200, 150.
+      expect(amounts, containsAll([500.0, 300.0, 200.0, 150.0]));
+      expect(amounts.every((a) => a >= 150 && a <= 500), isTrue);
+      expect(amounts.contains(100.0), isFalse);
+      expect(amounts.contains(800.0), isFalse);
+      expect(amounts.contains(5000.0), isFalse);
+    });
+
+    test('UT-04: min == max == 200 → solo entries con amount == 200',
+        () async {
+      final results = await entriesDao
+          .watchPage(from: from, to: to, minAmount: 200, maxAmount: 200)
+          .first;
+      final amounts = results.map((e) => e.entry.amount).toList();
+      expect(amounts, [200.0]);
+    });
+
+    test('UT-05: combinado con kinds = ["expense"] + monto → AND', () async {
+      final results = await entriesDao
+          .watchPage(
+            from: from,
+            to: to,
+            kinds: const ['expense'],
+            minAmount: 150,
+            maxAmount: 250,
+          )
+          .first;
+      final amounts = results.map((e) => e.entry.amount).toList();
+      // Esperados: solo expense en [150, 250] → 200 (Comida) y 150 (Transporte).
+      expect(amounts, containsAll([200.0, 150.0]));
+      expect(amounts.length, 2);
+    });
+
+    test(
+        'UT-06: regresión sin filtro de monto → todos los entries activos',
+        () async {
+      final results = await entriesDao
+          .watchPage(from: from, to: to)
+          .first;
+      // Sin filtro de monto: 7 entries sembrados (income + 4 expense +
+      // credit_expense + transfer). debt_payment no se sembró.
+      expect(results.length, 7);
+    });
+  });
 }

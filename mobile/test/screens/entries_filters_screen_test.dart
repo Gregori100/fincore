@@ -75,7 +75,14 @@ void main() {
       expect(find.text('Gasto a tarjeta'), findsOneWidget);
       expect(find.text('Pago de tarjeta'), findsOneWidget);
       expect(find.text('Transferencia'), findsOneWidget);
-      // Chip "Sin categoría" presente.
+      // Chip "Sin categoría" presente (tras `flutter-movements-amount-filter-v1`
+      // la sección "Monto" empuja "Categorías" fuera del viewport inicial,
+      // así que scrolleamos antes del expect).
+      await tester.scrollUntilVisible(
+        find.text('Sin categoría'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.text('Sin categoría'), findsOneWidget);
 
       await harness.dispose();
@@ -231,6 +238,96 @@ void main() {
       expect(find.byIcon(Icons.calendar_today), findsNWidgets(2));
       expect(find.text('Desde'), findsOneWidget);
       expect(find.text('Hasta'), findsOneWidget);
+
+      await harness.dispose();
+    });
+  });
+
+  // ==========================================================================
+  // amount — sprint `flutter-movements-amount-filter-v1`
+  // ==========================================================================
+  group('EntriesFiltersScreen — sección Monto', () {
+    Future<EntriesFilters?> openPanelWith(
+      WidgetTester tester, {
+      required EntriesFilters initial,
+    }) {
+      final ctx = tester.element(find.byType(Scaffold).first);
+      return Navigator.of(ctx).push<EntriesFilters>(
+        MaterialPageRoute(
+          builder: (_) => EntriesFiltersScreen(
+            initial: initial,
+            accounts: const [],
+            categories: const [],
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+    }
+
+    testWidgets('WT-01: sección "Monto" renderea con 2 fields',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      // ignore: unused_local_variable
+      final future = openPanelWith(tester, initial: EntriesFilters.thisMonth());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Monto'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'Mínimo'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'Máximo'), findsOneWidget);
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-02: ingresar min=100 + Aplicar retorna EntriesFilters con minAmount=100',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      final future = openPanelWith(tester, initial: EntriesFilters.thisMonth());
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Mínimo'),
+        '100',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aplicar'));
+      await tester.pumpAndSettle();
+
+      final result = await future;
+      expect(result, isNotNull);
+      expect(result!.minAmount, 100.0);
+      expect(result.maxAmount, isNull);
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-03: min > max + Aplicar muestra snackbar warning y NO emite',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      // ignore: unused_local_variable
+      final future = openPanelWith(tester, initial: EntriesFilters.thisMonth());
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Mínimo'),
+        '1000',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Máximo'),
+        '100',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aplicar'));
+      await tester.pumpAndSettle();
+
+      // Snackbar visible con el mensaje del warning.
+      expect(
+        find.textContaining('rango de monto no es válido'),
+        findsOneWidget,
+      );
+      // Panel sigue montado (no pop).
+      expect(find.byType(EntriesFiltersScreen), findsOneWidget);
 
       await harness.dispose();
     });

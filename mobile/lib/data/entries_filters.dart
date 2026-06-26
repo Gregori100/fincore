@@ -29,6 +29,15 @@ class EntriesFilters {
   final List<String> accountIds;
   final List<String> categoryIds;
 
+  /// Filtro de monto mínimo (inclusivo). Null = no filtra por mínimo.
+  /// Sprint `flutter-movements-amount-filter-v1`, RN-A02. Opera sobre el
+  /// `amount` crudo (siempre positivo en BD — RN-A01).
+  final double? minAmount;
+
+  /// Filtro de monto máximo (inclusivo). Null = no filtra por máximo.
+  /// Sprint `flutter-movements-amount-filter-v1`, RN-A03.
+  final double? maxAmount;
+
   EntriesFilters({
     required this.datePreset,
     required this.from,
@@ -36,6 +45,8 @@ class EntriesFilters {
     List<String> kinds = const [],
     List<String> accountIds = const [],
     List<String> categoryIds = const [],
+    this.minAmount,
+    this.maxAmount,
   })  : kinds = List.unmodifiable(kinds),
         accountIds = List.unmodifiable(accountIds),
         categoryIds = List.unmodifiable(categoryIds);
@@ -78,9 +89,14 @@ class EntriesFilters {
     if (kinds.isNotEmpty) count++;
     if (accountIds.isNotEmpty) count++;
     if (categoryIds.isNotEmpty) count++;
+    if (minAmount != null || maxAmount != null) count++;
     return count;
   }
 
+  /// `clearMinAmount` / `clearMaxAmount` permiten setear el campo a null
+  /// explícitamente, distinguiendo "no cambiar" (default null en
+  /// `minAmount`/`maxAmount`) de "limpiar". Si se pasan `clearXxx: true`
+  /// junto a un valor explícito en `xxx`, el clear gana (documentado).
   EntriesFilters copyWith({
     DateRangePreset? datePreset,
     DateTime? from,
@@ -88,6 +104,10 @@ class EntriesFilters {
     List<String>? kinds,
     List<String>? accountIds,
     List<String>? categoryIds,
+    double? minAmount,
+    double? maxAmount,
+    bool clearMinAmount = false,
+    bool clearMaxAmount = false,
   }) {
     return EntriesFilters(
       datePreset: datePreset ?? this.datePreset,
@@ -96,6 +116,8 @@ class EntriesFilters {
       kinds: kinds ?? this.kinds,
       accountIds: accountIds ?? this.accountIds,
       categoryIds: categoryIds ?? this.categoryIds,
+      minAmount: clearMinAmount ? null : (minAmount ?? this.minAmount),
+      maxAmount: clearMaxAmount ? null : (maxAmount ?? this.maxAmount),
     );
   }
 
@@ -124,6 +146,8 @@ class EntriesFilters {
         return copyWith(accountIds: const []);
       case FilterDimension.categories:
         return copyWith(categoryIds: const []);
+      case FilterDimension.amount:
+        return copyWith(clearMinAmount: true, clearMaxAmount: true);
     }
   }
 
@@ -153,6 +177,12 @@ class EntriesFilters {
     }
     if (categoryIds.isNotEmpty) {
       map['categoryIds'] = categoryIds.join(',');
+    }
+    if (minAmount != null) {
+      map['minAmount'] = minAmount!.toString();
+    }
+    if (maxAmount != null) {
+      map['maxAmount'] = maxAmount!.toString();
     }
     return map;
   }
@@ -209,6 +239,10 @@ class EntriesFilters {
     final categoryIds =
         _parseCsv(params['categoryIds']).toSet().toList(growable: false);
 
+    // RN-A07: negativos y no-numéricos en minAmount/maxAmount caen a null.
+    final minAmount = _tryParseNonNegativeDouble(params['minAmount']);
+    final maxAmount = _tryParseNonNegativeDouble(params['maxAmount']);
+
     return EntriesFilters(
       datePreset: preset,
       from: from,
@@ -216,13 +250,15 @@ class EntriesFilters {
       kinds: kinds,
       accountIds: accountIds,
       categoryIds: categoryIds,
+      minAmount: minAmount,
+      maxAmount: maxAmount,
     );
   }
 }
 
 /// Dimensiones que el usuario puede quitar individualmente desde los chips
 /// de filtros activos arriba de la lista (M7 del quality review v1).
-enum FilterDimension { date, kinds, accounts, categories }
+enum FilterDimension { date, kinds, accounts, categories, amount }
 
 const _kValidKinds = {
   'income',
@@ -235,6 +271,16 @@ const _kValidKinds = {
 DateTime? _tryParseDate(String? raw) {
   if (raw == null || raw.isEmpty) return null;
   return DateTime.tryParse(raw);
+}
+
+/// Helper para `parse`: retorna el double parseado si es >= 0; null en
+/// cualquier otro caso (string vacío, no-numérico, negativo). RN-A07 del
+/// sprint `flutter-movements-amount-filter-v1`.
+double? _tryParseNonNegativeDouble(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  final v = double.tryParse(raw);
+  if (v == null || v < 0) return null;
+  return v;
 }
 
 List<String> _parseCsv(String? raw) {

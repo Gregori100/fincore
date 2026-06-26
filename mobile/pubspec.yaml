@@ -86,7 +86,15 @@ publish_to: 'none'
 # tab. Excluye transfer y debt_payment (RN-C03 — movimientos internos
 # sin impacto en flujo "contra el afuera"). +13 tests data + 3 widget
 # tests. 235/235 verdes. Sin cambios productivos breaking ni schema.
-version: 0.7.0+58
+# 0.7.1+59: sprint flutter-movements-amount-filter-v1 — agregar
+# dimensión "Monto" al panel de filtros de `/entries`. 2 fields
+# numéricos opcionales (mínimo y máximo). DAO extiende `watchPage`
+# con `minAmount`/`maxAmount` opcionales que agregan `amount >= min`
+# y `amount <= max` (RN-A02/A03 — inclusivos). Chip en la
+# `EntriesActiveFiltersBar` con label condicional (`≥ $X`, `≤ $X`,
+# `$X – $Y`). Validación `min > max` con snackbar warning. +6 tests
+# data + 7 modelo + 3 widget = 16 nuevos. 251/251 verdes. Sin schema.
+version: 0.7.1+59
 
 environment:
   sdk: ^3.7.2

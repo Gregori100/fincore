@@ -64,12 +64,18 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
   ///   (...)`). Soporta el token especial [kUncategorizedFilterToken] para
   ///   matchear NULL + categorías archivadas. Si null o vacía, no filtra por
   ///   categoría.
+  /// Sprint `flutter-movements-amount-filter-v1`:
+  /// - `minAmount`: si presente, agrega `amount >= min` (RN-A02, inclusivo).
+  /// - `maxAmount`: si presente, agrega `amount <= max` (RN-A03, inclusivo).
+  /// - Ambos opcionales con default null para preservar callers existentes.
   Stream<List<EntryWithRelations>> watchPage({
     List<String>? kinds,
     List<String>? accountIds,
     List<String>? categoryIds,
     DateTime? from,
     DateTime? to,
+    double? minAmount,
+    double? maxAmount,
     int offset = 0,
     int limit = 50,
   }) {
@@ -137,6 +143,12 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       // tras el sprint entries-by-bucket-fixes.
       final inclusiveTo = DateTime(to.year, to.month, to.day, 23, 59, 59, 999);
       query.where(journalEntries.occurredAt.isSmallerOrEqualValue(inclusiveTo));
+    }
+    if (minAmount != null) {
+      query.where(journalEntries.amount.isBiggerOrEqualValue(minAmount));
+    }
+    if (maxAmount != null) {
+      query.where(journalEntries.amount.isSmallerOrEqualValue(maxAmount));
     }
 
     query
