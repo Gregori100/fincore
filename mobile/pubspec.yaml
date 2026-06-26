@@ -55,7 +55,12 @@ publish_to: 'none'
 # drift_flutter, go_router, sqlite3, sqlite3_flutter_libs ya no flotan con
 # `^`. Mantenimiento previo al ciclo de sprints de deuda técnica para que
 # baseline sea reproducible.
-version: 0.6.2+54
+# 0.6.3+55: sprint flutter-integration-tests-v1 — migración de widget tests
+# diferidos al package integration_test. +14 tests verdes en runtime real
+# (account_form 5, category_form 5, entries_filters_panel 2,
+# settings_destructive 2) cubriendo el DV-2/RF-020-023 del v4 + M10 del
+# MVP. Sin cambios productivos. 217/217 unit + 17 integration verdes.
+version: 0.6.3+55
 
 environment:
   sdk: ^3.7.2
