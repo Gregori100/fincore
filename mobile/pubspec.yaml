@@ -51,7 +51,11 @@ publish_to: 'none'
 # en runtime real) tras descubrir que el cuelgue de pumpAndSettle con
 # `categoryIds` en query params es por interacción de drift +
 # AppDependencies completo en el harness — diagnóstico documentado.
-version: 0.6.1+53
+# 0.6.2+54: pinear deps críticas a versión exacta (RF-018). drift, drift_dev,
+# drift_flutter, go_router, sqlite3, sqlite3_flutter_libs ya no flotan con
+# `^`. Mantenimiento previo al ciclo de sprints de deuda técnica para que
+# baseline sea reproducible.
+version: 0.6.2+54
 
 environment:
   sdk: ^3.7.2
@@ -63,10 +67,12 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # SQLite con drift + codegen. Streams reactivos cacheados.
-  drift: ^2.20.0
-  drift_flutter: ^0.2.0
-  sqlite3: ^2.4.0
-  sqlite3_flutter_libs: ^0.5.0
+  # Pinned a versión exacta (RF-018): cualquier minor bump rompe queries,
+  # binding nativo o codegen. Bumpear con changelog en mano.
+  drift: 2.31.0
+  drift_flutter: 0.2.8
+  sqlite3: 2.9.4
+  sqlite3_flutter_libs: 0.5.42
   path: ^1.9.0
   path_provider: ^2.1.0
 
@@ -74,7 +80,8 @@ dependencies:
   intl: ^0.19.0
 
   # Navegación declarativa con redirect a /first-run si BD vacía.
-  go_router: ^14.6.2
+  # Pinned a versión exacta (RF-018): cualquier minor bump rompe redirects.
+  go_router: 14.8.1
 
   # Importar backup JSON desde file picker del sistema.
   file_picker: ^8.1.0
@@ -110,8 +117,8 @@ dev_dependencies:
   # Mocks de file_picker y share_plus en widget tests.
   mocktail: ^1.0.4
 
-  # Codegen drift.
-  drift_dev: ^2.20.0
+  # Codegen drift. Pinned para matchear `drift: 2.31.0` runtime.
+  drift_dev: 2.31.0
   build_runner: ^2.4.0
 
   # Generación de iconos de launcher (Android adaptive + monochrome themed).
