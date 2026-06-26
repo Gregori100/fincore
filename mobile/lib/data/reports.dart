@@ -293,6 +293,112 @@ class ReportsService {
       buckets: buckets,
     );
   }
+
+  /// Top N movimientos por monto descendente del rango. Sprint
+  /// `flutter-reports-top-movements-v1`.
+  ///
+  /// Filtros:
+  /// - `kind IN (kinds)` — los kinds seleccionados por el usuario en el
+  ///   header del tab (RN-T02). Si `kinds.isEmpty`, atajo defensivo:
+  ///   retorna reporte vacío sin tocar BD (evita SQL inválido con `IN ()`
+  ///   y respeta el contrato del empty state forzado).
+  /// - `journal_entries.deleted_at IS NULL` (RN-T04).
+  /// - Rango `[from, to]` inclusivo (RN-T03). `to` se extiende hasta el
+  ///   fin del día (23:59:59.999) coherente con el resto del DAO.
+  /// - Categoría archivada: el `LEFT JOIN ... AND deleted_at IS NULL`
+  ///   deja `cat_id` en NULL — la UI muestra el entry sin badge (RN-T07).
+  ///
+  /// Orden: `amount DESC, occurred_at DESC, created_at DESC` (RN-T06,
+  /// tiebreak determinístico).
+  ///
+  /// Limit: `limit` filas (default 20 por RN-T08).
+  ///
+  /// Reactividad: re-emite cuando cambian `journal_entries` o
+  /// `categories` (archivar mueve buckets).
+  Stream<TopMovementsReport> topMovements({
+    required DateTime from,
+    required DateTime to,
+    required List<String> kinds,
+    int limit = 20,
+  }) {
+    if (kinds.isEmpty) {
+      return Stream.value(_buildEmptyTopReport(from, to));
+    }
+    final inclusiveTo = DateTime(to.year, to.month, to.day, 23, 59, 59, 999);
+    // Construir el placeholders dinámico para el `IN (?, ?, ...)` según
+    // la cantidad de kinds. Drift no permite `Variable.withStringList`
+    // como `IN (...)` directo en customSelect; lo hacemos manual.
+    final placeholders = List.filled(kinds.length, '?').join(', ');
+    final sql = '''
+      SELECT
+        j.id AS j_id,
+        j.kind AS j_kind,
+        j.amount AS j_amount,
+        j.occurred_at AS j_occurred_at,
+        j.description AS j_description,
+        c.id AS c_id,
+        c.name AS c_name,
+        c.color_slug AS c_color_slug,
+        c.icon_slug AS c_icon_slug
+      FROM journal_entries j
+      LEFT JOIN categories c
+        ON c.id = j.category_id AND c.deleted_at IS NULL
+      WHERE j.kind IN ($placeholders)
+        AND j.deleted_at IS NULL
+        AND j.occurred_at >= ?
+        AND j.occurred_at <= ?
+      ORDER BY j.amount DESC, j.occurred_at DESC, j.created_at DESC
+      LIMIT ?
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            for (final k in kinds) Variable.withString(k),
+            Variable.withDateTime(from),
+            Variable.withDateTime(inclusiveTo),
+            Variable.withInt(limit),
+          ],
+          readsFrom: {_db.journalEntries, _db.categories},
+        )
+        .watch()
+        .map((rows) => _buildTopReport(rows, from: from, to: to));
+  }
+
+  TopMovementsReport _buildEmptyTopReport(DateTime from, DateTime to) {
+    return TopMovementsReport(from: from, to: to, entries: const []);
+  }
+
+  TopMovementsReport _buildTopReport(
+    List<QueryRow> rows, {
+    required DateTime from,
+    required DateTime to,
+  }) {
+    final entries = <TopMovementEntry>[];
+    for (final row in rows) {
+      final catId = row.read<String?>('c_id');
+      final catName = row.read<String?>('c_name');
+      final colorSlug = row.read<String?>('c_color_slug');
+      final iconSlug = row.read<String?>('c_icon_slug');
+      final category = (catId != null && catName != null)
+          ? TopMovementCategory(
+              id: catId,
+              name: catName,
+              colorSlug: colorSlug,
+              iconSlug: iconSlug,
+            )
+          : null;
+      entries.add(TopMovementEntry(
+        id: row.read<String>('j_id'),
+        kind: row.read<String>('j_kind'),
+        amount: row.read<double>('j_amount'),
+        occurredAt: row.read<DateTime>('j_occurred_at'),
+        description: row.read<String?>('j_description'),
+        category: category,
+      ));
+    }
+    return TopMovementsReport(from: from, to: to, entries: entries);
+  }
 }
 
 /// Reporte de cashflow mensual del sprint `flutter-reports-cashflow-v1`.
@@ -343,6 +449,61 @@ class MonthCashflow {
     required this.income,
     required this.expense,
     required this.net,
+  });
+}
+
+/// Reporte de top N movimientos del sprint `flutter-reports-top-movements-v1`.
+///
+/// Inmutable. Construido por [ReportsService.topMovements]. Lista los
+/// hasta N entries más grandes del rango ordenados por monto desc
+/// (RN-T06).
+class TopMovementsReport {
+  final DateTime from;
+  final DateTime to;
+  final List<TopMovementEntry> entries;
+
+  const TopMovementsReport({
+    required this.from,
+    required this.to,
+    required this.entries,
+  });
+
+  bool get isEmpty => entries.isEmpty;
+}
+
+/// Una entrada del top. Subset minimalista del journal entry — solo lo
+/// necesario para renderear la row y permitir la navegación a edit.
+class TopMovementEntry {
+  final String id;
+  final String kind;
+  final double amount;
+  final DateTime occurredAt;
+  final String? description;
+  final TopMovementCategory? category;
+
+  const TopMovementEntry({
+    required this.id,
+    required this.kind,
+    required this.amount,
+    required this.occurredAt,
+    required this.description,
+    required this.category,
+  });
+}
+
+/// Categoría asociada al entry (badge). Null si el entry no tiene
+/// categoría o si la categoría está archivada (RN-T07).
+class TopMovementCategory {
+  final String id;
+  final String name;
+  final String? colorSlug;
+  final String? iconSlug;
+
+  const TopMovementCategory({
+    required this.id,
+    required this.name,
+    required this.colorSlug,
+    required this.iconSlug,
   });
 }
 

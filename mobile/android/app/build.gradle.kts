@@ -23,8 +23,8 @@ android {
         applicationId = "io.github.gregori100.fincore"
         minSdk = 24
         targetSdk = 35
-        versionCode = 59
-        versionName = "0.7.1"
+        versionCode = 60
+        versionName = "0.8.0"
     }
 
     buildTypes {

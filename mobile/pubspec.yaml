@@ -94,7 +94,16 @@ publish_to: 'none'
 # `EntriesActiveFiltersBar` con label condicional (`≥ $X`, `≤ $X`,
 # `$X – $Y`). Validación `min > max` con snackbar warning. +6 tests
 # data + 7 modelo + 3 widget = 16 nuevos. 251/251 verdes. Sin schema.
-version: 0.7.1+59
+# 0.8.0+60: sprint flutter-reports-top-movements-v1 — tercer tab
+# "Top movimientos" en `/reports` (junto a "Gasto por categoría" y
+# "Cashflow mensual"). Lista los hasta N=20 movimientos más grandes
+# del rango ordenados por monto desc. Chips de kinds multi-select
+# en el header (default los 5 seleccionados; sin selección = empty
+# state forzado). Tap en row navega a `/entries/:id/edit`. TabBar
+# pasa de 2 a 3 tabs con `isScrollable: true` para que no se
+# encimen los labels. +11 tests data + 4 widget tests. 266/266
+# verdes. Sin schema bump.
+version: 0.8.0+60
 
 environment:
   sdk: ^3.7.2

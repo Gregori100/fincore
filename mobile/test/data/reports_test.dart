@@ -799,4 +799,227 @@ void main() {
       expect(sumExpense, report.totalExpense);
     });
   });
+
+  // ===========================================================================
+  // topMovements — sprint `flutter-reports-top-movements-v1`
+  // Cubre RN-T01..T08 + casos borde CB-T01..T16 del test-plan.
+  // ===========================================================================
+  const allKinds = [
+    'income',
+    'expense',
+    'credit_expense',
+    'debt_payment',
+    'transfer',
+  ];
+
+  group('topMovements — agregación básica', () {
+    test('UT-01: BD vacía → entries=[], isEmpty=true', () async {
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries, isEmpty);
+      expect(report.isEmpty, isTrue);
+    });
+
+    test('UT-02: orden por monto desc', () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 10),
+        description: 'small',
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 11),
+        description: 'large',
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 12),
+        description: 'medium',
+      );
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries.map((e) => e.amount).toList(), [500, 300, 100]);
+      expect(report.entries.map((e) => e.description).toList(),
+          ['large', 'medium', 'small']);
+    });
+
+    test('UT-03: tiebreak por occurred_at desc', () async {
+      // 2 entries con monto idéntico, occurred_at distintos. El más
+      // reciente debe aparecer primero.
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 10, 10),
+        description: 'older',
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 12, 10),
+        description: 'newer',
+      );
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries.first.description, 'newer',
+          reason: 'tiebreak por occurred_at desc: más reciente primero');
+    });
+  });
+
+  group('topMovements — soft delete y archivos', () {
+    test('UT-04: entry soft-deleted no cuenta', () async {
+      final id = await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      var report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries, hasLength(1));
+      await entriesDao.cancel(id);
+      report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries, isEmpty);
+    });
+
+    test('UT-05: entry con categoría archivada → category null',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        categoryId: catComida,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      var report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries.first.category, isNotNull);
+      expect(report.entries.first.category!.name, 'Comida_Test');
+      await categoriesDao.archive(catComida);
+      report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries, hasLength(1));
+      expect(report.entries.first.category, isNull,
+          reason: 'tras archivar la categoría, badge desaparece (RN-T07)');
+    });
+  });
+
+  group('topMovements — limit', () {
+    test('UT-06: limit=20 con 30 entries → retorna 20', () async {
+      for (var i = 0; i < 30; i++) {
+        await entriesDao.registerExpense(
+          accountOriginId: debit,
+          amount: 100.0 + i,
+          occurredAt: DateTime(2026, 6, 10, 0, i),
+        );
+      }
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds, limit: 20)
+          .first;
+      expect(report.entries, hasLength(20));
+      // Los más grandes (129..110) deben aparecer ordenados desc.
+      expect(report.entries.first.amount, 129);
+      expect(report.entries.last.amount, 110);
+    });
+
+    test('UT-07: limit=20 con 5 entries → retorna 5', () async {
+      for (var i = 0; i < 5; i++) {
+        await entriesDao.registerExpense(
+          accountOriginId: debit,
+          amount: 100.0 + i,
+          occurredAt: DateTime(2026, 6, 10, 0, i),
+        );
+      }
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds, limit: 20)
+          .first;
+      expect(report.entries, hasLength(5));
+    });
+  });
+
+  group('topMovements — rango temporal', () {
+    test('UT-08: rango inclusivo en `from` exacto', () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: from,
+      );
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: allKinds)
+          .first;
+      expect(report.entries, hasLength(1),
+          reason: 'entry en el límite `from` debe contar');
+    });
+
+    test('UT-09: rango inclusivo en `to` exacto (final del día)',
+        () async {
+      // El DAO extiende `to` internamente hasta 23:59:59.999.
+      final boundaryTo = DateTime(2026, 6, 30);
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 30, 23, 30),
+      );
+      final report = await reports
+          .topMovements(from: from, to: boundaryTo, kinds: allKinds)
+          .first;
+      expect(report.entries, hasLength(1),
+          reason: 'entry en el final del día de `to` debe contar');
+    });
+  });
+
+  group('topMovements — filtro de kinds', () {
+    test('UT-10: kinds=["expense"] excluye otros kinds', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        occurredAt: DateTime(2026, 6, 5),
+        description: 'income_filtered',
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 6),
+        description: 'expense_kept',
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 700,
+        occurredAt: DateTime(2026, 6, 7),
+        description: 'credit_expense_filtered',
+      );
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: const ['expense'])
+          .first;
+      expect(report.entries, hasLength(1));
+      expect(report.entries.first.description, 'expense_kept');
+    });
+
+    test(
+        'UT-11: kinds=[] → atajo defensivo retorna entries=[] sin tocar BD',
+        () async {
+      // Cerrar la BD antes de invocar topMovements. Si el atajo NO
+      // funciona, drift va a fallar con un error de BD cerrada. Si SÍ
+      // funciona, retorna lista vacía sin tocar nada.
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await db.close();
+      final report = await reports
+          .topMovements(from: from, to: to, kinds: const [])
+          .first;
+      expect(report.entries, isEmpty);
+      expect(report.isEmpty, isTrue);
+    });
+  });
 }
