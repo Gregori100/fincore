@@ -60,7 +60,15 @@ publish_to: 'none'
 # (account_form 5, category_form 5, entries_filters_panel 2,
 # settings_destructive 2) cubriendo el DV-2/RF-020-023 del v4 + M10 del
 # MVP. Sin cambios productivos. 217/217 unit + 17 integration verdes.
-version: 0.6.3+55
+# 0.6.4+56: sprint flutter-entries-list-refactor-v1 — partir el monolito
+# de `EntriesListScreen` (672 líneas) en 4 archivos con responsabilidades
+# claras: screen (170, solo shell + filtros), entries_paginated_list (340,
+# stream + scroll + paginación), entries_active_filters_bar (155, bar +
+# chips), entries_empty_state (50). El state de paginación se mueve al
+# widget hijo; el padre solo le pasa `filters` y el hijo detecta cambios
+# con didUpdateWidget. Cero cambios de comportamiento. 217 unit + 17
+# integration verdes (sin regresión).
+version: 0.6.4+56
 
 environment:
   sdk: ^3.7.2
