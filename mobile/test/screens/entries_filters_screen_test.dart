@@ -3,6 +3,7 @@ import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/screens/entries_filters_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import '../helpers/widget_test_harness.dart';
 
@@ -165,17 +166,54 @@ void main() {
       await harness.dispose();
     });
 
-    // M10 del quality review v1 — intentado y diferido. El test del panel
-    // con cuentas sembradas + multi-select funcional cuelga `pumpAndSettle`
-    // por la misma causa que M3 (no era los StreamBuilders del bar). El
-    // sprint actual quedó con un patch perf v1 que mejoró el comportamiento
-    // pero no llegó a aislar la causa raíz. Pendiente para sprint dedicado
-    // de UI testing depth.
-    //
-    // Cobertura compensatoria: los tests existentes con `accounts: []` +
-    // `categories: []` validan el render del panel + interacción con chips
-    // fijos (presets de fecha, kinds, "Sin categoría"). El multi-select
-    // funcional con datos reales se valida con smoke manual SM-04.
+    // M10 reactivado tras `flutter-entries-list-refactor-v1`: ver nota en
+    // `entries_list_screen_test.dart` sobre por qué el refactor lo fix.
+    // Este test usa el flujo end-to-end con el panel abierto desde el
+    // `EntriesListScreen` real (no via `openPanel` helper) para validar
+    // el multi-select sobre datos sembrados.
+    testWidgets(
+        'M10: tap chip cuenta + Aplicar filtra entries (flujo desde /entries)',
+        (tester) async {
+      String? bbvaId;
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        bbvaId = await deps.accountsDao.create(name: 'BBVA-M10', type: 'debit');
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        final today = DateTime.now();
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          amount: 100,
+          occurredAt: today,
+          description: 'GastoBolsaM10',
+        );
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bbvaId!,
+          amount: 200,
+          occurredAt: today.add(const Duration(hours: 1)),
+          description: 'GastoBBVAM10',
+        );
+      });
+
+      final ctx = tester.element(find.byType(Scaffold).first);
+      GoRouter.of(ctx).push('/entries');
+      await tester.pumpAndSettle();
+
+      expect(find.text('GastoBolsaM10'), findsOneWidget);
+      expect(find.text('GastoBBVAM10'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('BBVA-M10'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Aplicar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('GastoBBVAM10'), findsOneWidget);
+      expect(find.text('GastoBolsaM10'), findsNothing,
+          reason: 'Filtrar por BBVA debe ocultar entries de la Bolsa');
+
+      await harness.dispose();
+    });
 
     testWidgets('Tap en "Custom" muestra los dos input fields de fecha',
         (tester) async {

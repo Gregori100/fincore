@@ -127,20 +127,63 @@ void main() {
     });
   });
 
-  // M3 del quality review v1 — reactivación INTENTADA y revertida.
-  //
-  // El test del deep link via query params puro se difería con la hipótesis
-  // de que los StreamBuilders anidados en `_ActiveFiltersBar` causaban el
-  // cuelgue de `pumpAndSettle`. El patch perf v1 eliminó esos StreamBuilders
-  // (la bar ahora recibe `List<Account>` + `List<Category>` resueltas del
-  // padre). Sin embargo, al reactivar el test el cuelgue persiste — la
-  // causa raíz es OTRA (probablemente el `StreamSubscription` directo en
-  // `_subscribeMeta` del padre o el flujo de `setState` desde múltiples
-  // streams concurrentes).
-  //
-  // Re-diferido para investigación más profunda en un sprint dedicado de
-  // UI testing. Cobertura compensatoria: `reports_deeplink_test.dart`
-  // valida el flujo end-to-end (tap en bucket → /entries con query params
-  // → lista filtrada), que es el único path productivo. El deep link via
-  // URL manual no tiene flujo productivo (Diego no escribe URLs).
+  // M3 reactivado tras `flutter-entries-list-refactor-v1`: el cuelgue de
+  // `pumpAndSettle` que difería este test fue resuelto como efecto
+  // colateral del refactor. Causa raíz hipotetizada: cuando `_stream`,
+  // `_accountsSub` y `_categoriesSub` coexistían en el mismo State, el
+  // primer setState de los subs invalidaba el frame del StreamBuilder
+  // antes de que recibiera su primer evento, generando un loop de
+  // rebuild que pumpAndSettle no podía aterrizar. Al separar el state
+  // de paginación al `EntriesPaginatedList`, los ciclos de rebuild
+  // quedan desacoplados.
+  group('Deep link via URL manual (M3 reactivado)', () {
+    testWidgets(
+        'Push /entries?categoryIds=<uuid> pre-carga filtro y rinde solo entries de esa categoría',
+        (tester) async {
+      String? comidaId;
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        comidaId = await deps.categoriesDao.create(
+          name: 'ComidaM3',
+          appliesTo: 'expense',
+          colorSlug: 'red',
+          iconSlug: 'shopping-cart',
+        );
+        final otraId = await deps.categoriesDao.create(
+          name: 'OtraM3',
+          appliesTo: 'expense',
+          colorSlug: 'blue',
+          iconSlug: 'truck',
+        );
+        final day = DateTime(DateTime.now().year, DateTime.now().month, 10, 10);
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          categoryId: comidaId,
+          amount: 100,
+          occurredAt: day,
+          description: 'EntryComidaM3',
+        );
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          categoryId: otraId,
+          amount: 50,
+          occurredAt: day.add(const Duration(hours: 1)),
+          description: 'EntryOtraM3',
+        );
+      });
+
+      final ctx = tester.element(find.byType(Scaffold).first);
+      GoRouter.of(ctx).push('/entries?categoryIds=$comidaId');
+      await tester.pumpAndSettle();
+
+      expect(find.byType(EntriesListScreen), findsOneWidget);
+      expect(find.text('EntryComidaM3'), findsOneWidget,
+          reason: 'El deep link debe pre-cargar el filtro de Comida');
+      expect(find.text('EntryOtraM3'), findsNothing,
+          reason: 'El entry de otra categoría debe quedar fuera');
+
+      await harness.dispose();
+    });
+  });
 }

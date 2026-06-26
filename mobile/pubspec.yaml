@@ -68,7 +68,17 @@ publish_to: 'none'
 # widget hijo; el padre solo le pasa `filters` y el hijo detecta cambios
 # con didUpdateWidget. Cero cambios de comportamiento. 217 unit + 17
 # integration verdes (sin regresión).
-version: 0.6.4+56
+# 0.6.5+57: sprint flutter-pumpandsettle-diagnosis-v1 — el cuelgue
+# sistémico de `pumpAndSettle` con `pumpFincoreApp` + filtros drift
+# fue resuelto como efecto colateral del refactor del 0.6.4. Causa
+# raíz: cuando `_stream`, `_accountsSub`, `_categoriesSub` coexistían
+# en el mismo State, el primer setState de los subs invalidaba el
+# frame antes de que el StreamBuilder de `_stream` recibiera su primer
+# evento — loop de rebuild que pumpAndSettle no podía aterrizar. M3
+# (deep link via URL manual) y M10 (multi-select del panel con datos
+# sembrados) reactivados como widget tests en sus archivos originales.
+# 219 unit + 17 integration verdes. Sin cambios productivos.
+version: 0.6.5+57
 
 environment:
   sdk: ^3.7.2
