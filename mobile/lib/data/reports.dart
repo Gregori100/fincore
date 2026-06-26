@@ -124,6 +124,115 @@ class ReportsService {
         .map((rows) => _buildReport(rows, from: from, to: to));
   }
 
+  /// Cashflow mensual agregado en el rango `[from, to]` inclusivo
+  /// (RN-C05). Sprint `flutter-reports-cashflow-v1`.
+  ///
+  /// Filtros:
+  /// - Kind ∈ {`income`, `expense`, `credit_expense`} (RN-C01/C02).
+  /// - `transfer` y `debt_payment` excluidos (RN-C03 — son movimientos
+  ///   internos que doble-contarían).
+  /// - `journal_entries.deleted_at IS NULL`.
+  ///
+  /// Reactividad: el Stream re-emite cuando cambia `journal_entries`. NO
+  /// joinea `categories` porque el cashflow es agregado, no desglosa por
+  /// categoría — minimiza el costo de la query y elimina la dependencia
+  /// reactiva en categorías archivadas (un archive no debe re-emitir el
+  /// cashflow).
+  ///
+  /// Agrupación: por `strftime('%Y-%m', occurred_at)`. RN-C06 obliga a
+  /// rellenar meses sin entries con ceros — se hace en Dart sobre el
+  /// resultado de la query (la query SQL solo emite filas para meses con
+  /// datos).
+  ///
+  /// Orden: cronológico ascendente (RN-C08).
+  Stream<CashflowReport> cashflowByMonth({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    const sql = '''
+      SELECT
+        strftime('%Y-%m', occurred_at) AS month_key,
+        SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END) AS income,
+        SUM(CASE WHEN kind IN ('expense', 'credit_expense') THEN amount ELSE 0 END) AS expense
+      FROM journal_entries
+      WHERE kind IN ('income', 'expense', 'credit_expense')
+        AND deleted_at IS NULL
+        AND occurred_at >= ?
+        AND occurred_at <= ?
+      GROUP BY strftime('%Y-%m', occurred_at)
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(from),
+            Variable.withDateTime(to),
+          ],
+          readsFrom: {_db.journalEntries},
+        )
+        .watch()
+        .map((rows) => _buildCashflowReport(rows, from: from, to: to));
+  }
+
+  /// Itera los meses calendario desde el mes de `from` hasta el mes de `to`
+  /// (inclusive en ambos extremos). Retorna `DateTime(year, month, 1)` por
+  /// cada mes. Usado por `_buildCashflowReport` para rellenar meses vacíos
+  /// (RN-C06).
+  ///
+  /// Sin tocar zona horaria — el constructor `DateTime(y, m, 1)` queda en
+  /// local del dispositivo, coherente con el resto de la app.
+  List<DateTime> _iterateMonthsBetween(DateTime from, DateTime to) {
+    final result = <DateTime>[];
+    var cursor = DateTime(from.year, from.month, 1);
+    final end = DateTime(to.year, to.month, 1);
+    while (!cursor.isAfter(end)) {
+      result.add(cursor);
+      cursor = DateTime(cursor.year, cursor.month + 1, 1);
+    }
+    return result;
+  }
+
+  CashflowReport _buildCashflowReport(
+    List<QueryRow> rows, {
+    required DateTime from,
+    required DateTime to,
+  }) {
+    final byKey = <String, ({double income, double expense})>{};
+    for (final row in rows) {
+      final key = row.read<String>('month_key');
+      final income = row.read<double>('income');
+      final expense = row.read<double>('expense');
+      byKey[key] = (income: income, expense: expense);
+    }
+    final months = <MonthCashflow>[];
+    var totalIncome = 0.0;
+    var totalExpense = 0.0;
+    for (final first in _iterateMonthsBetween(from, to)) {
+      final key =
+          '${first.year.toString().padLeft(4, '0')}-${first.month.toString().padLeft(2, '0')}';
+      final data = byKey[key] ?? (income: 0.0, expense: 0.0);
+      final income = data.income;
+      final expense = data.expense;
+      totalIncome += income;
+      totalExpense += expense;
+      months.add(MonthCashflow(
+        monthKey: key,
+        firstDay: first,
+        income: income,
+        expense: expense,
+        net: income - expense,
+      ));
+    }
+    return CashflowReport(
+      from: from,
+      to: to,
+      totalIncome: totalIncome,
+      totalExpense: totalExpense,
+      net: totalIncome - totalExpense,
+      months: months,
+    );
+  }
+
   SpendingReport _buildReport(
     List<QueryRow> rows, {
     required DateTime from,
@@ -184,6 +293,57 @@ class ReportsService {
       buckets: buckets,
     );
   }
+}
+
+/// Reporte de cashflow mensual del sprint `flutter-reports-cashflow-v1`.
+///
+/// Inmutable. Construido por [ReportsService.cashflowByMonth]. Agrega
+/// ingresos vs gastos por mes calendario dentro del rango
+/// `[from, to]` inclusivo en ambos extremos (RN-C05).
+class CashflowReport {
+  final DateTime from;
+  final DateTime to;
+  final double totalIncome;
+  final double totalExpense;
+  final double net;
+  final List<MonthCashflow> months;
+
+  const CashflowReport({
+    required this.from,
+    required this.to,
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.net,
+    required this.months,
+  });
+
+  /// True cuando el rango no tiene ni ingresos ni gastos. Útil para mostrar
+  /// el empty state (RF-010). Los meses pueden estar poblados con ceros por
+  /// RN-C06, así que la verificación correcta es sobre los totales.
+  bool get isEmpty => totalIncome == 0 && totalExpense == 0;
+}
+
+/// Cashflow de un mes calendario.
+///
+/// - `monthKey`: `YYYY-MM` (string). Útil para tests y debug.
+/// - `firstDay`: primer día del mes a las 00:00 del local. Útil para el eje
+///   del bar chart.
+/// - `income`, `expense`: sumas en el mes (RN-C01/C02).
+/// - `net`: `income - expense`. Puede ser negativo.
+class MonthCashflow {
+  final String monthKey;
+  final DateTime firstDay;
+  final double income;
+  final double expense;
+  final double net;
+
+  const MonthCashflow({
+    required this.monthKey,
+    required this.firstDay,
+    required this.income,
+    required this.expense,
+    required this.net,
+  });
 }
 
 class _RawBucket {

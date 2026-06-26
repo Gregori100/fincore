@@ -537,4 +537,266 @@ void main() {
           reason: 'tras archivar, el bucket pasa a Sin categoría');
     });
   });
+
+  // ===========================================================================
+  // cashflowByMonth — sprint `flutter-reports-cashflow-v1`
+  // Cubre RN-C01 a RN-C08 + casos borde CB-T01 a CB-T13 del test-plan.
+  // ===========================================================================
+
+  group('cashflowByMonth — agregación básica', () {
+    test(
+        'UT-01: BD sin entries → totales en 0, months poblado con ceros del rango',
+        () async {
+      final report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalIncome, 0);
+      expect(report.totalExpense, 0);
+      expect(report.net, 0);
+      expect(report.months, hasLength(1),
+          reason: 'rango de 1 mes calendario → 1 entrada con ceros');
+      expect(report.months.first.income, 0);
+      expect(report.months.first.expense, 0);
+      expect(report.months.first.net, 0);
+      expect(report.months.first.monthKey, '2026-06');
+      expect(report.isEmpty, isTrue);
+    });
+
+    test(
+        'UT-02: único income en junio → income > 0, expense = 0, net positivo',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1500,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      final report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalIncome, 1500);
+      expect(report.totalExpense, 0);
+      expect(report.net, 1500);
+      expect(report.months.first.income, 1500);
+      expect(report.months.first.expense, 0);
+      expect(report.months.first.net, 1500);
+      expect(report.isEmpty, isFalse);
+    });
+
+    test(
+        'UT-03: expense + credit_expense del mismo mes se suman en expense',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      final report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalIncome, 0);
+      expect(report.totalExpense, 500,
+          reason: 'expense + credit_expense suman en expense (RN-C02)');
+      expect(report.net, -500);
+    });
+  });
+
+  group('cashflowByMonth — filtros de kind (RN-C03)', () {
+    test('UT-04: transfer NO cuenta', () async {
+      await entriesDao.registerTransfer(
+        accountOriginId: debit,
+        accountDestinationId: bolsa,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      final report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalIncome, 0);
+      expect(report.totalExpense, 0);
+    });
+
+    test('UT-05: debt_payment NO cuenta', () async {
+      // Generar deuda primero: un credit_expense aumenta la deuda de la
+      // tarjeta. Después un debt_payment ≤ deuda es legal. El cashflow
+      // contará el credit_expense (RN-C02) pero NO el debt_payment (RN-C03).
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerDebtPayment(
+        accountOriginId: debit,
+        accountDestinationId: credit,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      final report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalIncome, 0);
+      expect(report.totalExpense, 200,
+          reason: 'solo el credit_expense de 200 cuenta; el debt_payment NO');
+    });
+  });
+
+  group('cashflowByMonth — soft delete', () {
+    test('UT-06: entry soft-deleted no cuenta', () async {
+      final entryId = await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      var report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalExpense, 500);
+      await entriesDao.cancel(entryId);
+      report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalExpense, 0,
+          reason: 'tras cancel, el entry no debe contar');
+    });
+  });
+
+  group('cashflowByMonth — agrupación por mes', () {
+    test(
+        'UT-07: rango cruzando año tiene meses en orden cronológico ascendente',
+        () async {
+      // Rango: dic-2025 → feb-2026 (3 meses).
+      final wideFrom = DateTime(2025, 12, 1);
+      final wideTo = DateTime(2026, 2, 28, 23, 59, 59);
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 1, 15),
+      );
+      final report = await reports
+          .cashflowByMonth(from: wideFrom, to: wideTo)
+          .first;
+      expect(report.months.map((m) => m.monthKey).toList(),
+          ['2025-12', '2026-01', '2026-02']);
+    });
+
+    test('UT-08: mes intermedio sin entries aparece con 0/0 (RN-C06)',
+        () async {
+      final wideFrom = DateTime(2026, 4, 1);
+      final wideTo = DateTime(2026, 6, 30, 23, 59, 59);
+      // Sembrar solo en abril y junio. Mayo queda vacío en medio.
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 4, 10),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      final report = await reports
+          .cashflowByMonth(from: wideFrom, to: wideTo)
+          .first;
+      expect(report.months, hasLength(3));
+      final mayo = report.months.firstWhere((m) => m.monthKey == '2026-05');
+      expect(mayo.income, 0);
+      expect(mayo.expense, 0,
+          reason: 'mes intermedio sin entries debe aparecer con 0/0');
+    });
+
+    test('UT-09: from == to dentro del mismo mes → 1 MonthCashflow',
+        () async {
+      final day = DateTime(2026, 6, 15, 10);
+      final report = await reports
+          .cashflowByMonth(from: day, to: day)
+          .first;
+      expect(report.months, hasLength(1));
+      expect(report.months.first.monthKey, '2026-06');
+    });
+
+    test('UT-10: rango cruza límite de mes → 2 entradas', () async {
+      final tightFrom = DateTime(2026, 5, 31);
+      final tightTo = DateTime(2026, 6, 1, 23, 59, 59);
+      final report = await reports
+          .cashflowByMonth(from: tightFrom, to: tightTo)
+          .first;
+      expect(report.months.map((m) => m.monthKey).toList(),
+          ['2026-05', '2026-06']);
+    });
+
+    test('UT-11: límite inclusivo en `from` exacto (CB-T09)',
+        () async {
+      // Entry exacto en el límite `from`.
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 50,
+        occurredAt: from,
+      );
+      final report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.totalExpense, 50,
+          reason: 'entry en el límite `from` debe contar');
+    });
+  });
+
+  group('cashflowByMonth — invariantes', () {
+    test(
+        'UT-12: net == income - expense para cada mes y para el total',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 12),
+      );
+      final report = await reports
+          .cashflowByMonth(from: from, to: to)
+          .first;
+      expect(report.net, report.totalIncome - report.totalExpense);
+      for (final m in report.months) {
+        expect(m.net, m.income - m.expense,
+            reason: 'invariante por mes ${m.monthKey}');
+      }
+    });
+
+    test(
+        'UT-13: sum(months.income) == totalIncome y sum(months.expense) == totalExpense',
+        () async {
+      final wideFrom = DateTime(2026, 4, 1);
+      final wideTo = DateTime(2026, 6, 30, 23, 59, 59);
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 800,
+        occurredAt: DateTime(2026, 4, 10),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 5, 15),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 20),
+      );
+      final report = await reports
+          .cashflowByMonth(from: wideFrom, to: wideTo)
+          .first;
+      final sumIncome =
+          report.months.fold<double>(0, (acc, m) => acc + m.income);
+      final sumExpense =
+          report.months.fold<double>(0, (acc, m) => acc + m.expense);
+      expect(sumIncome, report.totalIncome);
+      expect(sumExpense, report.totalExpense);
+    });
+  });
 }

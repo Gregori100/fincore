@@ -1,18 +1,21 @@
+import 'package:fincore/screens/reports/cashflow_tab.dart';
 import 'package:fincore/screens/reports/spending_by_category_tab.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:flutter/material.dart';
 
-/// Pantalla de reportes con `TabBar` extensible. V1 incluye una sola tab:
-/// "Gasto por categoría". El shell queda armado para que futuros sprints
-/// agreguen tabs adicionales (cashflow mensual, saldo a fecha, top
-/// movimientos) sin tocar la navegación.
+/// Pantalla de reportes con `TabBar`. Tabs vigentes:
+/// 1. "Gasto por categoría" (sprint `flutter-reports-v1`).
+/// 2. "Cashflow mensual" (sprint `flutter-reports-cashflow-v1`).
+///
+/// `initialIndex` default = 0 para mantener hábito y para no romper tests
+/// del primer sprint.
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 1,
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Reportes'),
@@ -22,12 +25,14 @@ class ReportsScreen extends StatelessWidget {
             unselectedLabelColor: FincoreColors.textMuted,
             tabs: [
               Tab(text: 'Gasto por categoría'),
+              Tab(text: 'Cashflow mensual'),
             ],
           ),
         ),
         body: const TabBarView(
           children: [
             SpendingByCategoryTab(),
+            CashflowTab(),
           ],
         ),
       ),

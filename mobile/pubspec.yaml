@@ -78,7 +78,15 @@ publish_to: 'none'
 # (deep link via URL manual) y M10 (multi-select del panel con datos
 # sembrados) reactivados como widget tests en sus archivos originales.
 # 219 unit + 17 integration verdes. Sin cambios productivos.
-version: 0.6.5+57
+# 0.7.0+58: sprint flutter-reports-cashflow-v1 — agregar tab "Cashflow
+# mensual" al `/reports` (segundo tab además de "Gasto por categoría").
+# Bar chart pareado nativo (verde ingresos / rojo gastos) por mes
+# calendario + 3 métricas del período (ingresos, gastos, neto) +
+# breakdown numérico. Default `thisMonth` por coherencia con el otro
+# tab. Excluye transfer y debt_payment (RN-C03 — movimientos internos
+# sin impacto en flujo "contra el afuera"). +13 tests data + 3 widget
+# tests. 235/235 verdes. Sin cambios productivos breaking ni schema.
+version: 0.7.0+58
 
 environment:
   sdk: ^3.7.2
