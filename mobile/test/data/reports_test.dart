@@ -3,6 +3,7 @@ import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/database.dart';
+import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/data/seed.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1020,6 +1021,252 @@ void main() {
           .first;
       expect(report.entries, isEmpty);
       expect(report.isEmpty, isTrue);
+    });
+  });
+
+  // ===========================================================================
+  // balanceAtDate — sprint `flutter-reports-balance-at-date-v1`
+  // Cubre RN-B01..B08 + casos borde CB-T01..T13 del test-plan.
+  // ===========================================================================
+  group('balanceAtDate — totales', () {
+    test('UT-01: BD vacía → BO=0, DE=0, CR=0', () async {
+      // setUp ya sembró Bolsa + debit + credit + 3 categorías. Sin entries
+      // todavía → totales en 0, cuentas listadas con balance=0.
+      final report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 30))
+          .first;
+      expect(report.bo, 0);
+      expect(report.de, 0);
+      // CR = credit_limit - 0 = 50000.
+      expect(report.cr, 50000);
+      expect(report.accounts, hasLength(3),
+          reason: 'Bolsa + Banamex + Visa visibles');
+    });
+
+    test(
+        'UT-02: fecha = hoy coincide con FinancialStateService watchBo/De/Cr',
+        () async {
+      // Sembrar entries variados.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 1000,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 2000,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      // Validar cruzado contra FinancialStateService a hoy.
+      final state = FinancialStateService(db);
+      final reportNow = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 30))
+          .first;
+      final stateBo = await state.watchBo().first;
+      final stateDe = await state.watchDe().first;
+      final stateCr = await state.watchCr().first;
+      expect(reportNow.bo, stateBo);
+      expect(reportNow.de, stateDe);
+      expect(reportNow.cr, stateCr);
+    });
+
+    test('UT-03: fecha pasada filtra entries posteriores', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 20),
+      );
+      final report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 10))
+          .first;
+      expect(report.bo, 1000,
+          reason: 'solo el primer income cuenta hasta el 10 de junio');
+    });
+
+    test('UT-04: entry exacto al final del día de `asOf` cuenta', () async {
+      // Entry a las 23:59:59 del 10 de junio cuenta para asOf=10 jun.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 10, 23, 59, 59),
+      );
+      // Entry el 11 de junio NO cuenta.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 11, 0, 0, 0),
+      );
+      final report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 10))
+          .first;
+      expect(report.bo, 100,
+          reason: 'entry a 23:59:59 cuenta; entry de día siguiente NO');
+    });
+  });
+
+  group('balanceAtDate — soft delete y archivos', () {
+    test('UT-05: entry soft-deleted excluido', () async {
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      var report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 30))
+          .first;
+      expect(report.bo, 500);
+      await entriesDao.cancel(id);
+      report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 30))
+          .first;
+      expect(report.bo, 0,
+          reason: 'tras cancel, el entry no cuenta');
+    });
+
+    test(
+        'UT-06: credit_limit null contribuye a DE pero no a CR; 0 contribuye con 0',
+        () async {
+      // Cuenta credit sin credit_limit.
+      final visaNull = await accountsDao.create(
+        name: 'VisaNull',
+        type: 'credit',
+        // credit_limit no se pasa = null
+      );
+      // Cuenta credit con credit_limit = 0.01 (mínimo válido del DAO).
+      // El DAO valida > 0, así que no podemos probar exactamente 0. Usamos
+      // un valor chico para demostrar el comportamiento del cálculo.
+      final visaZero = await accountsDao.create(
+        name: 'VisaSmall',
+        type: 'credit',
+        creditLimit: 0.01,
+      );
+      // Generar deuda en ambas.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: visaNull,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: visaZero,
+        amount: 50,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      final report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 30))
+          .first;
+      // DE total = deuda Visa default (0) + VisaNull (100) + VisaSmall (50)
+      // = 150.
+      expect(report.de, 150);
+      // CR total = Visa default (50000) + VisaSmall (0.01 - 50 = -49.99)
+      // VisaNull no contribuye porque credit_limit es null.
+      expect(report.cr, closeTo(50000 + (0.01 - 50), 0.001));
+    });
+  });
+
+  group('balanceAtDate — lista de cuentas', () {
+    test('UT-07: orden por tipo (cash, debit, credit) + alfabético',
+        () async {
+      // Sembrar más cuentas para validar orden.
+      await accountsDao.create(name: 'Z BBVA', type: 'debit');
+      await accountsDao.create(name: 'A BBVA', type: 'debit');
+      await accountsDao.create(
+        name: 'Mastercard',
+        type: 'credit',
+        creditLimit: 10000,
+      );
+      final report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 30))
+          .first;
+      final names = report.accounts.map((a) => a.name).toList();
+      // Orden esperado:
+      // 1. Bolsa (cash).
+      // 2. A BBVA (debit, alfabético).
+      // 3. Banamex (debit del setUp).
+      // 4. Z BBVA (debit).
+      // 5. Mastercard (credit, alfabético).
+      // 6. Visa (credit del setUp).
+      expect(names,
+          ['Bolsa', 'A BBVA', 'Banamex', 'Z BBVA', 'Mastercard', 'Visa']);
+    });
+
+    test('UT-08: cuenta sin movimientos hasta la fecha aparece con balance=0',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      final report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 30))
+          .first;
+      final bolsaAcc =
+          report.accounts.firstWhere((a) => a.name == 'Bolsa');
+      expect(bolsaAcc.balance, 0,
+          reason: 'Bolsa sin entries → balance 0');
+      final debitAcc =
+          report.accounts.firstWhere((a) => a.name == 'Banamex');
+      expect(debitAcc.balance, -200,
+          reason: 'Banamex con solo un expense → -200');
+    });
+  });
+
+  group('balanceAtDate — delta (patch v1)', () {
+    test(
+        'UT-09: asOf = hoy → delta = 0 (balance == balanceNow para los 3 totales)',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      // asOf = hoy → balance == balanceNow → delta = 0.
+      final report =
+          await reports.balanceAtDate(asOf: DateTime.now()).first;
+      expect(report.boDelta, 0);
+      expect(report.deDelta, 0);
+      expect(report.crDelta, 0);
+      for (final acc in report.accounts) {
+        expect(acc.balanceDelta, 0,
+            reason: 'asOf=hoy → balanceDelta=0 para todas las cuentas');
+      }
+    });
+
+    test(
+        'UT-10: asOf en el pasado con movimientos posteriores → delta refleja el cambio',
+        () async {
+      // Sembrar income antiguo + expense reciente.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      // Expense reciente (hoy) → solo cuenta en balanceNow, no en balance
+      // a fecha 2026-06-10.
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 300,
+        occurredAt: DateTime.now(),
+      );
+      final report = await reports
+          .balanceAtDate(asOf: DateTime(2026, 6, 10))
+          .first;
+      // A 2026-06-10: solo el income → bo=1000.
+      expect(report.bo, 1000);
+      // Hoy: income - expense = 700.
+      expect(report.boNow, 700);
+      // Delta = boNow - bo = -300.
+      expect(report.boDelta, -300,
+          reason: 'BO cayó 300 entre 2026-06-10 y hoy');
     });
   });
 }

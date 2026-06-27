@@ -399,6 +399,160 @@ class ReportsService {
     }
     return TopMovementsReport(from: from, to: to, entries: entries);
   }
+
+  /// Saldo de BO/DE/CR a una fecha pasada arbitraria via replay del journal
+  /// hasta el fin del día de `asOf` (RN-B04 inclusivo). Sprint
+  /// `flutter-reports-balance-at-date-v1`.
+  ///
+  /// Una sola query SQL devuelve una fila por cuenta activa con su balance
+  /// individual a la fecha. Los 3 totales (BO/DE/CR) se calculan en Dart
+  /// agregando sobre las filas — evita 4 queries separadas a BD.
+  ///
+  /// Filtros:
+  /// - `accounts.deleted_at IS NULL` (RN-B05 — solo cuentas activas hoy).
+  /// - `journal_entries.deleted_at IS NULL`.
+  /// - `journal_entries.occurred_at <= endOfDay(asOf)`.
+  ///
+  /// Orden: cash → debit → credit, alfabético dentro de cada tipo
+  /// (RN-B08).
+  ///
+  /// Reactividad: re-emite cuando cambian `accounts` o `journal_entries`.
+  Stream<BalanceAtDateReport> balanceAtDate({required DateTime asOf}) {
+    final endOfDay = _endOfDay(asOf);
+    final endOfToday = _endOfDay(DateTime.now());
+    const sql = '''
+      SELECT
+        a.id AS a_id,
+        a.name AS a_name,
+        a.type AS a_type,
+        a.credit_limit AS a_credit_limit,
+        (CASE
+          WHEN a.type IN ('cash', 'debit') THEN
+            (COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_destination_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0)
+             - COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_origin_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0))
+          WHEN a.type = 'credit' THEN
+            (COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_origin_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0)
+             - COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_destination_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0))
+          ELSE 0
+        END) AS balance,
+        (CASE
+          WHEN a.type IN ('cash', 'debit') THEN
+            (COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_destination_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0)
+             - COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_origin_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0))
+          WHEN a.type = 'credit' THEN
+            (COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_origin_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0)
+             - COALESCE((SELECT SUM(amount) FROM journal_entries
+                        WHERE account_destination_id = a.id
+                        AND deleted_at IS NULL
+                        AND occurred_at <= ?), 0))
+          ELSE 0
+        END) AS balance_now
+      FROM accounts a
+      WHERE a.deleted_at IS NULL
+      ORDER BY
+        CASE a.type
+          WHEN 'cash' THEN 1
+          WHEN 'debit' THEN 2
+          WHEN 'credit' THEN 3
+          ELSE 4
+        END ASC,
+        a.name ASC
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            // 4 placeholders para `balance` (asOf).
+            Variable.withDateTime(endOfDay),
+            Variable.withDateTime(endOfDay),
+            Variable.withDateTime(endOfDay),
+            Variable.withDateTime(endOfDay),
+            // 4 placeholders para `balance_now` (hoy).
+            Variable.withDateTime(endOfToday),
+            Variable.withDateTime(endOfToday),
+            Variable.withDateTime(endOfToday),
+            Variable.withDateTime(endOfToday),
+          ],
+          readsFrom: {_db.accounts, _db.journalEntries},
+        )
+        .watch()
+        .map((rows) => _buildBalanceAtDateReport(rows, asOf: asOf));
+  }
+
+  /// Extiende `asOf` al final del día (23:59:59.999) para que entries
+  /// ocurridos cualquier hora del día seleccionado entren al replay. RN-B04.
+  DateTime _endOfDay(DateTime asOf) {
+    return DateTime(asOf.year, asOf.month, asOf.day, 23, 59, 59, 999);
+  }
+
+  BalanceAtDateReport _buildBalanceAtDateReport(
+    List<QueryRow> rows, {
+    required DateTime asOf,
+  }) {
+    var bo = 0.0;
+    var de = 0.0;
+    var cr = 0.0;
+    var boNow = 0.0;
+    var deNow = 0.0;
+    var crNow = 0.0;
+    final accounts = <AccountBalanceAtDate>[];
+    for (final row in rows) {
+      final type = row.read<String>('a_type');
+      final balance = row.read<double>('balance');
+      final balanceNow = row.read<double>('balance_now');
+      final creditLimit = row.read<double?>('a_credit_limit');
+      if (type == 'cash' || type == 'debit') {
+        bo += balance;
+        boNow += balanceNow;
+      } else if (type == 'credit') {
+        de += balance;
+        deNow += balanceNow;
+        if (creditLimit != null) {
+          cr += creditLimit - balance;
+          crNow += creditLimit - balanceNow;
+        }
+      }
+      accounts.add(AccountBalanceAtDate(
+        id: row.read<String>('a_id'),
+        name: row.read<String>('a_name'),
+        type: type,
+        creditLimit: creditLimit,
+        balance: balance,
+        balanceNow: balanceNow,
+      ));
+    }
+    return BalanceAtDateReport(
+      asOf: asOf,
+      bo: bo,
+      de: de,
+      cr: cr,
+      boNow: boNow,
+      deNow: deNow,
+      crNow: crNow,
+      accounts: accounts,
+    );
+  }
 }
 
 /// Reporte de cashflow mensual del sprint `flutter-reports-cashflow-v1`.
@@ -505,6 +659,80 @@ class TopMovementCategory {
     required this.colorSlug,
     required this.iconSlug,
   });
+}
+
+/// Reporte de saldo a fecha del sprint
+/// `flutter-reports-balance-at-date-v1`.
+///
+/// Inmutable. Construido por [ReportsService.balanceAtDate]. Replay del
+/// journal hasta el fin del día de `asOf` (RN-B04). Útil para reconciliar
+/// contra estados de cuenta del banco a fecha de corte.
+class BalanceAtDateReport {
+  final DateTime asOf;
+  final double bo;
+  final double de;
+  final double cr;
+  /// Saldos a hoy (`DateTime.now()` al construir el reporte). Permiten
+  /// calcular el delta sin que el usuario tenga que ir al dashboard.
+  /// Patch v1 (decisión post-smoke con Diego — eliminar comparación
+  /// mental).
+  final double boNow;
+  final double deNow;
+  final double crNow;
+  final List<AccountBalanceAtDate> accounts;
+
+  const BalanceAtDateReport({
+    required this.asOf,
+    required this.bo,
+    required this.de,
+    required this.cr,
+    required this.boNow,
+    required this.deNow,
+    required this.crNow,
+    required this.accounts,
+  });
+
+  /// True cuando no hay cuentas activas en BD (caso extremo —
+  /// improbable si hay Bolsa, pero defensivo para empty state).
+  bool get isEmpty => accounts.isEmpty;
+
+  /// Delta hoy menos fecha. Positivo = el indicador subió. La
+  /// interpretación buena/mala depende del indicador (RN-B09).
+  double get boDelta => boNow - bo;
+  double get deDelta => deNow - de;
+  double get crDelta => crNow - cr;
+}
+
+/// Saldo individual de una cuenta a la fecha del reporte.
+///
+/// - `balance` para cash/debit: monto disponible (puede ser negativo si la
+///   cuenta tuvo overdraft histórico).
+/// - `balance` para credit: deuda acumulada (positivo cuando hay deuda).
+/// - `creditLimit` solo aplica a credit; null para cash/debit y para
+///   credit sin límite seteado.
+class AccountBalanceAtDate {
+  final String id;
+  final String name;
+  final String type;
+  final double? creditLimit;
+  final double balance;
+  /// Saldo a hoy de la cuenta (patch v1). Permite delta automático en
+  /// la lista de cuentas.
+  final double balanceNow;
+
+  const AccountBalanceAtDate({
+    required this.id,
+    required this.name,
+    required this.type,
+    required this.creditLimit,
+    required this.balance,
+    required this.balanceNow,
+  });
+
+  /// Delta hoy menos fecha. Para cash/debit: positivo = ganó plata,
+  /// negativo = gastó. Para credit: positivo = más deuda, negativo =
+  /// pagó deuda.
+  double get balanceDelta => balanceNow - balance;
 }
 
 class _RawBucket {
