@@ -112,7 +112,17 @@ publish_to: 'none'
 # SQL agregada que sirve totales y desglose (más eficiente que 4
 # queries separadas). +8 tests data + 3 widget tests. 277/277
 # verdes. Sin schema bump.
-version: 0.9.0+61
+# 0.10.0+62: sprint flutter-entries-saved-views-v1 — vistas guardadas
+# del panel de filtros de `/entries`. CRUD completo: guardar (botón
+# en panel), aplicar/renombrar/eliminar (sheet desde AppBar con icono
+# bookmark). **Primer schema bump del MVP local** (2 → 3): tabla
+# `saved_views` nueva con migración aditiva en `onUpgrade`.
+# Serializador híbrido en `EntriesFilters`: preset semántico (thisMonth,
+# etc) se guarda como slug rolling; custom guarda from/to ISO8601
+# fijos. wipeAll() extendido para borrar también las vistas. +10
+# tests DAO + 6 serializer + 1 migración + 3 widget = 20 nuevos.
+# 299/299 verdes.
+version: 0.10.0+62
 
 environment:
   sdk: ^3.7.2

@@ -2082,17 +2082,337 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
   }
 }
 
+class $SavedViewsTable extends SavedViews
+    with TableInfo<$SavedViewsTable, SavedViewRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SavedViewsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _filtersJsonMeta = const VerificationMeta(
+    'filtersJson',
+  );
+  @override
+  late final GeneratedColumn<String> filtersJson = GeneratedColumn<String>(
+    'filters_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, name, filtersJson, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'saved_views';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SavedViewRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('filters_json')) {
+      context.handle(
+        _filtersJsonMeta,
+        filtersJson.isAcceptableOrUnknown(
+          data['filters_json']!,
+          _filtersJsonMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_filtersJsonMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SavedViewRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SavedViewRow(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      name:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}name'],
+          )!,
+      filtersJson:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}filters_json'],
+          )!,
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+    );
+  }
+
+  @override
+  $SavedViewsTable createAlias(String alias) {
+    return $SavedViewsTable(attachedDatabase, alias);
+  }
+}
+
+class SavedViewRow extends DataClass implements Insertable<SavedViewRow> {
+  final String id;
+  final String name;
+  final String filtersJson;
+  final DateTime createdAt;
+  const SavedViewRow({
+    required this.id,
+    required this.name,
+    required this.filtersJson,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['filters_json'] = Variable<String>(filtersJson);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  SavedViewsCompanion toCompanion(bool nullToAbsent) {
+    return SavedViewsCompanion(
+      id: Value(id),
+      name: Value(name),
+      filtersJson: Value(filtersJson),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory SavedViewRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SavedViewRow(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      filtersJson: serializer.fromJson<String>(json['filtersJson']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'filtersJson': serializer.toJson<String>(filtersJson),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  SavedViewRow copyWith({
+    String? id,
+    String? name,
+    String? filtersJson,
+    DateTime? createdAt,
+  }) => SavedViewRow(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    filtersJson: filtersJson ?? this.filtersJson,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  SavedViewRow copyWithCompanion(SavedViewsCompanion data) {
+    return SavedViewRow(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      filtersJson:
+          data.filtersJson.present ? data.filtersJson.value : this.filtersJson,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedViewRow(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('filtersJson: $filtersJson, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, name, filtersJson, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SavedViewRow &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.filtersJson == this.filtersJson &&
+          other.createdAt == this.createdAt);
+}
+
+class SavedViewsCompanion extends UpdateCompanion<SavedViewRow> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<String> filtersJson;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const SavedViewsCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.filtersJson = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  SavedViewsCompanion.insert({
+    required String id,
+    required String name,
+    required String filtersJson,
+    required DateTime createdAt,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       filtersJson = Value(filtersJson),
+       createdAt = Value(createdAt);
+  static Insertable<SavedViewRow> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<String>? filtersJson,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (filtersJson != null) 'filters_json': filtersJson,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  SavedViewsCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<String>? filtersJson,
+    Value<DateTime>? createdAt,
+    Value<int>? rowid,
+  }) {
+    return SavedViewsCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      filtersJson: filtersJson ?? this.filtersJson,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (filtersJson.present) {
+      map['filters_json'] = Variable<String>(filtersJson.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SavedViewsCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('filtersJson: $filtersJson, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$FincoreDatabase extends GeneratedDatabase {
   _$FincoreDatabase(QueryExecutor e) : super(e);
   $FincoreDatabaseManager get managers => $FincoreDatabaseManager(this);
   late final $AccountsTable accounts = $AccountsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
   late final $JournalEntriesTable journalEntries = $JournalEntriesTable(this);
+  late final $SavedViewsTable savedViews = $SavedViewsTable(this);
   late final AccountsDao accountsDao = AccountsDao(this as FincoreDatabase);
   late final CategoriesDao categoriesDao = CategoriesDao(
     this as FincoreDatabase,
   );
   late final EntriesDao entriesDao = EntriesDao(this as FincoreDatabase);
+  late final SavedViewsDao savedViewsDao = SavedViewsDao(
+    this as FincoreDatabase,
+  );
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2101,6 +2421,7 @@ abstract class _$FincoreDatabase extends GeneratedDatabase {
     accounts,
     categories,
     journalEntries,
+    savedViews,
   ];
   @override
   DriftDatabaseOptions get options =>
@@ -3509,6 +3830,196 @@ typedef $$JournalEntriesTableProcessedTableManager =
         bool categoryId,
       })
     >;
+typedef $$SavedViewsTableCreateCompanionBuilder =
+    SavedViewsCompanion Function({
+      required String id,
+      required String name,
+      required String filtersJson,
+      required DateTime createdAt,
+      Value<int> rowid,
+    });
+typedef $$SavedViewsTableUpdateCompanionBuilder =
+    SavedViewsCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<String> filtersJson,
+      Value<DateTime> createdAt,
+      Value<int> rowid,
+    });
+
+class $$SavedViewsTableFilterComposer
+    extends Composer<_$FincoreDatabase, $SavedViewsTable> {
+  $$SavedViewsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get filtersJson => $composableBuilder(
+    column: $table.filtersJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SavedViewsTableOrderingComposer
+    extends Composer<_$FincoreDatabase, $SavedViewsTable> {
+  $$SavedViewsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get filtersJson => $composableBuilder(
+    column: $table.filtersJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SavedViewsTableAnnotationComposer
+    extends Composer<_$FincoreDatabase, $SavedViewsTable> {
+  $$SavedViewsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get filtersJson => $composableBuilder(
+    column: $table.filtersJson,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$SavedViewsTableTableManager
+    extends
+        RootTableManager<
+          _$FincoreDatabase,
+          $SavedViewsTable,
+          SavedViewRow,
+          $$SavedViewsTableFilterComposer,
+          $$SavedViewsTableOrderingComposer,
+          $$SavedViewsTableAnnotationComposer,
+          $$SavedViewsTableCreateCompanionBuilder,
+          $$SavedViewsTableUpdateCompanionBuilder,
+          (
+            SavedViewRow,
+            BaseReferences<_$FincoreDatabase, $SavedViewsTable, SavedViewRow>,
+          ),
+          SavedViewRow,
+          PrefetchHooks Function()
+        > {
+  $$SavedViewsTableTableManager(_$FincoreDatabase db, $SavedViewsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$SavedViewsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () => $$SavedViewsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer:
+              () => $$SavedViewsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<String> filtersJson = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => SavedViewsCompanion(
+                id: id,
+                name: name,
+                filtersJson: filtersJson,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required String filtersJson,
+                required DateTime createdAt,
+                Value<int> rowid = const Value.absent(),
+              }) => SavedViewsCompanion.insert(
+                id: id,
+                name: name,
+                filtersJson: filtersJson,
+                createdAt: createdAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          BaseReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SavedViewsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$FincoreDatabase,
+      $SavedViewsTable,
+      SavedViewRow,
+      $$SavedViewsTableFilterComposer,
+      $$SavedViewsTableOrderingComposer,
+      $$SavedViewsTableAnnotationComposer,
+      $$SavedViewsTableCreateCompanionBuilder,
+      $$SavedViewsTableUpdateCompanionBuilder,
+      (
+        SavedViewRow,
+        BaseReferences<_$FincoreDatabase, $SavedViewsTable, SavedViewRow>,
+      ),
+      SavedViewRow,
+      PrefetchHooks Function()
+    >;
 
 class $FincoreDatabaseManager {
   final _$FincoreDatabase _db;
@@ -3519,4 +4030,6 @@ class $FincoreDatabaseManager {
       $$CategoriesTableTableManager(_db, _db.categories);
   $$JournalEntriesTableTableManager get journalEntries =>
       $$JournalEntriesTableTableManager(_db, _db.journalEntries);
+  $$SavedViewsTableTableManager get savedViews =>
+      $$SavedViewsTableTableManager(_db, _db.savedViews);
 }

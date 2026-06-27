@@ -1,12 +1,15 @@
+import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/constants/date_range_presets.dart';
 import 'package:fincore/constants/filter_tokens.dart';
 import 'package:fincore/constants/kinds.dart';
+import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/date_field_outlined.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
+import 'package:fincore/widgets/save_view_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -186,6 +189,46 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
     Navigator.of(context).maybePop();
   }
 
+  /// Sprint `flutter-entries-saved-views-v1` (RF-008): guarda los
+  /// filtros actuales como vista nueva tras pedir el nombre.
+  Future<void> _saveView() async {
+    final name = await showSaveViewDialog(
+      context,
+      title: 'Guardar vista',
+    );
+    if (name == null) return;
+    if (!mounted) return;
+    // Antes de guardar, computar `_editing` con los amounts actuales
+    // (parsea controllers). Reutilizamos la misma lógica de `_apply`.
+    final minText = _minAmountCtrl.text.trim();
+    final maxText = _maxAmountCtrl.text.trim();
+    final min = minText.isEmpty ? null : double.tryParse(minText);
+    final max = maxText.isEmpty ? null : double.tryParse(maxText);
+    if (min != null && max != null && min > max) {
+      showWarningSnackbar(
+        context,
+        'El rango de monto no es válido. Revisá los montos.',
+      );
+      return;
+    }
+    final filtersToSave = _editing.copyWith(
+      minAmount: min,
+      maxAmount: max,
+      clearMinAmount: minText.isEmpty,
+      clearMaxAmount: maxText.isEmpty,
+    );
+    final deps = AppDependencies.of(context);
+    try {
+      await deps.savedViewsDao
+          .create(name: name, filters: filtersToSave);
+      if (mounted) {
+        showSuccessSnackbar(context, 'Vista guardada.');
+      }
+    } on SavedViewsDaoError catch (e) {
+      if (mounted) showErrorSnackbar(context, e);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('d MMM y', 'es_MX');
@@ -295,6 +338,9 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
           // Sección Monto (sprint flutter-movements-amount-filter-v1)
           // ===========================================================
           const _SectionTitle('Monto'),
+          // Patch UX post-smoke: inputs más compactos (isDense + padding
+          // ajustado) para que se vean alineados con la altura visual de
+          // los chips del resto del panel.
           Row(
             children: [
               Expanded(
@@ -303,7 +349,14 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Mínimo',
                     prefixText: r'$ ',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
                   ),
+                  style: const TextStyle(fontSize: 13),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -319,7 +372,14 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
                   decoration: const InputDecoration(
                     labelText: 'Máximo',
                     prefixText: r'$ ',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
                   ),
+                  style: const TextStyle(fontSize: 13),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -362,6 +422,21 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
               ],
             );
           }),
+          const SizedBox(height: 24),
+
+          // ===========================================================
+          // Sección Vistas guardadas (sprint
+          // `flutter-entries-saved-views-v1`)
+          // ===========================================================
+          OutlinedButton.icon(
+            onPressed: _saveView,
+            icon: const Icon(Icons.bookmark_outline, size: 18),
+            label: const Text('Guardar como vista'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: FincoreColors.accent,
+              side: const BorderSide(color: FincoreColors.accent),
+            ),
+          ),
           const SizedBox(height: 24),
         ],
       ),

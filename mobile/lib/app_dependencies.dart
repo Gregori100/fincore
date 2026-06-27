@@ -2,6 +2,7 @@ import 'package:fincore/data/backup.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/reports.dart';
@@ -17,6 +18,7 @@ class AppDependencies {
   final AccountsDao accountsDao;
   final CategoriesDao categoriesDao;
   final EntriesDao entriesDao;
+  final SavedViewsDao savedViewsDao;
   final FinancialStateService stateService;
   final BackupService backupService;
   final ReportsService reportsService;
@@ -26,6 +28,7 @@ class AppDependencies {
     required this.accountsDao,
     required this.categoriesDao,
     required this.entriesDao,
+    required this.savedViewsDao,
     required this.stateService,
     required this.backupService,
     required this.reportsService,
@@ -45,6 +48,7 @@ class AppDependencies {
     final accountsDao = database.accountsDao;
     final categoriesDao = database.categoriesDao;
     final entriesDao = database.entriesDao;
+    final savedViewsDao = database.savedViewsDao;
     final backupService = BackupService(database, stateService);
     final reportsService = ReportsService(database);
     return AppDependencies(
@@ -52,6 +56,7 @@ class AppDependencies {
       accountsDao: accountsDao,
       categoriesDao: categoriesDao,
       entriesDao: entriesDao,
+      savedViewsDao: savedViewsDao,
       stateService: stateService,
       backupService: backupService,
       reportsService: reportsService,

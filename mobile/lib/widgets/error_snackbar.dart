@@ -1,4 +1,5 @@
 import 'package:fincore/data/backup.dart';
+import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/models/domain_error.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:flutter/material.dart';
@@ -137,6 +138,21 @@ SnackBar _buildFincoreSnackBar({
   );
 }
 
+/// Mapeo de códigos del `SavedViewsDao` a mensajes amigables (sprint
+/// `flutter-entries-saved-views-v1`, RF-011).
+String savedViewsDaoErrorToMessage(SavedViewsDaoError error) {
+  switch (error.code) {
+    case 'invalid_name':
+      return 'El nombre no es válido. Probá con 1-50 caracteres.';
+    case 'duplicate_name':
+      return 'Ya tenés una vista con ese nombre.';
+    case 'not_found':
+      return 'Esa vista ya no existe.';
+    default:
+      return error.message;
+  }
+}
+
 void showErrorSnackbar(BuildContext context, Object error) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
@@ -144,6 +160,7 @@ void showErrorSnackbar(BuildContext context, Object error) {
   final message = switch (error) {
     BackupError() => backupErrorToMessage(error),
     DomainError() => domainErrorToMessage(error),
+    SavedViewsDaoError() => savedViewsDaoErrorToMessage(error),
     Exception() => error.toString().replaceFirst('Exception: ', ''),
     _ => 'Error inesperado.',
   };

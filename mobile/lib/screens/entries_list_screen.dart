@@ -5,6 +5,7 @@ import 'package:fincore/data/database.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/screens/entries_filters_screen.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/screens/saved_views_list_screen.dart';
 import 'package:fincore/widgets/entries_active_filters_bar.dart';
 import 'package:fincore/widgets/entries_paginated_list.dart';
 import 'package:flutter/material.dart';
@@ -93,6 +94,24 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
     setState(() => _filters = result);
   }
 
+  /// Sprint `flutter-entries-saved-views-v1` + patch UX v4: push a la
+  /// pantalla full-screen con la lista de vistas guardadas. Si retorna
+  /// filtros (Diego tappeó una vista), los aplica.
+  ///
+  /// Cambió de `showModalBottomSheet` a `MaterialPageRoute` para eliminar
+  /// la interacción problemática sheet-sobre-sheet (shrink visual del
+  /// padre cuando un sheet hijo abría teclado).
+  Future<void> _openSavedViews() async {
+    final result = await Navigator.of(context).push<EntriesFilters>(
+      MaterialPageRoute(
+        builder: (_) => const SavedViewsListScreen(),
+        fullscreenDialog: true,
+      ),
+    );
+    if (result == null) return;
+    setState(() => _filters = result);
+  }
+
   void _removeDimension(FilterDimension dim) {
     setState(() => _filters = _filters.clearDimension(dim));
   }
@@ -112,6 +131,13 @@ class _EntriesListScreenState extends State<EntriesListScreen> {
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         actions: [
+          // Sprint `flutter-entries-saved-views-v1` (RF-007): icono de
+          // vistas guardadas. Tap abre sheet con CRUD.
+          IconButton(
+            tooltip: 'Mis vistas',
+            icon: const Icon(Icons.bookmark_outline),
+            onPressed: _openSavedViews,
+          ),
           IconButton(
             tooltip: activeCount > 0 ? 'Filtros ($activeCount)' : 'Filtros',
             icon: Stack(

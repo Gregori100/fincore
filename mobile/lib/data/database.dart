@@ -3,6 +3,7 @@ import 'package:drift_flutter/drift_flutter.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/daos/saved_views_dao.dart';
 
 part 'database.g.dart';
 
@@ -87,6 +88,29 @@ class JournalEntries extends Table {
 }
 
 // =============================================================================
+// Tabla: saved_views (sprint flutter-entries-saved-views-v1)
+// =============================================================================
+// Vistas guardadas del panel de filtros de `/entries`. Diego guarda combos de
+// filtros (fecha + tipo + cuenta + categoría + monto) con nombre custom para
+// reaplicarlos con un tap.
+//
+// Borrado físico (sin `deleted_at`): las vistas son preferencias de UI, no
+// datos críticos. Si Diego elimina una vista, se va.
+//
+// Sin índices: esperamos <100 filas (single-user). `name` se valida case-
+// insensitive en el DAO con `LOWER(name) = LOWER(?)` para impedir duplicados.
+@DataClassName('SavedViewRow')
+class SavedViews extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  TextColumn get filtersJson => text()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// =============================================================================
 // FincoreDatabase
 // =============================================================================
 // Los 3 DAOs se registran en `daos:` desde el sprint flutter-local-hardening-v4
@@ -95,16 +119,19 @@ class JournalEntries extends Table {
 // Antes del v4, `EntriesDao` requería `FinancialStateService` y se instanciaba
 // manualmente en `AppDependencies`; ahora `attachedDatabase.entriesDao` es la
 // fuente única.
+//
+// schemaVersion 3 (sprint flutter-entries-saved-views-v1): tabla `saved_views`
+// nueva. Migración aditiva en `onUpgrade`.
 @DriftDatabase(
-  tables: [Accounts, Categories, JournalEntries],
-  daos: [AccountsDao, CategoriesDao, EntriesDao],
+  tables: [Accounts, Categories, JournalEntries, SavedViews],
+  daos: [AccountsDao, CategoriesDao, EntriesDao, SavedViewsDao],
 )
 class FincoreDatabase extends _$FincoreDatabase {
   FincoreDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -161,6 +188,23 @@ class FincoreDatabase extends _$FincoreDatabase {
               'ON journal_entries(occurred_at DESC) '
               'WHERE deleted_at IS NULL',
             );
+            return;
+          }
+          // Migración 2 → 3 (sprint flutter-entries-saved-views-v1): crea
+          // tabla nueva `saved_views`. Aditiva, no destructiva — no toca
+          // datos existentes.
+          if (from == 2 && to == 3) {
+            await m.createTable(savedViews);
+            return;
+          }
+          // Migración 1 → 3 (instalación que se saltó la 2): combina ambas.
+          if (from == 1 && to == 3) {
+            await customStatement(
+              'CREATE INDEX idx_entries_occurred_active '
+              'ON journal_entries(occurred_at DESC) '
+              'WHERE deleted_at IS NULL',
+            );
+            await m.createTable(savedViews);
             return;
           }
           // Guardrail (RN-H02 + RF-009): cualquier futura migración debe

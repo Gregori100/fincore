@@ -187,6 +187,108 @@ class EntriesFilters {
     return map;
   }
 
+  /// Serializa los filtros a JSON para guardar en BD (sprint
+  /// `flutter-entries-saved-views-v1`). Diferente de [serialize] (que es
+  /// para query params del router):
+  ///
+  /// - Híbrido preset/custom (RN-V04):
+  ///   - Si `datePreset` es semántico (`thisMonth`/`lastMonth`/`thisYear`):
+  ///     guarda solo el slug; al deserializar se recalcula con
+  ///     `dateRangeForPreset(preset, DateTime.now())` → rolling.
+  ///   - Si `datePreset == custom`: guarda `from`/`to` como ISO8601 → fijo.
+  /// - Listas: serializadas como `List<String>` nativo, no CSV.
+  /// - Defaults vacíos no se incluyen (JSON más chico).
+  Map<String, dynamic> toSavedJson() {
+    final json = <String, dynamic>{
+      'datePreset': datePreset.slug,
+    };
+    if (datePreset == DateRangePreset.custom) {
+      json['from'] = from.toIso8601String();
+      json['to'] = to.toIso8601String();
+    }
+    if (kinds.isNotEmpty) {
+      json['kinds'] = List<String>.from(kinds);
+    }
+    if (accountIds.isNotEmpty) {
+      json['accountIds'] = List<String>.from(accountIds);
+    }
+    if (categoryIds.isNotEmpty) {
+      json['categoryIds'] = List<String>.from(categoryIds);
+    }
+    if (minAmount != null) {
+      json['minAmount'] = minAmount;
+    }
+    if (maxAmount != null) {
+      json['maxAmount'] = maxAmount;
+    }
+    return json;
+  }
+
+  /// Deserializa filtros desde un JSON guardado en BD. Tolerante a campos
+  /// faltantes (RN-V04, R-T05): cualquier campo inválido cae al default
+  /// sin lanzar. Si el JSON es vacío o totalmente corrupto, retorna
+  /// [EntriesFilters.thisMonth].
+  factory EntriesFilters.fromSavedJson(
+    Map<String, dynamic> json, [
+    DateTime? now,
+  ]) {
+    final ref = now ?? DateTime.now();
+    if (json.isEmpty) {
+      return EntriesFilters.thisMonth(ref);
+    }
+
+    final preset = dateRangePresetFromSlug(json['datePreset'] as String?) ??
+        DateRangePreset.thisMonth;
+
+    DateTime from;
+    DateTime to;
+    if (preset == DateRangePreset.custom) {
+      // Custom: usa from/to del JSON exactos. Si falta o están corruptos,
+      // fallback a thisMonth.
+      final parsedFrom = _tryParseDate(json['from'] as String?);
+      final parsedTo = _tryParseDate(json['to'] as String?);
+      if (parsedFrom == null ||
+          parsedTo == null ||
+          parsedFrom.isAfter(parsedTo)) {
+        final fb = dateRangeForPreset(DateRangePreset.thisMonth, ref);
+        from = fb.$1;
+        to = fb.$2;
+      } else {
+        from = parsedFrom;
+        to = parsedTo;
+      }
+    } else {
+      // Preset semántico → rolling: recalcula con la fecha actual.
+      final r = dateRangeForPreset(preset, ref);
+      from = r.$1;
+      to = r.$2;
+    }
+
+    final kinds = _parseSavedList(json['kinds'])
+        .where(_kValidKinds.contains)
+        .toSet()
+        .toList(growable: false);
+    final accountIds = _parseSavedList(json['accountIds'])
+        .toSet()
+        .toList(growable: false);
+    final categoryIds = _parseSavedList(json['categoryIds'])
+        .toSet()
+        .toList(growable: false);
+    final minAmount = _tryParseDouble(json['minAmount']);
+    final maxAmount = _tryParseDouble(json['maxAmount']);
+
+    return EntriesFilters(
+      datePreset: preset,
+      from: from,
+      to: to,
+      kinds: kinds,
+      accountIds: accountIds,
+      categoryIds: categoryIds,
+      minAmount: minAmount,
+      maxAmount: maxAmount,
+    );
+  }
+
   /// Parsea desde query params. Tolerante a URLs malformadas: cualquier
   /// campo inválido cae al default sin lanzar.
   ///
@@ -290,4 +392,25 @@ List<String> _parseCsv(String? raw) {
       .map((s) => s.trim())
       .where((s) => s.isNotEmpty)
       .toList(growable: false);
+}
+
+/// Sprint `flutter-entries-saved-views-v1`: parsea una lista del JSON
+/// guardado. Acepta List nativa de strings o null. Si el campo no es
+/// lista, retorna lista vacía sin lanzar.
+List<String> _parseSavedList(dynamic raw) {
+  if (raw is! List) return const [];
+  return raw
+      .where((e) => e is String && e.isNotEmpty)
+      .cast<String>()
+      .toList(growable: false);
+}
+
+/// Sprint `flutter-entries-saved-views-v1`: parsea un double tolerante.
+/// Acepta `double` o `int` directo; null/no-numérico → null.
+double? _tryParseDouble(dynamic raw) {
+  if (raw == null) return null;
+  if (raw is double) return raw;
+  if (raw is int) return raw.toDouble();
+  if (raw is String) return double.tryParse(raw);
+  return null;
 }

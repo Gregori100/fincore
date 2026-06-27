@@ -255,6 +255,10 @@ class BackupService {
     await _db.delete(_db.journalEntries).go();
     await _db.delete(_db.categories).go();
     await _db.delete(_db.accounts).go();
+    // Sprint `flutter-entries-saved-views-v1` (RN-V10): las vistas
+    // guardadas son preferencias de UI; al "arrancar limpio" también
+    // se borran para mantener coherencia.
+    await _db.delete(_db.savedViews).go();
   }
 
   // ===========================================================================
