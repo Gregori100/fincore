@@ -122,13 +122,14 @@ publish_to: 'none'
 # fijos. wipeAll() extendido para borrar también las vistas. +10
 # tests DAO + 6 serializer + 1 migración + 3 widget = 20 nuevos.
 # 299/299 verdes.
-# 0.11.2+65 — sprint flutter-entries-category-suggestion-v1: sugerencia
-# automática de categoría al capturar un nuevo movimiento. Cascada de 3
-# pasos (descripción exacta → monto+cuenta últimos 90 días → más usada
-# últimos 30 días) para expense/credit_expense/income. Chip "✨ Sugerida"
-# debajo del CategoryPicker; respeta elección manual y se inhibe en edit.
-# Sin schema bump. +18 unit + 4 widget tests = 22 nuevos. 343/343 verdes.
-version: 0.11.2+65
+# 0.11.3+66 — sprint flutter-entries-category-suggestion-v1 v2: simplifica
+# el algoritmo de sugerencia post-uso real. Tras feedback de Diego, se
+# eliminó el match por monto+cuenta (irrelevante) y el fallback "más
+# usada" (intrusivo, disparaba sin señal del usuario). Único criterio:
+# match por substring de descripción (la nueva contiene la histórica),
+# con filtros defensivos de LENGTH >= 3 chars en ambos lados.
+# +18 unit (refactor) + 4 widget tests sin cambios = 22 nuevos.
+version: 0.11.3+66
 
 environment:
   sdk: ^3.7.2

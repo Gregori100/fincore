@@ -17,3 +17,27 @@
 - Pregunta: P-004
   Decision: **30 días** para "más usado" (paso 3), **90 días** para "monto+cuenta" (paso 2).
   Impacto en spec: confirmación de RN-S03 pasos 2 y 3, S-06. Sin cambios estructurales.
+
+## 2026-06-29 — v2 (post-uso real)
+
+Diego instaló el APK `0.11.2+65` y reportó que la sugerencia disparaba al seleccionar la cuenta (paso 3 "más usada") sin haber tipeado nada. Le pareció intrusivo y descubrió que su modelo mental era distinto al algoritmo implementado.
+
+- Cambio: ¿el monto es relevante como criterio (paso 2)?
+  Decision: **NO**. Diego confirmó que para él el monto no es indicador útil para sugerir categoría. Eliminado el paso 2.
+  Impacto en código: `_stepAmountAccountMatch` removido del servicio. RN-S03 simplificada.
+
+- Cambio P-003: ¿el match de descripción debe ser exacto o substring?
+  Decision (corrige P-003 original): **substring** — la nueva descripción **contiene** la histórica. Ejemplo: histórico `"Café"` matchea con nueva `"Café para mi novia"` y con `"Café del amigo Juan"`. Para evitar falsos positivos masivos, descripción histórica debe medir al menos 3 caracteres (`LENGTH(TRIM(j.description)) >= 3`). La nueva descripción también short-circuit si <3 chars.
+  Impacto en código: query del paso 1 cambia de `LOWER(TRIM(j.description)) = ?` a `? LIKE '%' || LOWER(TRIM(j.description)) || '%'` con filtro de LENGTH.
+
+- Cambio: ¿se mantiene el fallback estadístico (paso 3 "más usada por kind+cuenta")?
+  Decision: **NO**. El fallback genera sugerencias sin señal explícita del usuario, lo cual erosiona confianza. La sugerencia ahora SOLO aparece cuando hay match basado en lo que Diego escribió.
+  Impacto en código: `_stepMostUsedRecent` removido del servicio. La cascada se reduce a un único criterio.
+
+- Cambio de firma del servicio: `suggestForNewEntry` ya no recibe `accountId`, `amount` ni `now`. Firma nueva: `({required String kind, required String? description})`.
+
+- Cambio en el form: removido el listener de `_amountCtrl`. Removidas las invocaciones de `_recalcSuggestionImmediate()` en los `onChanged` de `AccountPicker`. El cambio de `_kind` sigue disparando porque `applies_to` cambia.
+
+- Tests: refactor completo de `category_suggestion_test.dart` v2 (18 tests cubriendo match exacto, substring "caso Diego", edge cases, kinds y compatibility). Widget tests `entry_form_suggestion_test.dart` siguen verdes sin cambios.
+
+Versión bumped: `0.11.2+65 → 0.11.3+66`.

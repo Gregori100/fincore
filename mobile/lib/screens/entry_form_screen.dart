@@ -65,25 +65,25 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
-    // Listeners para recalcular la sugerencia al tipear descripción o
-    // monto. Se agregan acá (no en `_bootstrap`) porque los TextEditingController
-    // existen desde `initState`. El handler short-circuit en `_isEdit`.
+    // Listener para recalcular la sugerencia al tipear descripción. Se
+    // agrega en `initState` porque el `TextEditingController` existe
+    // desde acá. El handler short-circuit en `_isEdit` y `_categoryTouched`.
+    // (Tras refactor v2 ya NO escuchamos `_amountCtrl` — el monto no
+    // influye en la sugerencia.)
     _descCtrl.addListener(_onSuggestionInputChanged);
-    _amountCtrl.addListener(_onSuggestionInputChanged);
   }
 
   @override
   void dispose() {
     _suggestionDebounce?.cancel();
     _descCtrl.removeListener(_onSuggestionInputChanged);
-    _amountCtrl.removeListener(_onSuggestionInputChanged);
     _amountCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
 
-  /// Listener compartido por `_descCtrl` y `_amountCtrl`. Programa el
-  /// `_recalcSuggestion` con debounce.
+  /// Listener del `_descCtrl`. Programa el `_recalcSuggestion` con
+  /// debounce 300 ms.
   void _onSuggestionInputChanged() {
     if (_isEdit || _categoryTouched) return;
     _scheduleSuggestion();
@@ -117,19 +117,13 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
     final generation = ++_suggestionGeneration;
     final deps = AppDependencies.of(context);
     final kindApi = _kind!.apiValue;
-    // "Cuenta relevante" según el kind (RN-S01).
-    final accountId =
-        _kind! == JournalKind.income ? _destId : _originId;
-    final amount = double.tryParse(_amountCtrl.text);
     final description = _descCtrl.text;
 
     String? result;
     try {
       result = await deps.categorySuggestionService.suggestForNewEntry(
         kind: kindApi,
-        accountId: accountId,
         description: description,
-        amount: amount,
       );
     } catch (_) {
       // RN-S09: degradación silenciosa. El picker queda como estaba.
@@ -558,13 +552,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
             accounts: _accounts,
             allowedTypes: _originTypes(k),
             selectedId: _originId,
-            onChanged: (v) {
-              setState(() => _originId = v);
-              // Cambio de cuenta origen → recalcular sugerencia para
-              // expense/credit_expense (cuenta relevante). Para income
-              // no aplica (esa rama usa destId).
-              _recalcSuggestionImmediate();
-            },
+            onChanged: (v) => setState(() => _originId = v),
             excludeId: k == JournalKind.transfer ? _destId : null,
           ),
           AccountBalanceHint(accountId: _originId, accounts: _accounts),
@@ -576,12 +564,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
             accounts: _accounts,
             allowedTypes: _destTypes(k),
             selectedId: _destId,
-            onChanged: (v) {
-              setState(() => _destId = v);
-              // Cambio de cuenta destino → recalcular para income (cuenta
-              // relevante). Para otros kinds la sugerencia ignora destId.
-              _recalcSuggestionImmediate();
-            },
+            onChanged: (v) => setState(() => _destId = v),
             excludeId: k == JournalKind.transfer ? _originId : null,
           ),
           AccountBalanceHint(accountId: _destId, accounts: _accounts),
