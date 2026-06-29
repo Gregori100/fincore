@@ -122,14 +122,13 @@ publish_to: 'none'
 # fijos. wipeAll() extendido para borrar también las vistas. +10
 # tests DAO + 6 serializer + 1 migración + 3 widget = 20 nuevos.
 # 299/299 verdes.
-# 0.11.3+66 — sprint flutter-entries-category-suggestion-v1 v2: simplifica
-# el algoritmo de sugerencia post-uso real. Tras feedback de Diego, se
-# eliminó el match por monto+cuenta (irrelevante) y el fallback "más
-# usada" (intrusivo, disparaba sin señal del usuario). Único criterio:
-# match por substring de descripción (la nueva contiene la histórica),
-# con filtros defensivos de LENGTH >= 3 chars en ambos lados.
-# +18 unit (refactor) + 4 widget tests sin cambios = 22 nuevos.
-version: 0.11.3+66
+# 0.11.4+67 — sprint flutter-entries-category-suggestion-v1 v2.1: hace el
+# match de descripción BIDIRECCIONAL. Antes solo matcheaba si la nueva
+# descripción contenía la histórica ("Café" sugiere al tipear "Café
+# para mi novia"). Ahora también matchea si la histórica contiene la
+# nueva ("fiscal" sugiere al tipear "fisca", antes de terminar de
+# escribir). +1 unit test = 19 nuevos total, 4 widget tests sin cambios.
+version: 0.11.4+67
 
 environment:
   sdk: ^3.7.2

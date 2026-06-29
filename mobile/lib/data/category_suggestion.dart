@@ -5,21 +5,22 @@ import 'package:fincore/data/database.dart';
 /// movimiento. Sprint `flutter-entries-category-suggestion-v1`,
 /// algoritmo **v2** post-uso real (decisión del 2026-06-29).
 ///
-/// **Algoritmo v2 — un solo criterio: match por substring de descripción.**
+/// **Algoritmo v2 — un solo criterio: match BIDIRECCIONAL por substring.**
 ///
-/// La nueva descripción se compara contra descripciones históricas usando
-/// `LIKE`: se considera match cuando la nueva descripción **contiene**
-/// como substring la descripción de un entry previo del mismo `kind`
-/// con categoría activa y `applies_to` compatible.
+/// La nueva descripción matchea con un entry histórico cuando **alguna
+/// de las dos contiene a la otra** como substring (case-insensitive,
+/// trimmed). Esto cubre los dos patrones reales del usuario:
 ///
-/// Ejemplo: histórico tiene un entry con `description = "Café"` y
-/// categoría "Café". Si Diego tipea `"Café para mi novia"`, la nueva
-/// contiene `"Café"` → sugiere "Café". Igual para `"Café del amigo Juan"`.
+/// - **Histórico corto, tipeo extenso**: histórico `"Café"`, tipeo
+///   `"Café para mi novia"` → la nueva contiene la histórica → match.
+/// - **Histórico largo, tipeo prefijo**: histórico `"fiscal"`, tipeo
+///   `"fisca"` → la histórica contiene la nueva → match (la sugerencia
+///   aparece antes de terminar de escribir).
 ///
-/// Filtro defensivo: la descripción histórica debe medir **al menos 3
-/// caracteres tras trim**, para que entries con descripciones muy cortas
-/// (`"a"`, `"x"`) no generen falsos positivos masivos. La nueva
-/// descripción también debe tener al menos 3 chars.
+/// Filtros defensivos:
+/// - La descripción histórica debe medir al menos 3 caracteres tras
+///   trim, para que entries con `"a"`, `"x"` no generen falsos positivos.
+/// - El tipeo nuevo debe tener al menos 3 chars (short-circuit en Dart).
 ///
 /// Orden ante múltiples matches: `occurred_at DESC, created_at DESC` →
 /// la categoría del entry más reciente gana.
@@ -69,12 +70,18 @@ class CategorySuggestionService {
     // descripciones históricas con acentos en mayúscula no matchearán
     // con tipeo nuevo en minúscula. Limitación aceptada.
     //
-    // Patrón LIKE: la **nueva** descripción contiene la **histórica**.
+    // Patrón LIKE bidireccional (post smoke real, 2026-06-29):
+    // - Rama A: la **nueva** contiene la **histórica** → cubre histórico
+    //   corto con tipeo extenso (`"Café"` vs `"Café para mi novia"`).
+    // - Rama B: la **histórica** contiene la **nueva** → cubre histórico
+    //   largo con tipeo de prefijo (`"fiscal"` vs `"fisca"`).
+    //
+    // Detalles:
     // - `?` ya viene normalizado en Dart con trim+toLowerCase.
     // - `LENGTH(TRIM(j.description)) >= 3`: evita falsos positivos por
     //   descripciones históricas muy cortas (`"a"`, `"x"`).
-    // - El patrón `'%' || ... || '%'` envuelve la columna histórica;
-    //   pasa como Variable sin interpolar `%` directamente desde Dart.
+    // - Patrón `'%' || ... || '%'` se construye en SQL; las Variables
+    //   son strings literales (sin `%` interpolado desde Dart).
     final sql = '''
       SELECT j.category_id AS category_id
       FROM journal_entries j
@@ -84,7 +91,10 @@ class CategorySuggestionService {
         AND j.deleted_at IS NULL
         AND j.description IS NOT NULL
         AND LENGTH(TRIM(j.description)) >= 3
-        AND ? LIKE '%' || LOWER(TRIM(j.description)) || '%'
+        AND (
+          ? LIKE '%' || LOWER(TRIM(j.description)) || '%'
+          OR LOWER(TRIM(j.description)) LIKE '%' || ? || '%'
+        )
         AND c.applies_to IN ($appliesToPlaceholders)
       ORDER BY j.occurred_at DESC, j.created_at DESC
       LIMIT 1
@@ -94,6 +104,7 @@ class CategorySuggestionService {
           sql,
           variables: [
             Variable.withString(kind),
+            Variable.withString(normalizedDesc),
             Variable.withString(normalizedDesc),
             for (final a in appliesTo) Variable.withString(a),
           ],

@@ -286,7 +286,30 @@ void main() {
     });
 
     test(
-        'UT-12: múltiples matches retorna el más reciente',
+        'UT-12 (rama bidireccional): "fisca" matchea histórico "fiscal" '
+        '(histórica contiene nueva)',
+        () async {
+      // Caso real reportado por Diego: histórico tiene descripción
+      // "fiscal" (categoría Salario). Al tipear "fisca" (5 chars,
+      // prefijo), debería matchear porque la histórica contiene la
+      // nueva. Sin esto el match solo funcionaba al terminar de
+      // escribir.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        occurredAt: DateTime(2026, 5, 10),
+        description: 'fiscal',
+        categoryId: catSalario,
+      );
+      final result = await service.suggestForNewEntry(
+        kind: 'income',
+        description: 'fisca',
+      );
+      expect(result, catSalario);
+    });
+
+    test(
+        'UT-13: múltiples matches retorna el más reciente',
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
@@ -313,7 +336,7 @@ void main() {
   });
 
   group('CategorySuggestionService — edge cases', () {
-    test('UT-13: description null o empty retorna null', () async {
+    test('UT-14: description null o empty retorna null', () async {
       final r1 = await service.suggestForNewEntry(
         kind: 'expense',
         description: null,
@@ -331,7 +354,7 @@ void main() {
       expect(r3, isNull);
     });
 
-    test('UT-14: entry con category_id=null no aparece (INNER JOIN)',
+    test('UT-15: entry con category_id=null no aparece (INNER JOIN)',
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
@@ -347,7 +370,7 @@ void main() {
       expect(result, isNull);
     });
 
-    test('UT-15: soft-deleted entry no contribuye', () async {
+    test('UT-16: soft-deleted entry no contribuye', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         amount: 50,
@@ -365,7 +388,7 @@ void main() {
     });
 
     test(
-        'UT-16: kinds no soportados (transfer, debt_payment) retornan null sin tocar BD',
+        'UT-17: kinds no soportados (transfer, debt_payment) retornan null sin tocar BD',
         () async {
       final r1 = await service.suggestForNewEntry(
         kind: 'transfer',
@@ -379,7 +402,7 @@ void main() {
       expect(r2, isNull);
     });
 
-    test('UT-17: credit_expense usa applies_to=expense compatibility',
+    test('UT-18: credit_expense usa applies_to=expense compatibility',
         () async {
       // Histórico credit_expense con categoría both.
       await entriesDao.registerCreditExpense(
@@ -397,7 +420,7 @@ void main() {
     });
 
     test(
-        'UT-18: histórico tiene la misma descripción pero archivada → null (sin fallback)',
+        'UT-19: histórico tiene la misma descripción pero archivada → null (sin fallback)',
         () async {
       // El único entry con match tiene categoría archivada.
       await entriesDao.registerExpense(

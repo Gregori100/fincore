@@ -41,3 +41,17 @@ Diego instaló el APK `0.11.2+65` y reportó que la sugerencia disparaba al sele
 - Tests: refactor completo de `category_suggestion_test.dart` v2 (18 tests cubriendo match exacto, substring "caso Diego", edge cases, kinds y compatibility). Widget tests `entry_form_suggestion_test.dart` siguen verdes sin cambios.
 
 Versión bumped: `0.11.2+65 → 0.11.3+66`.
+
+## 2026-06-29 — v2.1 (match bidireccional, post smoke v2)
+
+Diego instaló el APK `0.11.3+66` y reportó que el match de descripción solo funcionaba en una dirección. Caso concreto: histórico tiene `"fiscal"` con categoría Sueldo. Al tipear `"fisca"` (5 chars, prefijo de "fiscal"), la sugerencia NO aparecía hasta completar `"fiscal"`. Razón: el SQL solo evaluaba "la nueva contiene la histórica" — `"fisca"` es más corta que `"fiscal"` y no la contiene.
+
+- Cambio: el match ahora es **bidireccional**.
+  Decision: `(? LIKE '%' || histórica || '%') OR (histórica LIKE '%' || ? || '%')`. Esto cubre los dos patrones reales:
+  - **Histórico corto + tipeo largo**: histórico `"Café"`, tipeo `"Café para mi novia"` → rama A matchea.
+  - **Histórico largo + tipeo de prefijo**: histórico `"fiscal"`, tipeo `"fisca"` → rama B matchea (la sugerencia aparece antes de terminar de escribir).
+  Impacto en código: SQL agrega `OR` con la rama inversa. Doble Variable para el mismo `normalizedDesc`. Filtro `LENGTH(histórica) >= 3` sigue aplicando, y el short-circuit en Dart si tipeo <3 chars también.
+
+- Tests: agregado UT-12 explícito para el caso de Diego (`"fiscal"` vs `"fisca"`). UT-13..UT-19 renumerados.
+
+Versión bumped: `0.11.3+66 → 0.11.4+67`.
