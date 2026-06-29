@@ -122,12 +122,13 @@ publish_to: 'none'
 # fijos. wipeAll() extendido para borrar también las vistas. +10
 # tests DAO + 6 serializer + 1 migración + 3 widget = 20 nuevos.
 # 299/299 verdes.
-# 0.11.1+64 — sprint flutter-categories-polish-v1: fix scroll que cortaba
-# la última fila en /categories (FAB tapaba el final), mismo fix preventivo
-# en /accounts. +18 iconos nuevos en el catálogo (30 → 48) para cubrir
-# categorías típicas de finanzas personales sin paridad con backend legacy.
-# Sin schema bump. 321/321 verdes.
-version: 0.11.1+64
+# 0.11.2+65 — sprint flutter-entries-category-suggestion-v1: sugerencia
+# automática de categoría al capturar un nuevo movimiento. Cascada de 3
+# pasos (descripción exacta → monto+cuenta últimos 90 días → más usada
+# últimos 30 días) para expense/credit_expense/income. Chip "✨ Sugerida"
+# debajo del CategoryPicker; respeta elección manual y se inhibe en edit.
+# Sin schema bump. +18 unit + 4 widget tests = 22 nuevos. 343/343 verdes.
+version: 0.11.2+65
 
 environment:
   sdk: ^3.7.2

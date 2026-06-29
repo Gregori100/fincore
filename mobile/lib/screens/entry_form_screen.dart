@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
@@ -41,19 +43,142 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
   bool _saving = false;
   String? _bootstrapError;
 
+  // Sprint flutter-entries-category-suggestion-v1:
+  // - `_categoryTouched`: el usuario tocó manualmente el CategoryPicker
+  //   (CUALQUIER selección lo marca — B1 quality review v1). Mientras
+  //   sea true, `_recalcSuggestion` queda inhibido para no pisar su
+  //   elección (RN-S07).
+  // - `_categorySuggested`: la categoría actual fue propuesta por el
+  //   servicio. Controla el render del chip "Sugerida" (RF-005).
+  // - `_suggestionDebounce`: Timer para agrupar cambios rápidos en
+  //   descripción/monto (RN-S08, debounce 300 ms).
+  // - `_suggestionGeneration`: contador monotónico para descartar
+  //   resultados de queries obsoletas tras race conditions (R-08 del plan).
+  bool _categoryTouched = false;
+  bool _categorySuggested = false;
+  Timer? _suggestionDebounce;
+  int _suggestionGeneration = 0;
+
   bool get _isEdit => widget.entryId != null;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
+    // Listeners para recalcular la sugerencia al tipear descripción o
+    // monto. Se agregan acá (no en `_bootstrap`) porque los TextEditingController
+    // existen desde `initState`. El handler short-circuit en `_isEdit`.
+    _descCtrl.addListener(_onSuggestionInputChanged);
+    _amountCtrl.addListener(_onSuggestionInputChanged);
   }
 
   @override
   void dispose() {
+    _suggestionDebounce?.cancel();
+    _descCtrl.removeListener(_onSuggestionInputChanged);
+    _amountCtrl.removeListener(_onSuggestionInputChanged);
     _amountCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
+  }
+
+  /// Listener compartido por `_descCtrl` y `_amountCtrl`. Programa el
+  /// `_recalcSuggestion` con debounce.
+  void _onSuggestionInputChanged() {
+    if (_isEdit || _categoryTouched) return;
+    _scheduleSuggestion();
+  }
+
+  /// Cancela el timer previo y programa uno nuevo con `Duration(ms: 300)`.
+  /// Al disparar, llama a `_recalcSuggestion` que captura la generación
+  /// actual y la valida antes de aplicar el resultado.
+  void _scheduleSuggestion() {
+    _suggestionDebounce?.cancel();
+    _suggestionDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      _recalcSuggestion();
+    });
+  }
+
+  /// Cancela cualquier timer pendiente y dispara la sugerencia
+  /// inmediatamente (sin debounce). Usado tras eventos discretos como
+  /// cambio de kind o cuenta — no hay tipeo continuo que agrupar.
+  void _recalcSuggestionImmediate() {
+    _suggestionDebounce?.cancel();
+    _recalcSuggestion();
+  }
+
+  Future<void> _recalcSuggestion() async {
+    if (!mounted) return;
+    if (_isEdit) return; // RN-S02: solo en alta.
+    if (_categoryTouched) return; // RN-S07: respeta elección manual.
+    if (_kind == null || !_kind!.acceptsCategory) return;
+
+    final generation = ++_suggestionGeneration;
+    final deps = AppDependencies.of(context);
+    final kindApi = _kind!.apiValue;
+    // "Cuenta relevante" según el kind (RN-S01).
+    final accountId =
+        _kind! == JournalKind.income ? _destId : _originId;
+    final amount = double.tryParse(_amountCtrl.text);
+    final description = _descCtrl.text;
+
+    String? result;
+    try {
+      result = await deps.categorySuggestionService.suggestForNewEntry(
+        kind: kindApi,
+        accountId: accountId,
+        description: description,
+        amount: amount,
+      );
+    } catch (_) {
+      // RN-S09: degradación silenciosa. El picker queda como estaba.
+      return;
+    }
+
+    // Si una generación más reciente disparó o el form se desmontó,
+    // descartar este resultado (R-02 + R-08 del plan).
+    if (!mounted || generation != _suggestionGeneration) return;
+    // Si el usuario tocó el picker mientras la query estaba en flight,
+    // tampoco aplicamos (race tardío).
+    if (_categoryTouched) return;
+
+    setState(() {
+      if (result == null) {
+        // Sin sugerencia: limpiar el sello y la sugerencia previa.
+        // DV-02 del implementation-review: si la cascada deja de
+        // matchear (e.g. el usuario borra la descripción que daba
+        // match), invalidamos la sugerencia anterior. NO afecta
+        // elecciones manuales porque este `setState` solo corre con
+        // `_categoryTouched == false`.
+        _categorySuggested = false;
+        _categoryId = null;
+      } else {
+        _categoryId = result;
+        _categorySuggested = true;
+      }
+    });
+  }
+
+  /// Wrapper del `onChanged` del `CategoryPicker`. CUALQUIER selección
+  /// del usuario en el dropdown se considera interacción manual y marca
+  /// `_categoryTouched = true`, incluso si Diego volvió a elegir la
+  /// categoría que ya estaba pre-seleccionada por sugerencia.
+  ///
+  /// B1 quality review v1: confirmar explícitamente desde el dropdown
+  /// debe blindar contra que un re-cálculo posterior la reemplace. Una
+  /// elección manual que coincide con la sugerencia sigue siendo manual.
+  ///
+  /// `CategoryPicker.onChanged` solo se dispara por interacción del
+  /// usuario en Material 3 — el setState que aplica la sugerencia
+  /// programática NO la dispara. Por eso es seguro tratar cualquier
+  /// invocación como manual.
+  void _onCategoryPickerChanged(String? value) {
+    setState(() {
+      _categoryId = value;
+      _categoryTouched = true;
+      _categorySuggested = false;
+    });
   }
 
   Future<void> _bootstrap() async {
@@ -112,7 +237,14 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
       _amountCtrl.clear();
       _descCtrl.clear();
       _formKey.currentState?.reset();
+      // Reset del estado de sugerencia: cambiar kind es reset total del form.
+      _categoryTouched = false;
+      _categorySuggested = false;
     });
+    // Con kind nuevo + form vacío, la cascada puede caer al paso 3 si
+    // hay histórico para ese kind. Disparamos inmediato (no debounce
+    // porque es evento discreto).
+    _recalcSuggestionImmediate();
   }
 
   Future<void> _pickDate() async {
@@ -426,7 +558,13 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
             accounts: _accounts,
             allowedTypes: _originTypes(k),
             selectedId: _originId,
-            onChanged: (v) => setState(() => _originId = v),
+            onChanged: (v) {
+              setState(() => _originId = v);
+              // Cambio de cuenta origen → recalcular sugerencia para
+              // expense/credit_expense (cuenta relevante). Para income
+              // no aplica (esa rama usa destId).
+              _recalcSuggestionImmediate();
+            },
             excludeId: k == JournalKind.transfer ? _destId : null,
           ),
           AccountBalanceHint(accountId: _originId, accounts: _accounts),
@@ -438,7 +576,12 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
             accounts: _accounts,
             allowedTypes: _destTypes(k),
             selectedId: _destId,
-            onChanged: (v) => setState(() => _destId = v),
+            onChanged: (v) {
+              setState(() => _destId = v);
+              // Cambio de cuenta destino → recalcular para income (cuenta
+              // relevante). Para otros kinds la sugerencia ignora destId.
+              _recalcSuggestionImmediate();
+            },
             excludeId: k == JournalKind.transfer ? _originId : null,
           ),
           AccountBalanceHint(accountId: _destId, accounts: _accounts),
@@ -489,8 +632,12 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
             categories: _categories,
             validAppliesTo: k.validCategoryAppliesTo,
             selectedId: _categoryId,
-            onChanged: (v) => setState(() => _categoryId = v),
+            onChanged: _onCategoryPickerChanged,
           ),
+          if (_categorySuggested && _categoryId != null) ...[
+            const SizedBox(height: 6),
+            const _SuggestionChip(),
+          ],
         ],
         const SizedBox(height: 32),
         FilledButton(
@@ -549,4 +696,48 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
         JournalKind.debtPayment => const ['credit'],
         JournalKind.expense || JournalKind.creditExpense => const [],
       };
+}
+
+/// Chip pequeño que comunica al usuario que la categoría actual del
+/// picker fue propuesta por el `CategorySuggestionService`. Sprint
+/// `flutter-entries-category-suggestion-v1` (RF-005).
+///
+/// Color accent suave para no robar protagonismo al picker. Icono
+/// sparkle al inicio + texto "Sugerida". Informativo, no interactivo.
+class _SuggestionChip extends StatelessWidget {
+  const _SuggestionChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: FincoreColors.accent.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: FincoreColors.accent.withValues(alpha: 0.5)),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.auto_awesome,
+              size: 14,
+              color: FincoreColors.accent,
+            ),
+            SizedBox(width: 6),
+            Text(
+              'Sugerida',
+              style: TextStyle(
+                color: FincoreColors.accent,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

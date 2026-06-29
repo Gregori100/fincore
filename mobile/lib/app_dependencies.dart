@@ -1,4 +1,5 @@
 import 'package:fincore/data/backup.dart';
+import 'package:fincore/data/category_suggestion.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
@@ -22,6 +23,7 @@ class AppDependencies {
   final FinancialStateService stateService;
   final BackupService backupService;
   final ReportsService reportsService;
+  final CategorySuggestionService categorySuggestionService;
 
   const AppDependencies({
     required this.database,
@@ -32,6 +34,7 @@ class AppDependencies {
     required this.stateService,
     required this.backupService,
     required this.reportsService,
+    required this.categorySuggestionService,
   });
 
   /// Builder de conveniencia: construye toda la cadena de servicios desde una
@@ -51,6 +54,7 @@ class AppDependencies {
     final savedViewsDao = database.savedViewsDao;
     final backupService = BackupService(database, stateService);
     final reportsService = ReportsService(database);
+    final categorySuggestionService = CategorySuggestionService(database);
     return AppDependencies(
       database: database,
       accountsDao: accountsDao,
@@ -60,6 +64,7 @@ class AppDependencies {
       stateService: stateService,
       backupService: backupService,
       reportsService: reportsService,
+      categorySuggestionService: categorySuggestionService,
     );
   }
 
