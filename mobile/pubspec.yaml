@@ -122,12 +122,12 @@ publish_to: 'none'
 # fijos. wipeAll() extendido para borrar también las vistas. +10
 # tests DAO + 6 serializer + 1 migración + 3 widget = 20 nuevos.
 # 299/299 verdes.
-# 0.11.0+63 — sprint flutter-reports-monthly-average-v1: 5° tab "Promedio
-# mensual" en /reports. Promedio prorrateado al día actual sobre los últimos
-# N meses cerrados (presets 1/3/6/12/24), comparación contra mes en curso
-# con semáforo y desglose por categoría. Sin schema bump. +15 unit + 4
-# widget tests = 19 nuevos. 321/321 verdes.
-version: 0.11.0+63
+# 0.11.1+64 — sprint flutter-categories-polish-v1: fix scroll que cortaba
+# la última fila en /categories (FAB tapaba el final), mismo fix preventivo
+# en /accounts. +18 iconos nuevos en el catálogo (30 → 48) para cubrir
+# categorías típicas de finanzas personales sin paridad con backend legacy.
+# Sin schema bump. 321/321 verdes.
+version: 0.11.1+64
 
 environment:
   sdk: ^3.7.2

@@ -78,7 +78,10 @@ class _CategoriesListScreenState extends State<CategoriesListScreen> {
                   );
                 }
                 return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                  // Bottom 96 para que el FAB no tape la última fila.
+                  // Convención del repo (dashboard, settings, tabs de
+                  // reports usan el mismo valor).
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
                   itemCount: cats.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 8),
                   itemBuilder: (_, i) => _Row(category: cats[i]),

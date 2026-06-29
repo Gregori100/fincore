@@ -44,7 +44,10 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
         builder: (context, snap) {
           if (!snap.hasData) {
             return ListView.separated(
-              padding: const EdgeInsets.all(16),
+              // Bottom 96 para que el FAB no tape la última fila.
+              // Convención del repo (dashboard, settings, tabs de
+              // reports usan el mismo valor).
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
               itemCount: 4,
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (_, __) => const SkeletonCard(),
@@ -61,7 +64,7 @@ class _AccountsListScreenState extends State<AccountsListScreen> {
             );
           }
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
             itemCount: accounts.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (_, i) => _AccountRow(account: accounts[i]),
