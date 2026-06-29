@@ -4,6 +4,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/save_view_dialog.dart';
+import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -47,17 +48,17 @@ class SavedViewsListScreen extends StatelessWidget {
         stream: deps.savedViewsDao.watchAll(),
         builder: (context, snap) {
           if (!snap.hasData) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'Cargando…',
-                  style: TextStyle(
-                    color: FincoreColors.textSubtle,
-                    fontSize: 13,
-                  ),
-                ),
+            // H5 quality review v1: alinear loading state con el patrón
+            // canónico del repo (accounts_list_screen, etc.). Skeleton
+            // evita layout shift al pintar la lista real.
+            return ListView.separated(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
               ),
+              itemCount: 4,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (_, __) => const SkeletonCard(),
             );
           }
           final views = snap.data!;
@@ -102,6 +103,7 @@ class _SavedViewRow extends StatelessWidget {
         ),
       ),
       trailing: PopupMenuButton<String>(
+        tooltip: 'Más acciones',
         icon: const Icon(
           Icons.more_vert,
           color: FincoreColors.textSubtle,

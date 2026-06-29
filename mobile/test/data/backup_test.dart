@@ -5,6 +5,7 @@ import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/database.dart';
+import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/financial_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -500,17 +501,25 @@ void main() {
     expect(categories.single.name.length, equals(200));
   });
 
-  test('wipeAll vacía las 3 tablas y deja la BD lista para reseed', () async {
+  test('wipeAll vacía las 4 tablas y deja la BD lista para reseed', () async {
     await seed();
+    // RN-V10 (sprint flutter-saved-views-polish-v1 / H10 quality review):
+    // sembrar también una saved_view para validar que wipeAll la borra.
+    await db.savedViewsDao.create(
+      name: 'Pre-wipe',
+      filters: EntriesFilters.thisMonth(),
+    );
     expect((await accountsDao.listAll()).length, greaterThan(0));
     expect((await categoriesDao.listAll()).length, greaterThan(0));
     expect((await entriesDao.watchPage().first).length, greaterThan(0));
+    expect((await db.savedViewsDao.listAll()).length, greaterThan(0));
 
     await backup.wipeAll();
 
     expect(await accountsDao.listAll(), isEmpty);
     expect(await categoriesDao.listAll(), isEmpty);
     expect(await entriesDao.watchPage().first, isEmpty);
+    expect(await db.savedViewsDao.listAll(), isEmpty);
     // Sin Bolsa: hasBolsa = false → router debe redirigir a /first-run.
     expect(await hasBolsa(db), isFalse);
   });

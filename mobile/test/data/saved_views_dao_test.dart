@@ -44,6 +44,18 @@ void main() {
       );
     });
 
+    test(
+        'UT-02b: create trimea whitespace al inicio y final '
+        '(sprint flutter-saved-views-polish-v1 / H12 quality review)',
+        () async {
+      final id = await dao.create(
+        name: '  Mi vista  ',
+        filters: baseFilters(),
+      );
+      final found = await dao.findById(id);
+      expect(found!.name, 'Mi vista');
+    });
+
     test('UT-03: create con name > 50 chars lanza invalid_name',
         () async {
       final longName = 'a' * 51;

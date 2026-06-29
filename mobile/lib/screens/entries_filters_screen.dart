@@ -426,15 +426,26 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
 
           // ===========================================================
           // Sección Vistas guardadas (sprint
-          // `flutter-entries-saved-views-v1`)
+          // `flutter-entries-saved-views-v1` + H7 quality review polish)
           // ===========================================================
-          OutlinedButton.icon(
-            onPressed: _saveView,
-            icon: const Icon(Icons.bookmark_outline, size: 18),
-            label: const Text('Guardar como vista'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: FincoreColors.accent,
-              side: const BorderSide(color: FincoreColors.accent),
+          const _SectionTitle('Vistas guardadas'),
+          // H7 quality review v1: disabled cuando no hay filtros activos.
+          // Sin esto el usuario puede guardar el estado default ("Este mes")
+          // como vista, que es equivalente a no tener vista. El tooltip
+          // explica el bloqueo.
+          Tooltip(
+            message: _editing.activeCount == 0
+                ? 'Configurá al menos un filtro antes de guardar.'
+                : '',
+            child: OutlinedButton.icon(
+              onPressed: _editing.activeCount == 0 ? null : _saveView,
+              icon: const Icon(Icons.bookmark_outline, size: 18),
+              label: const Text('Guardar como vista'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: FincoreColors.accent,
+                side: const BorderSide(color: FincoreColors.accent),
+                disabledForegroundColor: FincoreColors.textMuted,
+              ),
             ),
           ),
           const SizedBox(height: 24),

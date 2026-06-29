@@ -155,7 +155,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Importar respaldo',
+      // H3 quality review v1: el JSON v1 no serializa saved_views (son
+      // preferencias de UI, no datos críticos). Avisarle al usuario para
+      // que no sea sorpresa silenciosa post-import.
       message: 'Esto REEMPLAZA toda la BD actual con el contenido del archivo. '
+          'Tus vistas guardadas se perderán. '
           'No hay vuelta atrás (excepto si tenés otro respaldo guardado).',
       confirmLabel: 'Continuar',
     );

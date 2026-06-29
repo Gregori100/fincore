@@ -51,12 +51,15 @@ void main() {
         reason: 'saved_views debería estar dropeada antes de migrar');
 
     // Ejecutar el SQL equivalente al de `m.createTable(savedViews)`.
+    // `created_at` es TEXT (no INTEGER) porque `build.yaml` setea
+    // `store_date_time_values_as_text: true` para preservar subsegundos
+    // — same DateTime mapping que el codegen emite.
     await db.customStatement('''
       CREATE TABLE saved_views (
         id TEXT NOT NULL PRIMARY KEY,
         name TEXT NOT NULL,
         filters_json TEXT NOT NULL,
-        created_at INTEGER NOT NULL
+        created_at TEXT NOT NULL
       )
     ''');
 
@@ -88,6 +91,64 @@ void main() {
     final categoriesAfter = await db.categoriesDao.listAll();
     expect(categoriesAfter.any((c) => c.id == categoryId), isTrue,
         reason: 'categoría sembrada antes de la migración debe persistir');
+
+    await db.close();
+  });
+
+  // Sprint flutter-saved-views-polish-v1 / H14 quality review: blindar
+  // las ramas defensiva 1→3 y el guardrail UnimplementedError, que son el
+  // primer schema bump del MVP. Sienta precedente para los próximos.
+
+  test(
+      'UT-18: rama defensiva 1→3 crea el índice + tabla saved_views '
+      '(instalación que se saltó schemaVersion 2)',
+      () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll(); // fuerza onCreate.
+
+    // Simular estado pre-1→3: dropear ambas estructuras.
+    await db.customStatement('DROP TABLE saved_views');
+    await db.customStatement('DROP INDEX idx_entries_occurred_active');
+
+    // Llamar a onUpgrade vía `Migrator` directo, escenario from=1 to=3.
+    final migrator = db.createMigrator();
+    await db.migration.onUpgrade(migrator, 1, 3);
+
+    // Verificar índice parcial creado.
+    final idxRows = await db
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type='index' "
+          "AND name='idx_entries_occurred_active'",
+          readsFrom: const {},
+        )
+        .get();
+    expect(idxRows, hasLength(1),
+        reason: 'rama 1→3 debe recrear idx_entries_occurred_active');
+
+    // Verificar tabla saved_views creada y usable.
+    final viewId = await db.savedViewsDao.create(
+      name: 'Defensiva',
+      filters: EntriesFilters.thisMonth(),
+    );
+    expect(viewId, isNotEmpty);
+
+    await db.close();
+  });
+
+  test(
+      'UT-19: guardrail UnimplementedError dispara para upgrade no '
+      'implementado (RN-H02)',
+      () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll();
+    final migrator = db.createMigrator();
+
+    // Cualquier from/to que no esté entre las ramas explícitas (1→2, 2→3,
+    // 1→3) debe disparar el throw del guardrail.
+    expect(
+      () => db.migration.onUpgrade(migrator, 3, 99),
+      throwsA(isA<UnimplementedError>()),
+    );
 
     await db.close();
   });
