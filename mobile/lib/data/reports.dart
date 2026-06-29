@@ -553,6 +553,286 @@ class ReportsService {
       accounts: accounts,
     );
   }
+
+  /// Promedio mensual prorrateado al día actual + gasto del mes en curso.
+  /// Sprint `flutter-reports-monthly-average-v1`.
+  ///
+  /// Calcula el gasto promedio histórico de los últimos `monthsBack` meses
+  /// cerrados, prorrateado al mismo día del mes que `now` (RN-A07), y lo
+  /// compara contra el gasto acumulado del mes en curso desde el día 1
+  /// hasta `now` (RN-A05).
+  ///
+  /// Filtros:
+  /// - Kind ∈ {`expense`, `credit_expense`} (RN-A01). Excluye `transfer`,
+  ///   `debt_payment`, `income`.
+  /// - `journal_entries.deleted_at IS NULL` (RN-A06).
+  /// - Entries con categoría NULL o archivada agrupan en bucket "Sin
+  ///   categoría" (RN-A09).
+  ///
+  /// Prorrateo (RN-A07 + RN-A08): el filtro
+  /// `CAST(strftime('%d', occurred_at) AS INTEGER) <= D` excluye días
+  /// posteriores al D del mes. Para meses cortos (e.g. febrero con D=31)
+  /// no excluye nada porque el filtro es inclusivo a un día que no existe
+  /// — equivalente a "usar último día disponible" sin lógica adicional.
+  ///
+  /// Una sola query agregada: combina histórico prorrateado + mes en curso
+  /// vía condición compuesta. Procesamiento en Dart para promediar y armar
+  /// el desglose.
+  ///
+  /// Reactividad: re-emite cuando cambian `journal_entries` o `categories`
+  /// (archivar mueve buckets — RN-A09).
+  ///
+  /// `now` opcional para tests deterministas. Default `DateTime.now()`.
+  Stream<MonthlyAverageReport> monthlyAverage({
+    required int monthsBack,
+    DateTime? now,
+  }) {
+    final nowValue = now ?? DateTime.now();
+    final currentDay = nowValue.day;
+    final firstDayOfCurrentMonth =
+        DateTime(nowValue.year, nowValue.month, 1);
+    final closedMonths = _iterateClosedMonths(nowValue, monthsBack);
+    // `windowFrom` = primer día del mes histórico más antiguo. Si
+    // monthsBack == 0 (caso defensivo, no esperado por UI), windowFrom
+    // colapsa al firstDayOfCurrentMonth.
+    final windowFrom = closedMonths.isEmpty
+        ? firstDayOfCurrentMonth
+        : closedMonths.first;
+    // Fin del rango inclusivo: fin del día de `now`.
+    final windowTo = DateTime(
+        nowValue.year, nowValue.month, nowValue.day, 23, 59, 59, 999);
+    // SQLite trata NULL == NULL en GROUP BY → entries con c.id IS NULL
+    // (categoría null o archivada) caen al mismo grupo, igual que en
+    // `spendingByCategory`.
+    const sql = '''
+      SELECT
+        strftime('%Y-%m', j.occurred_at) AS month_key,
+        c.id AS category_id,
+        c.name AS category_name,
+        c.color_slug AS color_slug,
+        c.icon_slug AS icon_slug,
+        SUM(j.amount) AS total
+      FROM journal_entries j
+      LEFT JOIN categories c
+        ON c.id = j.category_id AND c.deleted_at IS NULL
+      WHERE j.kind IN ('expense', 'credit_expense')
+        AND j.deleted_at IS NULL
+        AND j.occurred_at >= ?
+        AND j.occurred_at <= ?
+        AND (
+          (j.occurred_at < ? AND CAST(strftime('%d', j.occurred_at) AS INTEGER) <= ?)
+          OR j.occurred_at >= ?
+        )
+      GROUP BY month_key, c.id, c.name, c.color_slug, c.icon_slug
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(windowFrom),
+            Variable.withDateTime(windowTo),
+            // Cutoff entre histórico y mes actual: primer día del mes en curso.
+            Variable.withDateTime(firstDayOfCurrentMonth),
+            Variable.withInt(currentDay),
+            Variable.withDateTime(firstDayOfCurrentMonth),
+          ],
+          readsFrom: {_db.journalEntries, _db.categories},
+        )
+        .watch()
+        .map((rows) => _buildMonthlyAverageReport(
+              rows,
+              monthsRequested: monthsBack,
+              closedMonths: closedMonths,
+              firstDayOfCurrentMonth: firstDayOfCurrentMonth,
+              now: nowValue,
+              windowFrom: windowFrom,
+              windowTo: windowTo,
+            ));
+  }
+
+  /// Construye la lista de `DateTime(year, month, 1)` para los `monthsBack`
+  /// meses cerrados anteriores al mes en curso de `now`. Orden ascendente.
+  /// Si `monthsBack <= 0` retorna lista vacía.
+  List<DateTime> _iterateClosedMonths(DateTime now, int monthsBack) {
+    if (monthsBack <= 0) return const [];
+    final result = <DateTime>[];
+    // Primer mes cerrado = mes anterior al actual.
+    var year = now.year;
+    var month = now.month - 1;
+    if (month == 0) {
+      month = 12;
+      year -= 1;
+    }
+    // Construir hacia atrás los `monthsBack` meses.
+    for (var i = 0; i < monthsBack; i++) {
+      result.add(DateTime(year, month, 1));
+      month -= 1;
+      if (month == 0) {
+        month = 12;
+        year -= 1;
+      }
+    }
+    // Ordenar ascendente para que windowFrom sea el primero.
+    return result.reversed.toList();
+  }
+
+  MonthlyAverageReport _buildMonthlyAverageReport(
+    List<QueryRow> rows, {
+    required int monthsRequested,
+    required List<DateTime> closedMonths,
+    required DateTime firstDayOfCurrentMonth,
+    required DateTime now,
+    required DateTime windowFrom,
+    required DateTime windowTo,
+  }) {
+    // Agrupar filas por categoría y por bucket histórico vs actual.
+    // categoryKey = categoryId ?? '__uncategorized__' para mantener nullable
+    // y diferenciar el bucket "Sin categoría".
+    const uncategorizedKey = '__uncategorized__';
+    // Por categoría: (monthKey → total) de filas históricas + total del mes
+    // actual.
+    final historicalByCategory =
+        <String, Map<String, double>>{}; // catKey → (monthKey → total)
+    final currentByCategory = <String, double>{}; // catKey → total
+    // Metadata por categoría (solo se setea la primera vez que aparece).
+    final categoryMeta = <String, _MonthlyAverageCategoryMeta>{};
+    final currentMonthKey = _monthKey(firstDayOfCurrentMonth);
+    final closedMonthKeys = closedMonths.map(_monthKey).toSet();
+
+    for (final row in rows) {
+      final monthKey = row.read<String>('month_key');
+      final categoryId = row.read<String?>('category_id');
+      final categoryName = row.read<String?>('category_name');
+      final colorSlug = row.read<String?>('color_slug');
+      final iconSlug = row.read<String?>('icon_slug');
+      final total = row.read<double>('total');
+      final isUncategorized = categoryId == null || categoryName == null;
+      final catKey = isUncategorized ? uncategorizedKey : categoryId;
+      categoryMeta.putIfAbsent(
+        catKey,
+        () => _MonthlyAverageCategoryMeta(
+          categoryId: isUncategorized ? null : categoryId,
+          name: isUncategorized ? kUncategorizedBucketName : categoryName,
+          colorSlug: isUncategorized ? null : colorSlug,
+          iconSlug: isUncategorized ? null : iconSlug,
+        ),
+      );
+      if (monthKey == currentMonthKey) {
+        currentByCategory[catKey] = (currentByCategory[catKey] ?? 0) + total;
+      } else if (closedMonthKeys.contains(monthKey)) {
+        final perMonth =
+            historicalByCategory.putIfAbsent(catKey, () => {});
+        perMonth[monthKey] = (perMonth[monthKey] ?? 0) + total;
+      }
+      // Filas con monthKey fuera de la ventana (e.g. drift en zona horaria,
+      // o futuro) se ignoran defensivamente.
+    }
+
+    // Calcular `monthsAvailable`: meses cerrados que aportan al menos un
+    // entry de cualquier categoría. Si M=0, reporte vacío.
+    final monthsWithData = <String>{};
+    for (final perMonth in historicalByCategory.values) {
+      monthsWithData.addAll(perMonth.keys);
+    }
+    final monthsAvailable = monthsWithData.length;
+
+    if (monthsAvailable == 0 && currentByCategory.isEmpty) {
+      return MonthlyAverageReport(
+        monthsRequested: monthsRequested,
+        monthsAvailable: 0,
+        windowFrom: windowFrom,
+        windowTo: windowTo,
+        currentDayOfMonth: now.day,
+        historicalAverage: 0,
+        currentMonthSpent: 0,
+        deltaAbsolute: 0,
+        deltaPercent: null,
+        categoryBreakdown: const [],
+      );
+    }
+
+    // Construir breakdown por categoría.
+    final allCategoryKeys = <String>{
+      ...historicalByCategory.keys,
+      ...currentByCategory.keys,
+    };
+    final breakdown = <CategoryAverageDelta>[];
+    var globalHistoricalSum = 0.0;
+    var globalCurrent = 0.0;
+    for (final catKey in allCategoryKeys) {
+      final perMonth = historicalByCategory[catKey] ?? const {};
+      // Suma del histórico de esta categoría dividida por el N **global**
+      // (monthsAvailable), no por la cantidad de meses en que ESTA categoría
+      // tuvo gasto. Razón: queremos el promedio mensual de la categoría,
+      // tratando los meses sin gasto como 0 (consistencia con global).
+      // Si monthsAvailable == 0, la división se omite (historicalAverage=0).
+      final categoryHistoricalSum =
+          perMonth.values.fold<double>(0, (a, b) => a + b);
+      final categoryHistoricalAverage =
+          monthsAvailable == 0 ? 0.0 : categoryHistoricalSum / monthsAvailable;
+      final categoryCurrent = currentByCategory[catKey] ?? 0;
+      final categoryDelta = categoryCurrent - categoryHistoricalAverage;
+      final double? categoryPercent;
+      if (categoryHistoricalAverage == 0) {
+        categoryPercent = null;
+      } else {
+        categoryPercent =
+            (categoryDelta / categoryHistoricalAverage) * 100;
+      }
+      final meta = categoryMeta[catKey]!;
+      breakdown.add(CategoryAverageDelta(
+        categoryId: meta.categoryId,
+        name: meta.name,
+        colorSlug: meta.colorSlug,
+        iconSlug: meta.iconSlug,
+        historicalAverage: categoryHistoricalAverage,
+        currentMonthSpent: categoryCurrent,
+        deltaAbsolute: categoryDelta,
+        deltaPercent: categoryPercent,
+      ));
+      globalHistoricalSum += categoryHistoricalSum;
+      globalCurrent += categoryCurrent;
+    }
+
+    // Orden del breakdown (RN-A12): delta absoluto descendente, tiebreak
+    // alfabético por nombre.
+    breakdown.sort((a, b) {
+      final cmp = b.deltaAbsolute.compareTo(a.deltaAbsolute);
+      if (cmp != 0) return cmp;
+      return a.name.compareTo(b.name);
+    });
+
+    final globalHistoricalAverage =
+        monthsAvailable == 0 ? 0.0 : globalHistoricalSum / monthsAvailable;
+    final globalDelta = globalCurrent - globalHistoricalAverage;
+    final double? globalPercent;
+    if (globalHistoricalAverage == 0) {
+      globalPercent = null;
+    } else {
+      globalPercent = (globalDelta / globalHistoricalAverage) * 100;
+    }
+
+    return MonthlyAverageReport(
+      monthsRequested: monthsRequested,
+      monthsAvailable: monthsAvailable,
+      windowFrom: windowFrom,
+      windowTo: windowTo,
+      currentDayOfMonth: now.day,
+      historicalAverage: globalHistoricalAverage,
+      currentMonthSpent: globalCurrent,
+      deltaAbsolute: globalDelta,
+      deltaPercent: globalPercent,
+      categoryBreakdown: breakdown,
+    );
+  }
+
+  /// `'2026-06'` para `DateTime(2026, 6, 1)`. Mantiene el formato que produce
+  /// `strftime('%Y-%m', ...)` en la query.
+  String _monthKey(DateTime date) {
+    final y = date.year.toString().padLeft(4, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    return '$y-$m';
+  }
 }
 
 /// Reporte de cashflow mensual del sprint `flutter-reports-cashflow-v1`.
@@ -733,6 +1013,102 @@ class AccountBalanceAtDate {
   /// negativo = gastó. Para credit: positivo = más deuda, negativo =
   /// pagó deuda.
   double get balanceDelta => balanceNow - balance;
+}
+
+/// Reporte de promedio mensual prorrateado al día actual.
+/// Sprint `flutter-reports-monthly-average-v1`.
+///
+/// Inmutable. Construido por [ReportsService.monthlyAverage]. La métrica
+/// global compara el gasto promedio mensual de los últimos `monthsRequested`
+/// meses cerrados (prorrateado al día D = `currentDayOfMonth`) contra el
+/// gasto acumulado del mes en curso desde el día 1 hasta hoy.
+///
+/// El campo `categoryBreakdown` desglosa la misma comparación por categoría,
+/// ordenado por `deltaAbsolute` descendente (mayor desviación al alza
+/// primero). Cuando `historicalAverage == 0` (BD reciente o sin gasto
+/// histórico), `deltaPercent` es null y la UI debe mostrar "—".
+///
+/// `isEmpty == true` cuando no hay gasto histórico ni gasto del mes en curso.
+class MonthlyAverageReport {
+  final int monthsRequested;
+  final int monthsAvailable;
+  final DateTime windowFrom;
+  final DateTime windowTo;
+  final int currentDayOfMonth;
+  final double historicalAverage;
+  final double currentMonthSpent;
+  final double deltaAbsolute;
+  final double? deltaPercent;
+  final List<CategoryAverageDelta> categoryBreakdown;
+
+  const MonthlyAverageReport({
+    required this.monthsRequested,
+    required this.monthsAvailable,
+    required this.windowFrom,
+    required this.windowTo,
+    required this.currentDayOfMonth,
+    required this.historicalAverage,
+    required this.currentMonthSpent,
+    required this.deltaAbsolute,
+    required this.deltaPercent,
+    required this.categoryBreakdown,
+  });
+
+  /// True cuando no hay meses cerrados con datos y tampoco hay gasto del mes
+  /// en curso. Diferencia el caso "BD recién instalada / sin uso" del caso
+  /// "tengo gasto este mes pero sin histórico aún" (donde `monthsAvailable
+  /// == 0` pero `currentMonthSpent > 0` y debe renderizarse igual con
+  /// `deltaPercent == null`).
+  bool get isEmpty =>
+      monthsAvailable == 0 && currentMonthSpent == 0;
+}
+
+/// Fila del desglose por categoría del [MonthlyAverageReport].
+///
+/// - `categoryId == null` representa el bucket especial "Sin categoría"
+///   (entries con `category_id` NULL o categoría archivada — RN-A09).
+/// - `colorSlug` y `iconSlug` son null para el bucket "Sin categoría"; la UI
+///   usa los fallback de `category_catalog.dart`.
+/// - `historicalAverage` está prorrateado al día D = `currentDayOfMonth` del
+///   reporte padre.
+/// - `deltaPercent == null` cuando `historicalAverage == 0` (RN-A11): la UI
+///   debe mostrar "—" en lugar del porcentaje.
+class CategoryAverageDelta {
+  final String? categoryId;
+  final String name;
+  final String? colorSlug;
+  final String? iconSlug;
+  final double historicalAverage;
+  final double currentMonthSpent;
+  final double deltaAbsolute;
+  final double? deltaPercent;
+
+  const CategoryAverageDelta({
+    required this.categoryId,
+    required this.name,
+    required this.colorSlug,
+    required this.iconSlug,
+    required this.historicalAverage,
+    required this.currentMonthSpent,
+    required this.deltaAbsolute,
+    required this.deltaPercent,
+  });
+}
+
+/// Metadata privada que el `_buildMonthlyAverageReport` usa para no
+/// recalcular nombre/slugs por cada fila de la query agrupada.
+class _MonthlyAverageCategoryMeta {
+  final String? categoryId;
+  final String name;
+  final String? colorSlug;
+  final String? iconSlug;
+
+  const _MonthlyAverageCategoryMeta({
+    required this.categoryId,
+    required this.name,
+    required this.colorSlug,
+    required this.iconSlug,
+  });
 }
 
 class _RawBucket {

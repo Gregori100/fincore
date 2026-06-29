@@ -1269,4 +1269,443 @@ void main() {
           reason: 'BO cayó 300 entre 2026-06-10 y hoy');
     });
   });
+
+  // ===========================================================================
+  // monthlyAverage — sprint `flutter-reports-monthly-average-v1`
+  // ===========================================================================
+  group('monthlyAverage', () {
+    // Reusa el setUp() global: tiene `bolsa`, `debit`, `credit`, 3 categorías
+    // expense, y `seedDefaults` ya ejecutado.
+
+    Future<void> seedExpense({
+      required String accountOriginId,
+      required double amount,
+      required DateTime occurredAt,
+      String? categoryId,
+      String kind = 'expense',
+    }) async {
+      if (kind == 'expense') {
+        await entriesDao.registerExpense(
+          accountOriginId: accountOriginId,
+          amount: amount,
+          occurredAt: occurredAt,
+          categoryId: categoryId,
+        );
+      } else if (kind == 'credit_expense') {
+        await entriesDao.registerCreditExpense(
+          accountOriginId: accountOriginId,
+          amount: amount,
+          occurredAt: occurredAt,
+          categoryId: categoryId,
+        );
+      }
+    }
+
+    test('UT-01: BD sin entries → isEmpty=true', () async {
+      final now = DateTime(2026, 6, 15);
+      final report =
+          await reports.monthlyAverage(monthsBack: 3, now: now).first;
+      expect(report.isEmpty, isTrue);
+      expect(report.monthsAvailable, 0);
+      expect(report.historicalAverage, 0);
+      expect(report.currentMonthSpent, 0);
+      expect(report.deltaAbsolute, 0);
+      expect(report.deltaPercent, isNull);
+      expect(report.categoryBreakdown, isEmpty);
+    });
+
+    test(
+        'UT-02: N=1 con 1 mes histórico + mes actual completos → promedio = total mes histórico hasta día D',
+        () async {
+      final now = DateTime(2026, 6, 20, 12);
+      // Histórico: mayo 2026, gasto al día 20.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 1000,
+        occurredAt: DateTime(2026, 5, 10, 10),
+        categoryId: catComida,
+      );
+      // Mes actual: junio 2026, gasto al día 5 (antes del 20).
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 400,
+        occurredAt: DateTime(2026, 6, 5, 10),
+        categoryId: catComida,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      expect(report.monthsAvailable, 1);
+      expect(report.historicalAverage, 1000);
+      expect(report.currentMonthSpent, 400);
+      expect(report.deltaAbsolute, -600);
+      expect(report.deltaPercent, closeTo(-60, 0.01));
+    });
+
+    test(
+        'UT-03: prorrateo al día D=15 → entries del 14 y 15 cuentan, del 16 no',
+        () async {
+      final now = DateTime(2026, 6, 15, 23);
+      // 3 meses histórico (marzo, abril, mayo).
+      // Marzo: entry día 14 ($100), día 16 ($999 — NO cuenta).
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 3, 14),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 999,
+        occurredAt: DateTime(2026, 3, 16),
+        categoryId: catComida,
+      );
+      // Abril: entry día 15 ($200).
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 4, 15),
+        categoryId: catComida,
+      );
+      // Mayo: sin entries (mes vacío cuenta como 0 en promedio).
+      final report =
+          await reports.monthlyAverage(monthsBack: 3, now: now).first;
+      expect(report.monthsAvailable, 2,
+          reason: 'solo marzo y abril aportaron datos válidos al prorrateo');
+      // Promedio = (100 + 200) / 2 = 150.
+      expect(report.historicalAverage, 150);
+    });
+
+    test('UT-04: mes en curso suma todos los días desde el 1 hasta now',
+        () async {
+      final now = DateTime(2026, 6, 20, 12);
+      // Mes actual: entries día 1, 10, 20.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 50,
+        occurredAt: DateTime(2026, 6, 1),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 75,
+        occurredAt: DateTime(2026, 6, 10),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 125,
+        occurredAt: DateTime(2026, 6, 20),
+        categoryId: catComida,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      expect(report.currentMonthSpent, 250);
+    });
+
+    test(
+        'UT-05 (RN-A08): D=31 sobre febrero (28 días) — incluye los días que existen',
+        () async {
+      final now = DateTime(2026, 5, 31, 23);
+      // Febrero histórico: entry día 28 ($300). Debe contar.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 300,
+        occurredAt: DateTime(2026, 2, 28),
+        categoryId: catComida,
+      );
+      // Marzo histórico: entry día 31 ($600). Debe contar.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 600,
+        occurredAt: DateTime(2026, 3, 31),
+        categoryId: catComida,
+      );
+      // Abril histórico: entry día 28 + entry día 31 (no existe → no se siembra).
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 400,
+        occurredAt: DateTime(2026, 4, 28),
+        categoryId: catComida,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 3, now: now).first;
+      expect(report.monthsAvailable, 3);
+      expect(report.historicalAverage,
+          closeTo((300 + 600 + 400) / 3, 0.01));
+    });
+
+    test(
+        'UT-06: categoría archivada → bucket "Sin categoría" del breakdown',
+        () async {
+      final now = DateTime(2026, 6, 20);
+      // Histórico con categoría que será archivada.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 5, 10),
+        categoryId: catComida,
+      );
+      // Entry con categoría null (mes actual).
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 5),
+        categoryId: null,
+      );
+      // Archivar la categoría usada históricamente.
+      await categoriesDao.archive(catComida);
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      // Solo debe existir un bucket "Sin categoría" que agregue ambas filas.
+      expect(report.categoryBreakdown, hasLength(1));
+      expect(report.categoryBreakdown.first.categoryId, isNull);
+      expect(report.categoryBreakdown.first.name, 'Sin categoría');
+      expect(report.categoryBreakdown.first.historicalAverage, 200);
+      expect(report.categoryBreakdown.first.currentMonthSpent, 100);
+    });
+
+    test('UT-07: soft delete excluye entry del promedio', () async {
+      final now = DateTime(2026, 6, 20);
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 5, 10),
+        categoryId: catComida,
+      );
+      // Borrar el entry recién creado.
+      final entries = await entriesDao.watchPage().first;
+      await entriesDao.cancel(entries.first.entry.id);
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      expect(report.monthsAvailable, 0,
+          reason: 'sin entries vigentes, no hay meses con datos');
+      expect(report.historicalAverage, 0);
+    });
+
+    test(
+        'UT-08: kinds excluidos (income, transfer, debt_payment) NO cuentan',
+        () async {
+      final now = DateTime(2026, 6, 20);
+      // Income al mes histórico — debe ignorarse.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        occurredAt: DateTime(2026, 5, 10),
+      );
+      // Transfer — debe ignorarse.
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 5, 11),
+      );
+      // expense — sí cuenta.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 300,
+        occurredAt: DateTime(2026, 5, 12),
+        categoryId: catComida,
+      );
+      // credit_expense — también cuenta. (Genera deuda en `credit` para el
+      // debt_payment siguiente.)
+      await seedExpense(
+        accountOriginId: credit,
+        amount: 200,
+        occurredAt: DateTime(2026, 5, 13),
+        categoryId: catComida,
+        kind: 'credit_expense',
+      );
+      // debt_payment — debe ignorarse. M2 quality review: blindar el
+      // filtro `kind IN ('expense', 'credit_expense')` contra regresión.
+      await entriesDao.registerDebtPayment(
+        accountOriginId: debit,
+        accountDestinationId: credit,
+        amount: 80,
+        occurredAt: DateTime(2026, 5, 14),
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      expect(report.historicalAverage, 500,
+          reason: 'expense + credit_expense del mes histórico');
+      expect(report.currentMonthSpent, 0);
+    });
+
+    test('UT-09: degradación M<N (3 meses con datos, N=12 → M=3)', () async {
+      final now = DateTime(2026, 6, 20);
+      // 3 meses históricos con datos.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 3, 5),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 4, 5),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 300,
+        occurredAt: DateTime(2026, 5, 5),
+        categoryId: catComida,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 12, now: now).first;
+      expect(report.monthsRequested, 12);
+      expect(report.monthsAvailable, 3,
+          reason: 'M < N: solo 3 meses con datos disponibles');
+      expect(report.historicalAverage, closeTo((100 + 200 + 300) / 3, 0.01));
+    });
+
+    test(
+        'UT-10: historicalAverage == 0 → deltaPercent es null y deltaAbsolute = currentMonthSpent',
+        () async {
+      final now = DateTime(2026, 6, 20);
+      // Solo entry del mes actual, sin histórico.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 800,
+        occurredAt: DateTime(2026, 6, 10),
+        categoryId: catComida,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 3, now: now).first;
+      expect(report.historicalAverage, 0);
+      expect(report.currentMonthSpent, 800);
+      expect(report.deltaAbsolute, 800);
+      expect(report.deltaPercent, isNull);
+    });
+
+    test(
+        'UT-11: categoría con histórico positivo y mes actual = 0 → delta negativo',
+        () async {
+      final now = DateTime(2026, 6, 20);
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 600,
+        occurredAt: DateTime(2026, 5, 10),
+        categoryId: catComida,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      expect(report.categoryBreakdown, hasLength(1));
+      final row = report.categoryBreakdown.first;
+      expect(row.historicalAverage, 600);
+      expect(row.currentMonthSpent, 0);
+      expect(row.deltaAbsolute, -600);
+      expect(row.deltaPercent, closeTo(-100, 0.01));
+    });
+
+    test(
+        'UT-12: categoría sin histórico pero con gasto actual → delta=current, percent=null',
+        () async {
+      final now = DateTime(2026, 6, 20);
+      // Histórico de OTRA categoría — la categoría target no tiene histórico.
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 5, 10),
+        categoryId: catComida,
+      );
+      // Mes actual: gasto en catTransporte (sin histórico).
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 250,
+        occurredAt: DateTime(2026, 6, 10),
+        categoryId: catTransporte,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      final transporteRow = report.categoryBreakdown
+          .firstWhere((b) => b.categoryId == catTransporte);
+      expect(transporteRow.historicalAverage, 0);
+      expect(transporteRow.currentMonthSpent, 250);
+      expect(transporteRow.deltaAbsolute, 250);
+      expect(transporteRow.deltaPercent, isNull);
+    });
+
+    test(
+        'UT-13: orden del breakdown por deltaAbsolute DESC, tiebreak alfabético',
+        () async {
+      final now = DateTime(2026, 6, 20);
+      // Histórico vacío para todos (delta = currentSpent).
+      // catComida: actual = 200.
+      // catSalud:  actual = 100.
+      // catTransporte: actual = 200 (empate con Comida).
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 10),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 11),
+        categoryId: catSalud,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 12),
+        categoryId: catTransporte,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 1, now: now).first;
+      final names = report.categoryBreakdown.map((b) => b.name).toList();
+      // Empate Comida_Test (200) vs Transporte_Test (200): Comida primero alfabético.
+      // Después Salud_Test (100).
+      expect(names, ['Comida_Test', 'Transporte_Test', 'Salud_Test']);
+    });
+
+    test(
+        'UT-14: stream reactivo — cancelar entry re-emite con nuevo total',
+        () async {
+      final now = DateTime(2026, 6, 20);
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 400,
+        occurredAt: DateTime(2026, 5, 10),
+        categoryId: catComida,
+      );
+      final stream = reports.monthlyAverage(monthsBack: 1, now: now);
+      final first = await stream.first;
+      expect(first.historicalAverage, 400);
+
+      final entries = await entriesDao.watchPage().first;
+      await entriesDao.cancel(entries.first.entry.id);
+      // Volver a leer el stream — re-emite con valores actualizados.
+      final second = await stream.first;
+      expect(second.historicalAverage, 0);
+    });
+
+    test('UT-15: D=10 sobre 3 meses con 1 entry día 10 cada uno → promedio == total/3',
+        () async {
+      final now = DateTime(2026, 6, 10, 12);
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 90,
+        occurredAt: DateTime(2026, 3, 10),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 120,
+        occurredAt: DateTime(2026, 4, 10),
+        categoryId: catComida,
+      );
+      await seedExpense(
+        accountOriginId: debit,
+        amount: 60,
+        occurredAt: DateTime(2026, 5, 10),
+        categoryId: catComida,
+      );
+      final report =
+          await reports.monthlyAverage(monthsBack: 3, now: now).first;
+      expect(report.historicalAverage,
+          closeTo((90 + 120 + 60) / 3, 0.01));
+    });
+  });
 }
