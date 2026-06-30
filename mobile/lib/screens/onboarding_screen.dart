@@ -185,27 +185,120 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-class _Slide1 extends StatelessWidget {
+/// Slide 1 con animación de entrada en 3 etapas que se solapan:
+///   - 0-450ms: símbolo (fade + scale 0.7 → 1.0)
+///   - 300-700ms: wordmark "Fin Core" (slide up 24px + fade)
+///   - 600-900ms: párrafo descriptivo (fade)
+///
+/// La animación se dispara en `initState` cada vez que el slide se
+/// monta. PageView lo re-monta al volver de slides 2/3, así que el
+/// usuario ve la animación cada vez que entra — refuerza identidad
+/// y no es molesto porque dura <1s.
+class _Slide1 extends StatefulWidget {
   const _Slide1();
 
   @override
+  State<_Slide1> createState() => _Slide1State();
+}
+
+class _Slide1State extends State<_Slide1>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _symbolOpacity;
+  late final Animation<double> _symbolScale;
+  late final Animation<double> _wordmarkOpacity;
+  late final Animation<Offset> _wordmarkOffset;
+  late final Animation<double> _textOpacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+
+    _symbolOpacity = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+    );
+    _symbolScale = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOutBack),
+      ),
+    );
+
+    _wordmarkOpacity = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.33, 0.78, curve: Curves.easeOut),
+    );
+    _wordmarkOffset = Tween<Offset>(
+      begin: const Offset(0, 0.4),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.33, 0.78, curve: Curves.easeOut),
+      ),
+    );
+
+    _textOpacity = CurvedAnimation(
+      parent: _controller,
+      curve: const Interval(0.66, 1.0, curve: Curves.easeOut),
+    );
+
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 32),
+        padding: const EdgeInsets.symmetric(horizontal: 32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            FincoreLogo(fontSize: 64, showTagline: true),
-            SizedBox(height: 32),
-            Text(
-              'Una libreta digital privada para tus cuentas, gastos e '
-              'ingresos. Todo en tu cel, sin servidores ni cuentas.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: FincoreColors.textSubtle,
-                fontSize: 14,
-                height: 1.5,
+            FadeTransition(
+              opacity: _symbolOpacity,
+              child: ScaleTransition(
+                scale: _symbolScale,
+                child: const SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: Image(
+                    image: AssetImage('assets/icon/foreground_1024.png'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            FadeTransition(
+              opacity: _wordmarkOpacity,
+              child: SlideTransition(
+                position: _wordmarkOffset,
+                child: const FincoreLogo(fontSize: 56, showTagline: true),
+              ),
+            ),
+            const SizedBox(height: 32),
+            FadeTransition(
+              opacity: _textOpacity,
+              child: const Text(
+                'Una libreta digital privada para tus cuentas, gastos e '
+                'ingresos. Todo en tu cel, sin servidores ni cuentas.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: FincoreColors.textSubtle,
+                  fontSize: 14,
+                  height: 1.5,
+                ),
               ),
             ),
           ],

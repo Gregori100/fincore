@@ -134,7 +134,12 @@ publish_to: 'none'
 # + Android 12+ SplashScreen API). Elimina el flash blanco/negro antes
 # de que Flutter pinte el primer frame — transición invisible hacia el
 # SplashScreen widget que ya tenía el wordmark.
-version: 0.12.1+69
+# 0.12.2+70 — animación de entrada del slide 1 del onboarding. Símbolo
+# (scale + fade con overshoot), wordmark (slide up + fade) y párrafo
+# (fade) en 3 etapas solapadas de ~900ms total. Solo afecta a testers
+# nuevos (Diego con Bolsa no ve onboarding); también se reproduce al
+# entrar desde Ayuda → "Ver tour de bienvenida".
+version: 0.12.2+70
 
 environment:
   sdk: ^3.7.2
