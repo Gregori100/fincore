@@ -57,11 +57,15 @@ class FincoreTestHarness {
 ///   por default vía `seedDefaults` salvo que se pase `seedBolsa: false`.
 /// - `seedBolsa`: si `false`, NO se ejecuta `seedDefaults`. Útil para tests del
 ///   first-run que validan el splash → /first-run.
+/// - `onboardingSeen`: por default `true` para que los tests existentes (que
+///   asumían el flujo previo a este sprint) no rompan. Tests específicos del
+///   onboarding deben pasar `false` para forzar el redirect a `/onboarding`.
 Future<FincoreTestHarness> pumpFincoreApp(
   WidgetTester tester, {
   String initialRoute = '/dashboard',
   Future<void> Function(FincoreDatabase db, AppDependencies deps)? seed,
   bool seedBolsa = true,
+  bool onboardingSeen = true,
 }) async {
   // RF-011 v4 (L1-H2 quality review v3): combinación ambigua. Si Diego pide
   // `/first-run` con la Bolsa ya sembrada, el router redirigirá inmediatamente
@@ -105,7 +109,12 @@ Future<FincoreTestHarness> pumpFincoreApp(
   // Sin esto, el redirect del router queda colgado en /splash esperando que
   // alguien complete el chequeo async de hasBolsa. En tests resolvemos sync
   // para no depender de timers de pumpAndSettle.
-  firstRunState.value = seedBolsa;
+  // Sprint `flutter-onboarding-for-testers-v1`: el router ahora también
+  // observa `onboardingSeen`. Default true para no romper tests previos.
+  firstRunState.setInitial(
+    hasBolsa: seedBolsa,
+    onboardingSeen: onboardingSeen,
+  );
 
   final router = buildAppRouter(deps: deps, firstRunState: firstRunState);
 

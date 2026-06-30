@@ -501,7 +501,7 @@ void main() {
     expect(categories.single.name.length, equals(200));
   });
 
-  test('wipeAll vacía las 4 tablas y deja la BD lista para reseed', () async {
+  test('wipeAll vacía las 5 tablas y deja la BD lista para reseed', () async {
     await seed();
     // RN-V10 (sprint flutter-saved-views-polish-v1 / H10 quality review):
     // sembrar también una saved_view para validar que wipeAll la borra.
@@ -509,10 +509,14 @@ void main() {
       name: 'Pre-wipe',
       filters: EntriesFilters.thisMonth(),
     );
+    // Sprint `flutter-onboarding-for-testers-v1` (RN-O04): sembrar
+    // también una preferencia para validar que wipeAll la borra.
+    await db.appPreferencesDao.set('test_pre_wipe', 'true');
     expect((await accountsDao.listAll()).length, greaterThan(0));
     expect((await categoriesDao.listAll()).length, greaterThan(0));
     expect((await entriesDao.watchPage().first).length, greaterThan(0));
     expect((await db.savedViewsDao.listAll()).length, greaterThan(0));
+    expect(await db.appPreferencesDao.get('test_pre_wipe'), 'true');
 
     await backup.wipeAll();
 
@@ -520,6 +524,8 @@ void main() {
     expect(await categoriesDao.listAll(), isEmpty);
     expect(await entriesDao.watchPage().first, isEmpty);
     expect(await db.savedViewsDao.listAll(), isEmpty);
+    expect(await db.appPreferencesDao.get('test_pre_wipe'), isNull,
+        reason: 'wipeAll debe borrar app_preferences (RN-O04)');
     // Sin Bolsa: hasBolsa = false → router debe redirigir a /first-run.
     expect(await hasBolsa(db), isFalse);
   });

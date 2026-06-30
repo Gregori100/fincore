@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:fincore/app_dependencies.dart';
+import 'package:fincore/data/app_preferences_keys.dart';
 import 'package:fincore/data/backup.dart';
 import 'package:fincore/data/seed.dart';
 import 'package:fincore/router/app_router.dart';
@@ -52,7 +53,9 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
           'Respaldo importado: ${report.accountsCount} cuentas, '
           '${report.categoriesCount} categorías, ${report.entriesCount} movimientos.',
         );
-        _completeAndGo();
+        // F-NAV quality review v1: await para que el `finally` no
+        // desactive `_working` antes de que termine el set del flag.
+        await _completeAndGo();
       }
     } on BackupError catch (e) {
       if (mounted) showErrorSnackbar(context, e);
@@ -85,7 +88,8 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
         accountsDao: deps.accountsDao,
         categoriesDao: deps.categoriesDao,
       );
-      if (mounted) _completeAndGo();
+      // F-NAV quality review v1: await (ver `_importBackup`).
+      if (mounted) await _completeAndGo();
     } catch (e) {
       if (mounted) showErrorSnackbar(context, e);
     } finally {
@@ -93,10 +97,19 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
     }
   }
 
-  void _completeAndGo() {
-    // Notifica al router que ya hay Bolsa; el redirect va al dashboard.
+  Future<void> _completeAndGo() async {
+    // Sprint `flutter-onboarding-for-testers-v1` (SP-06 del plan): si el
+    // usuario llegó hasta acá por "Importar respaldo" o "Arrancar limpio",
+    // ya está en uso real. Marcamos `onboarding_seen = true` para que un
+    // wipe + re-instalación futura no lo fuerce a ver el tour si el flag
+    // sigue en false por alguna razón.
+    final deps = AppDependencies.of(context);
     final state = FirstRunStateProvider.of(context);
+    await deps.appPreferencesDao.set(kPrefOnboardingSeen, 'true');
+    state.setOnboardingSeen(true);
+    // Notifica al router que ya hay Bolsa; el redirect va al dashboard.
     markFirstRunComplete(state);
+    if (!mounted) return;
     GoRouter.of(context).go('/dashboard');
   }
 

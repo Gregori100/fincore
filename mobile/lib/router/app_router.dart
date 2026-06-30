@@ -1,4 +1,5 @@
 import 'package:fincore/app_dependencies.dart';
+import 'package:fincore/data/app_preferences_keys.dart';
 import 'package:fincore/data/bootstrap.dart';
 import 'package:fincore/screens/account_form_screen.dart';
 import 'package:fincore/screens/accounts_list_screen.dart';
@@ -8,16 +9,68 @@ import 'package:fincore/screens/dashboard_screen.dart';
 import 'package:fincore/screens/entries_list_screen.dart';
 import 'package:fincore/screens/entry_form_screen.dart';
 import 'package:fincore/screens/first_run_screen.dart';
+import 'package:fincore/screens/help_screen.dart';
+import 'package:fincore/screens/onboarding_screen.dart';
 import 'package:fincore/screens/reports_screen.dart';
 import 'package:fincore/screens/settings_screen.dart';
 import 'package:fincore/screens/splash_screen.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
-/// Notifica al router cuando el estado "BD tiene Bolsa" cambia (después de
-/// seed o import). Sin esto, el redirect inicial queda colgado en /first-run.
-class FirstRunState extends ValueNotifier<bool?> {
-  FirstRunState() : super(null); // null = no chequeado todavía
+/// Notifica al router sobre el estado de arranque de la app.
+/// Sprint `flutter-onboarding-for-testers-v1`: extendido con
+/// `onboardingSeen` además del `hasBolsa` original.
+///
+/// Ambos arrancan en `null` (chequeo pendiente). El router redirige
+/// según los 4 estados combinados:
+/// - `hasBolsa=true`: usuario con datos → `/dashboard`.
+/// - `hasBolsa=false && onboardingSeen=false`: tester nuevo → `/onboarding`.
+/// - `hasBolsa=false && onboardingSeen=true`: ya vio el tour → `/first-run`.
+/// - cualquiera `== null`: chequeo pendiente → `/splash`.
+///
+/// Backward compat: `value` retorna `hasBolsa` para que el código viejo
+/// que escucha el listener siga funcionando (tests del harness).
+class FirstRunState extends ChangeNotifier {
+  bool? _hasBolsa;
+  bool? _onboardingSeen;
+
+  bool? get hasBolsa => _hasBolsa;
+  bool? get onboardingSeen => _onboardingSeen;
+
+  /// Backward compat: el `redirect` original consultaba `state.value`
+  /// como `hasBolsa`. Tests existentes del harness también lo usan.
+  bool? get value => _hasBolsa;
+
+  /// Backward compat setter para tests/harness que hacían
+  /// `firstRunState.value = true` para señalar "ya tiene Bolsa".
+  set value(bool? v) {
+    if (_hasBolsa != v) {
+      _hasBolsa = v;
+      notifyListeners();
+    }
+  }
+
+  /// Setea ambos flags atómicamente y notifica una sola vez. Lo usa
+  /// `initializeFirstRunState` tras el `Future.wait` paralelo.
+  void setInitial({required bool hasBolsa, required bool onboardingSeen}) {
+    _hasBolsa = hasBolsa;
+    _onboardingSeen = onboardingSeen;
+    notifyListeners();
+  }
+
+  void setHasBolsa(bool v) {
+    if (_hasBolsa != v) {
+      _hasBolsa = v;
+      notifyListeners();
+    }
+  }
+
+  void setOnboardingSeen(bool v) {
+    if (_onboardingSeen != v) {
+      _onboardingSeen = v;
+      notifyListeners();
+    }
+  }
 }
 
 /// Provider para exponer el FirstRunState desde el árbol de widgets.
@@ -50,22 +103,42 @@ GoRouter buildAppRouter({
     initialLocation: '/splash',
     refreshListenable: firstRunState,
     redirect: (context, state) {
-      final hasBolsa = firstRunState.value;
+      final hasBolsa = firstRunState.hasBolsa;
+      final onboardingSeen = firstRunState.onboardingSeen;
       final loc = state.matchedLocation;
-      if (hasBolsa == null) {
-        // todavía chequeando: forzá la splash si el target no es ya la splash.
+      // Chequeo pendiente (cualquiera de los dos nulo): forzá splash.
+      if (hasBolsa == null || onboardingSeen == null) {
         return loc == '/splash' ? null : '/splash';
       }
-      // Listo el chequeo: si seguimos en splash, redirigir según hasBolsa.
-      if (loc == '/splash') return hasBolsa ? '/dashboard' : '/first-run';
-      if (!hasBolsa && loc != '/first-run') return '/first-run';
-      if (hasBolsa && loc == '/first-run') return '/dashboard';
+      // Tester nuevo sin onboarding visto: forzá `/onboarding` salvo si
+      // ya está ahí.
+      if (!hasBolsa && !onboardingSeen) {
+        return loc == '/onboarding' ? null : '/onboarding';
+      }
+      // Usuario que ya vio onboarding pero sin Bolsa: forzá `/first-run`.
+      if (!hasBolsa && onboardingSeen) {
+        return loc == '/first-run' ? null : '/first-run';
+      }
+      // Usuario con Bolsa: cualquier `/splash`/`/onboarding`/`/first-run`
+      // va a `/dashboard`. El resto de rutas se respeta.
+      if (hasBolsa) {
+        if (loc == '/splash' ||
+            loc == '/onboarding' ||
+            loc == '/first-run') {
+          return '/dashboard';
+        }
+      }
       return null;
     },
     routes: <RouteBase>[
       GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
+      GoRoute(
+        path: '/onboarding',
+        builder: (_, __) => const OnboardingScreen(),
+      ),
       GoRoute(path: '/first-run', builder: (_, __) => const FirstRunScreen()),
       GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),
+      GoRoute(path: '/help', builder: (_, __) => const HelpScreen()),
       GoRoute(
         path: '/accounts',
         builder: (_, __) => const AccountsListScreen(),
@@ -105,15 +178,29 @@ GoRouter buildAppRouter({
   );
 }
 
-/// Verifica al arrancar si la BD ya tiene Bolsa (seed corrido o import hecho).
-/// Llamar una vez desde main(), antes de runApp, para que el redirect inicial
-/// sepa a dónde mandar.
+/// Verifica al arrancar el estado de Bolsa y de onboarding visto.
+/// Llamar una vez desde main(), antes de runApp, para que el redirect
+/// inicial sepa a dónde mandar.
+///
+/// Sprint `flutter-onboarding-for-testers-v1`: extendido para cargar
+/// `onboarding_seen` en paralelo con `hasBolsa`. Para Diego (con Bolsa)
+/// el splash debe seguir siendo instantáneo — por eso ejecutamos las dos
+/// consultas en paralelo con `Future.wait` y notificamos una sola vez
+/// con `setInitial`, evitando "destellos" de transición.
 Future<void> initializeFirstRunState({
   required AppDependencies deps,
   required FirstRunState state,
 }) async {
-  final exists = await hasBolsa(deps.database);
-  state.value = exists;
+  final results = await Future.wait([
+    hasBolsa(deps.database),
+    deps.appPreferencesDao.get(kPrefOnboardingSeen),
+  ]);
+  final bolsa = results[0] as bool;
+  final seenRaw = results[1] as String?;
+  state.setInitial(
+    hasBolsa: bolsa,
+    onboardingSeen: seenRaw == 'true',
+  );
 }
 
 /// Llamado por first_run_screen tras "Arrancar limpio" o "Importar respaldo"

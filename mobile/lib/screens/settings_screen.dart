@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:fincore/app_dependencies.dart';
+import 'package:fincore/data/app_preferences_keys.dart';
 import 'package:fincore/data/backup.dart';
 import 'package:fincore/router/app_router.dart';
 import 'package:fincore/theme/fincore_colors.dart';
@@ -63,7 +64,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       const Duration(minutes: 2),
       onTimeout: () => const ShareResult('timeout', ShareResultStatus.unavailable),
     );
-    return result.status == ShareResultStatus.success;
+    final ok = result.status == ShareResultStatus.success;
+    // Sprint `flutter-onboarding-for-testers-v1` (RN-O08): persistimos
+    // el timestamp solo si el share completó con éxito. Cancelaciones o
+    // unavailable NO cuentan como respaldo realizado.
+    if (ok) {
+      await deps.appPreferencesDao
+          .set(kPrefLastExportAt, DateTime.now().toIso8601String());
+      // Forzar rebuild para que `_LastExportInfo` reflejé el nuevo valor.
+      if (mounted) setState(() {});
+    }
+    return ok;
   }
 
   /// Flujo "Exportar respaldo y luego reiniciar" (RF-013).
@@ -140,8 +151,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final firstRunState = FirstRunStateProvider.of(context);
     await deps.backupService.wipeAll();
     if (!mounted) return;
-    // Notificá al router que la BD está vacía → redirect a /first-run.
-    firstRunState.value = false;
+    // Notificá al router que la BD está vacía → redirect a `/onboarding`.
+    // S1 quality review v1: `wipeAll` borra la fila de `onboarding_seen`
+    // en BD, pero el state EN MEMORIA sigue siendo `true`. Sin resetear
+    // ambos, el router ve `hasBolsa=false && onboardingSeen=true` y va
+    // a `/first-run` (no a `/onboarding` como dice el comentario en
+    // `backup.dart`). Resetear los dos flags acá mantiene la promesa
+    // de RN-O04 ("el usuario queda como recién instalado").
+    firstRunState.setInitial(hasBolsa: false, onboardingSeen: false);
     // Salimos de Settings para que el redirect se vea.
     if (context.canPop()) {
       Navigator.of(context).maybePop();
@@ -290,6 +307,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 12),
                   const Center(child: CircularProgressIndicator()),
                 ],
+                // Sprint `flutter-onboarding-for-testers-v1`: indicador
+                // del último respaldo. Sin botón ni acción — solo señal.
+                // NOTA (F1 quality review v1): SIN `const`. Si fuera
+                // `const _LastExportInfo()`, el setState del padre tras
+                // export exitoso NO reconstruiría este widget (Flutter
+                // short-circuit por identidad de objeto canonizado), y
+                // el FutureBuilder interno no se re-ejecutaría hasta
+                // salir y volver a Settings.
+                const SizedBox(height: 12),
+                // ignore: prefer_const_constructors
+                _LastExportInfo(),
               ],
             ),
           ),
@@ -334,6 +362,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
                   ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Sprint `flutter-onboarding-for-testers-v1`: entrada Ayuda
+          // entre "Zona peligrosa" y "Acerca de". Accesible siempre,
+          // sin condiciones (RN-O05).
+          const SectionTitle('Ayuda'),
+          const SizedBox(height: 8),
+          BaseCard(
+            onTap: () => context.push('/help'),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: FincoreColors.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.help_outline,
+                      color: FincoreColors.accent),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Ayuda',
+                          style: TextStyle(
+                              color: FincoreColors.textPrimary,
+                              fontWeight: FontWeight.w600)),
+                      SizedBox(height: 2),
+                      Text('FAQ sobre kinds, reportes y backup.',
+                          style: TextStyle(
+                              color: FincoreColors.textSubtle, fontSize: 12)),
+                    ],
+                  ),
+                ),
+                Semantics(
+                  excludeSemantics: true,
+                  child: const Icon(Icons.chevron_right,
+                      color: FincoreColors.textSubtle),
                 ),
               ],
             ),
@@ -390,6 +462,111 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
+      ),
+    );
+  }
+}
+
+/// Indicador del estado del último respaldo. Sprint
+/// `flutter-onboarding-for-testers-v1` (RF-013).
+///
+/// 3 estados de render según `last_export_at`:
+/// - clave inexistente o parse falla → "Aún no exportaste un respaldo."
+/// - hace <14 días → "Último respaldo: hace X días."
+/// - hace ≥14 días → badge warning + texto sugiriendo exportar.
+///
+/// Sin reactividad (no es stream). El valor se recarga al construir
+/// SettingsScreen, lo cual es suficiente para uso real. El export
+/// exitoso fuerza un `setState` arriba para refrescar el indicador.
+class _LastExportInfo extends StatelessWidget {
+  const _LastExportInfo();
+
+  @override
+  Widget build(BuildContext context) {
+    final deps = AppDependencies.of(context);
+    return FutureBuilder<String?>(
+      future: deps.appPreferencesDao.get(kPrefLastExportAt),
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const SizedBox(height: 20);
+        }
+        final raw = snap.data;
+        if (raw == null || raw.isEmpty) {
+          return const _ExportInfoText(
+            text: 'Aún no exportaste un respaldo.',
+            warning: false,
+          );
+        }
+        final parsed = DateTime.tryParse(raw);
+        if (parsed == null) {
+          // CB-D04: tratar valores corruptos como "nunca exportado".
+          return const _ExportInfoText(
+            text: 'Aún no exportaste un respaldo.',
+            warning: false,
+          );
+        }
+        // CB-D05: clock futuro → tratar deltas negativos como 0.
+        var days = DateTime.now().difference(parsed).inDays;
+        if (days < 0) days = 0;
+        if (days >= 14) {
+          return _ExportInfoText(
+            text:
+                'Último respaldo: hace $days días — te recomendamos exportar pronto.',
+            warning: true,
+          );
+        }
+        return _ExportInfoText(
+          text: 'Último respaldo: hace $days días.',
+          warning: false,
+        );
+      },
+    );
+  }
+}
+
+class _ExportInfoText extends StatelessWidget {
+  final String text;
+  final bool warning;
+
+  const _ExportInfoText({required this.text, required this.warning});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!warning) {
+      return Text(
+        text,
+        style: const TextStyle(
+          color: FincoreColors.textSubtle,
+          fontSize: 12,
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: FincoreColors.warning.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: FincoreColors.warning.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.warning_amber_rounded,
+            color: FincoreColors.warning,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: FincoreColors.warning,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -259,6 +259,11 @@ class BackupService {
     // guardadas son preferencias de UI; al "arrancar limpio" también
     // se borran para mantener coherencia.
     await _db.delete(_db.savedViews).go();
+    // Sprint `flutter-onboarding-for-testers-v1` (RN-O04): las
+    // preferencias de la app (flag de onboarding, último export) también
+    // se resetean — el usuario queda como recién instalado, incluyendo
+    // volver a ver el onboarding tras el wipe.
+    await _db.delete(_db.appPreferences).go();
   }
 
   // ===========================================================================

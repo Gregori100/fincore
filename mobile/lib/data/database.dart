@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
+import 'package:fincore/data/daos/app_preferences_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
@@ -111,6 +112,30 @@ class SavedViews extends Table {
 }
 
 // =============================================================================
+// Tabla: app_preferences (sprint flutter-onboarding-for-testers-v1)
+// =============================================================================
+// Estado simple key/value para preferencias de UI que deben sobrevivir
+// reinicios de la app pero NO forman parte de los datos del usuario.
+//
+// Casos de uso v1:
+// - `onboarding_seen`: flag para no volver a mostrar el onboarding.
+// - `last_export_at`: timestamp ISO8601 del último export exitoso.
+//
+// NO se incluye en el backup JSON v1 (misma decisión que `saved_views`).
+// `BackupService.wipeAll()` la limpia para que un reseteo deje al usuario
+// como recién instalado.
+//
+// Sin timestamps, sin soft delete, sin FK. Tabla intencionalmente trivial.
+@DataClassName('AppPreferenceRow')
+class AppPreferences extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
+// =============================================================================
 // FincoreDatabase
 // =============================================================================
 // Los 3 DAOs se registran en `daos:` desde el sprint flutter-local-hardening-v4
@@ -122,16 +147,26 @@ class SavedViews extends Table {
 //
 // schemaVersion 3 (sprint flutter-entries-saved-views-v1): tabla `saved_views`
 // nueva. Migración aditiva en `onUpgrade`.
+//
+// schemaVersion 4 (sprint flutter-onboarding-for-testers-v1): tabla
+// `app_preferences` key/value para estado de UI (onboarding visto,
+// último export). Migración aditiva, no toca datos del usuario.
 @DriftDatabase(
-  tables: [Accounts, Categories, JournalEntries, SavedViews],
-  daos: [AccountsDao, CategoriesDao, EntriesDao, SavedViewsDao],
+  tables: [Accounts, Categories, JournalEntries, SavedViews, AppPreferences],
+  daos: [
+    AccountsDao,
+    CategoriesDao,
+    EntriesDao,
+    SavedViewsDao,
+    AppPreferencesDao,
+  ],
 )
 class FincoreDatabase extends _$FincoreDatabase {
   FincoreDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -205,6 +240,29 @@ class FincoreDatabase extends _$FincoreDatabase {
               'WHERE deleted_at IS NULL',
             );
             await m.createTable(savedViews);
+            return;
+          }
+          // Migración 3 → 4 (sprint flutter-onboarding-for-testers-v1):
+          // crea tabla `app_preferences`. Aditiva, no destructiva.
+          if (from == 3 && to == 4) {
+            await m.createTable(appPreferences);
+            return;
+          }
+          // Migración 2 → 4 (saltea 3): combina 2→3 + 3→4.
+          if (from == 2 && to == 4) {
+            await m.createTable(savedViews);
+            await m.createTable(appPreferences);
+            return;
+          }
+          // Migración 1 → 4 (saltea 2 y 3): combina las tres.
+          if (from == 1 && to == 4) {
+            await customStatement(
+              'CREATE INDEX idx_entries_occurred_active '
+              'ON journal_entries(occurred_at DESC) '
+              'WHERE deleted_at IS NULL',
+            );
+            await m.createTable(savedViews);
+            await m.createTable(appPreferences);
             return;
           }
           // Guardrail (RN-H02 + RF-009): cualquier futura migración debe
