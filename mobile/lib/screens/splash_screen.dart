@@ -1,9 +1,15 @@
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/fincore_logo.dart';
 import 'package:flutter/material.dart';
 
-/// Pantalla mostrada mientras se detecta si la BD tiene Bolsa (decide entre
-/// /first-run y /dashboard). El router redirige automáticamente cuando termina.
+/// Pantalla fallback mostrada si el state de FirstRun llega null al router
+/// (no debería ocurrir post-cambio de `main.dart` que awaitea antes de
+/// `runApp`, pero la dejamos como defensa).
+///
+/// El render es visualmente idéntico al splash nativo Android (símbolo
+/// centrado sobre canvas) para que si el router llega a pintar este frame
+/// durante un edge case, el usuario no perciba transición distinta. Sin
+/// wordmark ni spinner — esos creaban el efecto de "dos logos seguidos"
+/// que reportó Diego.
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
@@ -12,20 +18,13 @@ class SplashScreen extends StatelessWidget {
     return const Scaffold(
       backgroundColor: FincoreColors.canvas,
       body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FincoreLogo(fontSize: 64),
-            SizedBox(height: 48),
-            SizedBox(
-              width: 28,
-              height: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: FincoreColors.accent,
-              ),
-            ),
-          ],
+        child: SizedBox(
+          width: 120,
+          height: 120,
+          child: Image(
+            image: AssetImage('assets/icon/foreground_1024.png'),
+            fit: BoxFit.contain,
+          ),
         ),
       ),
     );

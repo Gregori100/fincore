@@ -129,7 +129,12 @@ publish_to: 'none'
 # `app_preferences` aditiva. Sin disrupción para usuarios existentes
 # (Diego con Bolsa nunca ve onboarding). +5 unit DAO + 3 migración + 6
 # onboarding + 4 help + 5 settings = 23 nuevos. 367/367 verdes.
-version: 0.12.0+68
+# 0.12.1+69 — splash nativo Android con símbolo centrado sobre canvas
+# (#1F242B). Genera drawables vía `flutter_native_splash` (light + dark
+# + Android 12+ SplashScreen API). Elimina el flash blanco/negro antes
+# de que Flutter pinte el primer frame — transición invisible hacia el
+# SplashScreen widget que ya tenía el wordmark.
+version: 0.12.1+69
 
 environment:
   sdk: ^3.7.2
@@ -198,6 +203,11 @@ dev_dependencies:
   # Generación de iconos de launcher (Android adaptive + monochrome themed).
   flutter_launcher_icons: ^0.14.1
 
+  # Generación del splash nativo Android (pantalla del sistema antes de que
+  # Flutter pinte el primer frame). Corre con
+  # `dart run flutter_native_splash:create` desde mobile/.
+  flutter_native_splash: ^2.4.1
+
 flutter:
   uses-material-design: true
   assets:
@@ -213,3 +223,25 @@ flutter_launcher_icons:
   adaptive_icon_foreground: "assets/icon/foreground_1024.png"
   adaptive_icon_monochrome: "assets/icon/monochrome_1024.png"
   min_sdk_android: 24
+
+# Config de flutter_native_splash. Símbolo centrado sobre fondo canvas
+# (mismo color del SplashScreen widget Flutter — transición invisible).
+# Web/iOS deshabilitados: solo Android es target del MVP.
+flutter_native_splash:
+  color: "#1F242B"
+  color_dark: "#1F242B"
+  image: "assets/icon/foreground_1024.png"
+  image_dark: "assets/icon/foreground_1024.png"
+  android: true
+  ios: false
+  web: false
+  # Android 12+ usa el SplashScreen API nativo. `icon_background_color`
+  # se mantiene en canvas para que el círculo del símbolo no se vea con
+  # halo blanco/gris en cels con esa versión.
+  android_12:
+    image: "assets/icon/foreground_1024.png"
+    image_dark: "assets/icon/foreground_1024.png"
+    color: "#1F242B"
+    color_dark: "#1F242B"
+    icon_background_color: "#1F242B"
+    icon_background_color_dark: "#1F242B"

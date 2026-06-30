@@ -30,17 +30,21 @@ void main() async {
   final database = FincoreDatabase();
   final deps = AppDependencies.fromDatabase(database);
   final firstRunState = FirstRunState();
+
+  // Esperamos la inicialización ANTES de runApp para evitar el doble
+  // splash visible: si dejamos esto async, el splash nativo Android
+  // (símbolo + canvas) termina, Flutter pinta el primer frame con la
+  // `SplashScreen` widget (wordmark + spinner) hasta que el state
+  // resuelve, y recién ahí el redirect lleva al destino. El usuario
+  // ve DOS logos consecutivos. Con await acá, el splash nativo se
+  // mantiene hasta que tenemos la respuesta, y el primer frame de
+  // Flutter ya es la pantalla destino. Las queries son in-memory
+  // SQLite (BD local pequeña) — overhead típico <50ms.
+  await initializeFirstRunState(deps: deps, state: firstRunState);
+
   final router = buildAppRouter(deps: deps, firstRunState: firstRunState);
-
-  // Detecta si la BD ya tiene Bolsa para decidir el redirect inicial.
-  // Async sin bloquear: el router muestra splash mientras tanto.
-  unawaited(initializeFirstRunState(deps: deps, state: firstRunState));
-
   runApp(FincoreApp(deps: deps, router: router, firstRunState: firstRunState));
 }
-
-/// Marca un Future como intencionalmente sin esperar.
-void unawaited(Future<void> future) {}
 
 class FincoreApp extends StatelessWidget {
   final AppDependencies deps;
