@@ -135,6 +135,15 @@ GoRouter buildAppRouter({
       GoRoute(
         path: '/onboarding',
         builder: (_, __) => const OnboardingScreen(),
+        routes: <RouteBase>[
+          // Modo review: invocado desde HelpScreen para repasar el tour.
+          // No persiste el flag de onboarding ni cambia el router state.
+          GoRoute(
+            path: 'review',
+            builder: (_, __) =>
+                const OnboardingScreen(repeatMode: true),
+          ),
+        ],
       ),
       GoRoute(path: '/first-run', builder: (_, __) => const FirstRunScreen()),
       GoRoute(path: '/dashboard', builder: (_, __) => const DashboardScreen()),

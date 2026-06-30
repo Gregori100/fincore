@@ -21,8 +21,16 @@ import 'package:go_router/go_router.dart';
 /// Al saltar o completar, persiste `onboarding_seen = 'true'` y navega
 /// a `/first-run` (caso normal: tester con BD vacía). Si por algún
 /// motivo `hasBolsa = true`, va a `/dashboard` defensivamente.
+///
+/// Modo `repeatMode = true` (ruta `/onboarding/review`): se invoca desde
+/// HelpScreen para revisar el tour de nuevo. NO persiste el flag, NO
+/// modifica `FirstRunState` y al terminar/saltar solo hace `pop()` para
+/// volver al caller. El AppBar muestra back arrow para que el usuario
+/// pueda salir en cualquier momento.
 class OnboardingScreen extends StatefulWidget {
-  const OnboardingScreen({super.key});
+  final bool repeatMode;
+
+  const OnboardingScreen({super.key, this.repeatMode = false});
 
   @override
   State<OnboardingScreen> createState() => _OnboardingScreenState();
@@ -40,6 +48,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _completeOnboarding() async {
+    // Modo review desde HelpScreen: no persistimos flag ni cambiamos el
+    // router state — el usuario ya completó el onboarding original y
+    // está repasando. Solo cerramos la pantalla.
+    if (widget.repeatMode) {
+      if (!mounted) return;
+      Navigator.of(context).maybePop();
+      return;
+    }
     final deps = AppDependencies.of(context);
     final state = FirstRunStateProvider.of(context);
     await deps.appPreferencesDao.set(kPrefOnboardingSeen, 'true');
@@ -83,13 +99,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       appBar: AppBar(
         backgroundColor: FincoreColors.canvas,
         elevation: 0,
+        // En modo review (desde HelpScreen) mostramos back arrow para
+        // poder volver con un tap. En modo inicial NO hay back: el
+        // usuario debe completar o saltar explícitamente.
+        leading: widget.repeatMode
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
+        automaticallyImplyLeading: false,
         actions: [
           TextButton(
             onPressed: _completeOnboarding,
             style: TextButton.styleFrom(
               foregroundColor: FincoreColors.textSubtle,
             ),
-            child: const Text('Saltar'),
+            child: Text(widget.repeatMode ? 'Cerrar' : 'Saltar'),
           ),
           const SizedBox(width: 8),
         ],
@@ -144,7 +170,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     foregroundColor: FincoreColors.canvas,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  child: Text(isLast ? 'Empezar' : 'Siguiente'),
+                  child: Text(
+                    isLast
+                        ? (widget.repeatMode ? 'Listo' : 'Empezar')
+                        : 'Siguiente',
+                  ),
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 /// Pantalla de Ayuda accesible desde Settings.
 /// Sprint `flutter-onboarding-for-testers-v1`.
@@ -24,8 +25,15 @@ class HelpScreen extends StatelessWidget {
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        children: const [
-          _FaqTile(
+        children: [
+          // Acceso al tour de bienvenida (modo review). Permite repasar
+          // las 3 slides del onboarding original sin afectar nada del
+          // estado de la app.
+          _ReplayTourTile(
+            onTap: () => context.push('/onboarding/review'),
+          ),
+          const SizedBox(height: 16),
+          const _FaqTile(
             title: '¿Qué tipos de movimientos hay?',
             body:
                 'FinCore tiene 5 tipos de movimientos:\n\n'
@@ -39,7 +47,7 @@ class HelpScreen extends StatelessWidget {
                 'Las transferencias y pagos de tarjeta NO cuentan como gasto '
                 'en los reportes — son movimientos internos.',
           ),
-          _FaqTile(
+          const _FaqTile(
             title: '¿Qué significan BO, DE y CR?',
             body:
                 'Son los 3 indicadores del Dashboard:\n\n'
@@ -50,7 +58,7 @@ class HelpScreen extends StatelessWidget {
                 'Se calculan automáticamente a partir de tus movimientos. No '
                 'tenés que actualizarlos manualmente.',
           ),
-          _FaqTile(
+          const _FaqTile(
             title: '¿Cómo se calculan los reportes?',
             body:
                 'En /reports tenés 5 tabs:\n\n'
@@ -65,7 +73,7 @@ class HelpScreen extends StatelessWidget {
                 '• Promedio mensual: gasto promedio prorrateado al día actual '
                   'de los últimos N meses, comparado con el mes en curso.',
           ),
-          _FaqTile(
+          const _FaqTile(
             title: '¿Cómo funciona la sugerencia automática de categoría?',
             body:
                 'Cuando registrás un movimiento nuevo, la app busca si ya '
@@ -77,7 +85,7 @@ class HelpScreen extends StatelessWidget {
                 'Si la sugerencia no es correcta, cambiala manualmente y la '
                 'app respeta tu elección — no vuelve a sugerir en ese form.',
           ),
-          _FaqTile(
+          const _FaqTile(
             title: '¿Qué son las vistas guardadas?',
             body:
                 'En /entries podés filtrar tus movimientos por fecha, tipo, '
@@ -88,7 +96,7 @@ class HelpScreen extends StatelessWidget {
                 'cargás con un tap. Sirve para no repetir la configuración '
                 'cada vez.',
           ),
-          _FaqTile(
+          const _FaqTile(
             title: '¿Cómo hacer backup y por qué importa?',
             body:
                 'La app es 100% local: tus datos viven en tu cel, sin '
@@ -147,6 +155,87 @@ class _FaqTile extends StatelessWidget {
                     fontSize: 13,
                     height: 1.5,
                   ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Tile destacado al principio de Ayuda para reabrir el tour de
+/// bienvenida. Navega a `/onboarding/review` (modo repeat) — la vista
+/// se ve igual que el primer arranque pero no afecta nada del estado.
+class _ReplayTourTile extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _ReplayTourTile({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: FincoreColors.surface,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        // Mismo patrón que BaseCard: sin ripple animado para evitar el
+        // parpadeo residual al volver con pop desde /onboarding/review.
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: FincoreColors.canvas.withValues(alpha: 0.4),
+        hoverColor: FincoreColors.canvas.withValues(alpha: 0.2),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: FincoreColors.accent.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: FincoreColors.accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.play_circle_outline,
+                  color: FincoreColors.accent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Ver tour de bienvenida',
+                      style: TextStyle(
+                        color: FincoreColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Repasá las 3 slides del primer arranque.',
+                      style: TextStyle(
+                        color: FincoreColors.textSubtle,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Semantics(
+                excludeSemantics: true,
+                child: const Icon(
+                  Icons.chevron_right,
+                  color: FincoreColors.textSubtle,
                 ),
               ),
             ],

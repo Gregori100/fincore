@@ -27,6 +27,14 @@ class BaseCard extends StatelessWidget {
           : InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: onTap,
+              // Sin ripple animado: cuando `onTap` dispara una navegación,
+              // la animación del ripple queda corriendo "detrás" de la
+              // pantalla nueva. Al volver con pop, el fade-out se ve como
+              // un parpadeo del card. Reemplazamos el ripple por un
+              // highlight estático y un overlay sutil de hover/focus.
+              splashFactory: NoSplash.splashFactory,
+              highlightColor: FincoreColors.canvas.withValues(alpha: 0.4),
+              hoverColor: FincoreColors.canvas.withValues(alpha: 0.2),
               child: content,
             ),
     );
