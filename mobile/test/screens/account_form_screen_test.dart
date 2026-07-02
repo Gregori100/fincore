@@ -207,4 +207,80 @@ void main() {
       await harness.dispose();
     });
   });
+
+  // Sprint flutter-reports-credit-cards-v1: inputs nuevos + validación
+  // reforzada de credit_limit.
+  group('AccountFormScreen — credit inputs (sprint credit-cards)', () {
+    testWidgets(
+        'WT-08+09: editar cuenta credit muestra sección + 7 TextFormFields',
+        (tester) async {
+      late String id;
+      final harness = await pumpFincoreApp(
+        tester,
+        seed: (db, deps) async {
+          id = await deps.accountsDao.create(
+            name: 'AmexShow',
+            type: 'credit',
+            creditLimit: 5000,
+            closingDay: 10,
+            paymentDay: 20,
+          );
+        },
+      );
+
+      final ctx = tester.element(find.byType(Scaffold));
+      GoRouter.of(ctx).push('/accounts/$id/edit');
+      await tester.pumpAndSettle();
+
+      // Sección de tarjeta visible.
+      expect(find.text('Metadata de la tarjeta'), findsOneWidget);
+      // 7 TextFormFields = Nombre + Descripción + 5 credit-only (Límite,
+      // Día corte, Día pago, Pago mínimo %, Tasa).
+      expect(find.byType(TextFormField), findsNWidgets(7));
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-11: editar credit con minPct=0.03 preseteado → se muestra "3.00" en input',
+        (tester) async {
+      // Verifica el round-trip de conversión BD (decimal 0-1) → UI
+      // (porcentaje 0-100). Sembramos con `minimumPaymentPct=0.03` y
+      // esperamos que el field muestre "3.00" (× 100).
+      late String amexId;
+      final harness = await pumpFincoreApp(
+        tester,
+        seed: (db, deps) async {
+          amexId = await deps.accountsDao.create(
+            name: 'AmexPct',
+            type: 'credit',
+            creditLimit: 10000,
+            closingDay: 15,
+            paymentDay: 5,
+            minimumPaymentPct: 0.03,
+            interestRate: 0.42,
+          );
+        },
+      );
+
+      final ctx = tester.element(find.byType(Scaffold));
+      GoRouter.of(ctx).push('/accounts/$amexId/edit');
+      await tester.pumpAndSettle();
+
+      // Los TextField internos del TextFormField exponen su controller;
+      // buscamos por el `initialValue` renderizado en el field. El campo
+      // 5 (Pago mínimo) debe tener "3.00" (0.03 × 100).
+      final textFieldsWithController = find.byWidgetPredicate((w) =>
+          w is TextField && w.controller?.text == '3.00');
+      expect(textFieldsWithController, findsOneWidget,
+          reason: '0.03 en BD debería mostrarse como "3.00" en el UI');
+
+      final interestField = find.byWidgetPredicate((w) =>
+          w is TextField && w.controller?.text == '42.00');
+      expect(interestField, findsOneWidget,
+          reason: '0.42 en BD debería mostrarse como "42.00" en el UI');
+
+      await harness.dispose();
+    });
+  });
 }

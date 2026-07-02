@@ -17,16 +17,22 @@ class BackupError implements Exception {
 }
 
 /// Reporte resultado del import: cuántos elementos se insertaron.
+///
+/// `adjustedAccountsCount` (sprint `flutter-reports-credit-cards-v1`):
+/// cantidad de cuentas credit del JSON legacy que traían `credit_limit=null`
+/// y fueron ajustadas a 0 al persistir. 0 en la mayoría de imports.
 class ImportReport {
   final int accountsCount;
   final int categoriesCount;
   final int entriesCount;
+  final int adjustedAccountsCount;
   final DateTime importedAt;
 
   const ImportReport({
     required this.accountsCount,
     required this.categoriesCount,
     required this.entriesCount,
+    this.adjustedAccountsCount = 0,
     required this.importedAt,
   });
 }
@@ -151,9 +157,16 @@ class BackupService {
     }
 
     // Pre-parseo (lanza si algo inválido) ANTES de tocar la BD.
-    final accountsParsed = accountsRaw
+    // Sprint flutter-reports-credit-cards-v1: `_accountFromJson` retorna un
+    // record con el companion y un flag `adjusted` (true cuando el JSON legacy
+    // traía `credit_limit=null` y fue ajustado a 0 sin romper el import).
+    final accountsParsedRaw = accountsRaw
         .map((e) => _accountFromJson(e as Map<String, dynamic>))
         .toList();
+    final accountsParsed =
+        accountsParsedRaw.map((r) => r.companion).toList();
+    final adjustedAccountsCount =
+        accountsParsedRaw.where((r) => r.adjusted).length;
     final categoriesParsed = categoriesRaw
         .map((e) => _categoryFromJson(e as Map<String, dynamic>))
         .toList();
@@ -237,6 +250,7 @@ class BackupService {
       accountsCount: accountsParsed.length,
       categoriesCount: categoriesParsed.length,
       entriesCount: entriesParsed.length,
+      adjustedAccountsCount: adjustedAccountsCount,
       importedAt: importedAt,
     );
   }
@@ -309,13 +323,14 @@ class BackupService {
         'updated_at': e.updatedAt.toUtc().toIso8601String(),
       };
 
-  AccountsCompanion _accountFromJson(Map<String, dynamic> json) {
+  ({AccountsCompanion companion, bool adjusted}) _accountFromJson(
+      Map<String, dynamic> json) {
     final id = json['id'] as String;
     final name = json['name'] as String;
     final type = json['type'] as String;
     final description = json['description'] as String?;
     final isProtected = (json['is_protected'] as bool?) ?? false;
-    final creditLimit = (json['credit_limit'] as num?)?.toDouble();
+    var creditLimit = (json['credit_limit'] as num?)?.toDouble();
     final closingDay = json['closing_day'] as int?;
     final paymentDay = json['payment_day'] as int?;
     final interestRate = (json['interest_rate'] as num?)?.toDouble();
@@ -329,13 +344,18 @@ class BackupService {
         'El tipo de cuenta no es válido (esperado: cash, debit o credit; recibido: "$type").',
       );
     }
-    // B3 (quality review 2026-06-19): validar metadata de credit en el import.
-    // Sin esto, un JSON corrupto con closing_day=99 o credit_limit<0 entraba y
-    // se rompía la UI al editar la cuenta.
+    // Sprint flutter-reports-credit-cards-v1: `credit_limit` es NOT NULL DEFAULT
+    // 0 en el schema v5. Se acepta null en JSON legacy (auto-ajuste a 0 con
+    // log en `ImportReport.adjustedAccountsCount`). Se acepta 0 como valor
+    // válido. Se rechaza < 0.
+    var adjusted = false;
     if (type == 'credit') {
-      if (creditLimit == null || creditLimit <= 0) {
+      if (creditLimit == null) {
+        creditLimit = 0;
+        adjusted = true;
+      } else if (creditLimit < 0) {
         throw BackupError('invalid_credit_limit',
-            'La cuenta de crédito "$name" debe tener credit_limit > 0 (recibido: $creditLimit).');
+            'La cuenta de crédito "$name" tiene credit_limit negativo (recibido: $creditLimit).');
       }
       if (closingDay == null || closingDay < 1 || closingDay > 31) {
         throw BackupError('invalid_credit_metadata',
@@ -359,13 +379,17 @@ class BackupService {
       throw BackupError('invalid_credit_metadata',
           'La cuenta "$name" tiene minimum_payment_pct fuera de rango [0, 1] (recibido: $minimumPaymentPct).');
     }
-    return AccountsCompanion.insert(
+    // Para cuentas non-credit del JSON legacy con credit_limit=null, dejamos
+    // que el DEFAULT 0 del schema aplique — no seteamos el campo.
+    final companion = AccountsCompanion.insert(
       id: id,
       name: name,
       type: type,
       description: Value(description),
       isProtected: Value(isProtected),
-      creditLimit: Value(creditLimit),
+      creditLimit: creditLimit != null
+          ? Value(creditLimit)
+          : const Value.absent(),
       closingDay: Value(closingDay),
       paymentDay: Value(paymentDay),
       interestRate: Value(interestRate),
@@ -373,6 +397,7 @@ class BackupService {
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );
+    return (companion: companion, adjusted: adjusted);
   }
 
   CategoriesCompanion _categoryFromJson(Map<String, dynamic> json) {

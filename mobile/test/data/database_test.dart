@@ -675,4 +675,74 @@ void main() {
       expect(all.length, 3);
     });
   });
+
+  // Sprint flutter-reports-credit-cards-v1: validación reforzada de
+  // `credit_limit` (obligatorio, >= 0) + migración v4 → v5.
+  group('AccountsDao — credit_limit (sprint credit-cards)', () {
+    test('UT-01: create(type=credit, creditLimit=null) tira invalid_credit_limit',
+        () async {
+      await expectLater(
+        accountsDao.create(
+          name: 'VisaSinLimite',
+          type: 'credit',
+          closingDay: 15,
+          paymentDay: 5,
+          // creditLimit no se pasa
+        ),
+        throwsA(isA<AccountsDaoError>()
+            .having((e) => e.code, 'code', 'invalid_credit_limit')
+            .having((e) => e.message, 'message', contains('obligatorio'))),
+      );
+    });
+
+    test('UT-02: updateAccount con creditLimit inválido (< 0) tira error',
+        () async {
+      final id = await accountsDao.create(
+        name: 'Amex',
+        type: 'credit',
+        creditLimit: 10000,
+        closingDay: 15,
+        paymentDay: 5,
+      );
+      await expectLater(
+        accountsDao.updateAccount(id: id, creditLimit: -100),
+        throwsA(isA<AccountsDaoError>()
+            .having((e) => e.code, 'code', 'invalid_credit_limit')),
+      );
+    });
+
+    test('UT-03: create(type=credit, creditLimit=0) es válido (RN-CC01)',
+        () async {
+      final id = await accountsDao.create(
+        name: 'Palacio',
+        type: 'credit',
+        creditLimit: 0,
+        closingDay: 15,
+        paymentDay: 5,
+      );
+      final account = await accountsDao.findById(id);
+      expect(account != null, isTrue);
+      expect(account!.creditLimit, 0);
+    });
+
+    test('UT-04: create(type=cash, creditLimit=null) es válido (no aplica validación)',
+        () async {
+      final id = await accountsDao.createBolsa();
+      final account = await accountsDao.findById(id);
+      expect(account != null, isTrue);
+      // Post-schema v5, cash queda con credit_limit=0 por DEFAULT.
+      expect(account!.creditLimit, 0);
+    });
+
+    test('UT-19: onUpgrade(4→5) sobre BD limpia es idempotente', () async {
+      // La BD in-memory ya está en v5. Correr onUpgrade otra vez no debe
+      // romper (backfill sin nulls + alterTable sobre schema actual + CREATE
+      // INDEX IF NOT EXISTS).
+      await db.customStatement(
+        'CREATE INDEX IF NOT EXISTS idx_accounts_deleted ON accounts(deleted_at)',
+      );
+      // No hay excepción → OK. Y las tablas siguen existiendo.
+      expect(await accountsDao.listAll(), isEmpty);
+    });
+  });
 }

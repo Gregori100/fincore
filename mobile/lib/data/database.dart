@@ -21,8 +21,14 @@ class Accounts extends Table {
   TextColumn get type => text()(); // 'cash' | 'debit' | 'credit'
   TextColumn get description => text().nullable()();
   BoolColumn get isProtected => boolean().withDefault(const Constant(false))();
-  // Metadata de tarjeta (solo aplica si type='credit', NULL en cash/debit).
-  RealColumn get creditLimit => real().nullable()();
+  // Metadata de tarjeta. `credit_limit` es NOT NULL con default 0 desde el
+  // sprint flutter-reports-credit-cards-v1 (schemaVersion 5): una tarjeta
+  // conceptualmente siempre tiene límite (aunque sea 0). El DAO valida que
+  // `type='credit'` reciba explícitamente el valor. Para cuentas cash/debit
+  // el campo se materializa como 0 sin efecto funcional (nunca se lee).
+  // Los otros campos siguen nullable — son opcionales aún cuando la cuenta
+  // es credit (permiten cargar tarjetas sin saber corte/pago/mínimo).
+  RealColumn get creditLimit => real().withDefault(const Constant(0))();
   IntColumn get closingDay => integer().nullable()();
   IntColumn get paymentDay => integer().nullable()();
   RealColumn get interestRate => real().nullable()();
@@ -151,6 +157,12 @@ class AppPreferences extends Table {
 // schemaVersion 4 (sprint flutter-onboarding-for-testers-v1): tabla
 // `app_preferences` key/value para estado de UI (onboarding visto,
 // último export). Migración aditiva, no toca datos del usuario.
+//
+// schemaVersion 5 (sprint flutter-reports-credit-cards-v1): `credit_limit`
+// deja de ser nullable y pasa a NOT NULL DEFAULT 0. La migración recrea
+// la tabla `accounts` con el nuevo constraint, backfilleando NULLs a 0
+// previo al recreate. Los índices no declarados en el schema Dart se
+// re-crean explícitamente después de alterTable.
 @DriftDatabase(
   tables: [Accounts, Categories, JournalEntries, SavedViews, AppPreferences],
   daos: [
@@ -166,7 +178,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -263,6 +275,78 @@ class FincoreDatabase extends _$FincoreDatabase {
             );
             await m.createTable(savedViews);
             await m.createTable(appPreferences);
+            return;
+          }
+          // Migración 4 → 5 (sprint flutter-reports-credit-cards-v1):
+          // `credit_limit` pasa de nullable a NOT NULL DEFAULT 0. Requiere
+          // (1) backfill de NULLs a 0 y (2) recreación de la tabla `accounts`
+          // porque SQLite no soporta ALTER COLUMN.
+          //
+          // NOTA: onUpgrade NO corre en transacción usuario (limitación de
+          // `PRAGMA foreign_keys`, que drift togglea internamente durante
+          // `alterTable`). La migración es idempotente por diseño: si crashea
+          // antes de que drift persista schemaVersion=5, el siguiente open
+          // re-ejecuta 4→5 sin efectos secundarios (UPDATE ... WHERE IS NULL
+          // es no-op tras el primer paso; alterTable reconstruye a la forma
+          // vigente; CREATE INDEX IF NOT EXISTS es idempotente).
+          if (from == 4 && to == 5) {
+            await customStatement(
+              'UPDATE accounts SET credit_limit = 0 WHERE credit_limit IS NULL',
+            );
+            await m.alterTable(TableMigration(accounts));
+            // drift.alterTable pierde los índices no declarados en el schema
+            // Dart (idx_accounts_deleted es customStatement en onCreate).
+            // Re-crear explícitamente.
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_accounts_deleted '
+              'ON accounts(deleted_at)',
+            );
+            return;
+          }
+          // Migración 3 → 5 (defensiva): combina 3→4 + 4→5.
+          if (from == 3 && to == 5) {
+            await m.createTable(appPreferences);
+            await customStatement(
+              'UPDATE accounts SET credit_limit = 0 WHERE credit_limit IS NULL',
+            );
+            await m.alterTable(TableMigration(accounts));
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_accounts_deleted '
+              'ON accounts(deleted_at)',
+            );
+            return;
+          }
+          // Migración 2 → 5 (defensiva): combina 2→3 + 3→4 + 4→5.
+          if (from == 2 && to == 5) {
+            await m.createTable(savedViews);
+            await m.createTable(appPreferences);
+            await customStatement(
+              'UPDATE accounts SET credit_limit = 0 WHERE credit_limit IS NULL',
+            );
+            await m.alterTable(TableMigration(accounts));
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_accounts_deleted '
+              'ON accounts(deleted_at)',
+            );
+            return;
+          }
+          // Migración 1 → 5 (defensiva): combina las cuatro migraciones.
+          if (from == 1 && to == 5) {
+            await customStatement(
+              'CREATE INDEX idx_entries_occurred_active '
+              'ON journal_entries(occurred_at DESC) '
+              'WHERE deleted_at IS NULL',
+            );
+            await m.createTable(savedViews);
+            await m.createTable(appPreferences);
+            await customStatement(
+              'UPDATE accounts SET credit_limit = 0 WHERE credit_limit IS NULL',
+            );
+            await m.alterTable(TableMigration(accounts));
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_accounts_deleted '
+              'ON accounts(deleted_at)',
+            );
             return;
           }
           // Guardrail (RN-H02 + RF-009): cualquier futura migración debe

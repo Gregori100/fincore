@@ -1134,27 +1134,25 @@ void main() {
     });
 
     test(
-        'UT-06: credit_limit null contribuye a DE pero no a CR; 0 contribuye con 0',
+        'UT-06: credit_limit=null se rechaza; 0 contribuye a CR con `-deuda` (sprint credit-cards)',
         () async {
-      // Cuenta credit sin credit_limit.
-      final visaNull = await accountsDao.create(
-        name: 'VisaNull',
-        type: 'credit',
-        // credit_limit no se pasa = null
+      // Post-schema v5: credit_limit es obligatorio para type=credit.
+      await expectLater(
+        accountsDao.create(
+          name: 'VisaNull',
+          type: 'credit',
+          // credit_limit no se pasa = null
+        ),
+        throwsA(isA<AccountsDaoError>()
+            .having((e) => e.code, 'code', 'invalid_credit_limit')),
       );
-      // Cuenta credit con credit_limit = 0.01 (mínimo válido del DAO).
-      // El DAO valida > 0, así que no podemos probar exactamente 0. Usamos
-      // un valor chico para demostrar el comportamiento del cálculo.
+      // credit_limit=0 es válido (tarjeta departamental sin límite formal).
       final visaZero = await accountsDao.create(
-        name: 'VisaSmall',
+        name: 'VisaZero',
         type: 'credit',
-        creditLimit: 0.01,
-      );
-      // Generar deuda en ambas.
-      await entriesDao.registerCreditExpense(
-        accountOriginId: visaNull,
-        amount: 100,
-        occurredAt: DateTime(2026, 6, 5),
+        creditLimit: 0,
+        closingDay: 15,
+        paymentDay: 5,
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: visaZero,
@@ -1164,12 +1162,11 @@ void main() {
       final report = await reports
           .balanceAtDate(asOf: DateTime(2026, 6, 30))
           .first;
-      // DE total = deuda Visa default (0) + VisaNull (100) + VisaSmall (50)
-      // = 150.
-      expect(report.de, 150);
-      // CR total = Visa default (50000) + VisaSmall (0.01 - 50 = -49.99)
-      // VisaNull no contribuye porque credit_limit es null.
-      expect(report.cr, closeTo(50000 + (0.01 - 50), 0.001));
+      // Visa del seed (creditLimit=50000, sin deuda) + VisaZero (creditLimit=0,
+      // debt=50). DE total = 50 (solo VisaZero). CR total = 50000 (Visa)
+      //   + (0 - 50 = -50) (VisaZero) = 49950.
+      expect(report.de, closeTo(50, 0.001));
+      expect(report.cr, closeTo(49950, 0.001));
     });
   });
 
@@ -1706,6 +1703,245 @@ void main() {
           await reports.monthlyAverage(monthsBack: 3, now: now).first;
       expect(report.historicalAverage,
           closeTo((90 + 120 + 60) / 3, 0.01));
+    });
+  });
+
+  // Sprint flutter-reports-credit-cards-v1: tests del nuevo reporte
+  // `watchCreditCards()`.
+  group('watchCreditCards (sprint credit-cards)', () {
+    // Fecha de referencia estable para tests deterministas.
+    final refDate = DateTime(2024, 6, 15);
+
+    test('UT-05: BD sin cuentas credit activas → lista vacía', () async {
+      // El seed ya creó Bolsa (cash) + Visa (credit) en el setUp default.
+      // Archivamos la Visa para dejar 0 credit activas.
+      await accountsDao.archive(credit);
+      final list = await reports.watchCreditCards(now: refDate).first;
+      expect(list, isEmpty);
+    });
+
+    test('UT-06: tarjeta sin metadata → nextClosingDate/etc en null', () async {
+      // Archivar Visa del setUp para dejar solo la nueva.
+      await accountsDao.archive(credit);
+      final id = await accountsDao.create(
+        name: 'SinMeta',
+        type: 'credit',
+        creditLimit: 1000,
+        // closingDay/paymentDay/minimumPaymentPct no se pasan.
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: id,
+        amount: 200,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      final list = await reports.watchCreditCards(now: refDate).first;
+      expect(list, hasLength(1));
+      final s = list.first;
+      expect(s.name, 'SinMeta');
+      expect(s.debt, 200);
+      expect(s.nextClosingDate, isNull);
+      expect(s.nextPaymentDate, isNull);
+      expect(s.daysToClosing, isNull);
+      expect(s.daysToPayment, isNull);
+      expect(s.minimumPayment, isNull);
+    });
+
+    test('UT-07: solo cuentas credit activas aparecen (soft delete filtrado)',
+        () async {
+      final archivedId = await accountsDao.create(
+        name: 'Archivada',
+        type: 'credit',
+        creditLimit: 5000,
+        closingDay: 10,
+        paymentDay: 20,
+      );
+      await accountsDao.archive(archivedId);
+      final list = await reports.watchCreditCards(now: refDate).first;
+      // Debe estar solo Visa del setUp (activa).
+      expect(list, hasLength(1));
+      expect(list.first.name, 'Visa');
+    });
+
+    test(
+        'UT-08: orden RN-CC09 — proximidad pago asc con deuda; alfabético al final sin deuda',
+        () async {
+      await accountsDao.archive(credit);
+      final visaProxima = await accountsDao.create(
+        name: 'ProximaPago',
+        type: 'credit',
+        creditLimit: 10000,
+        closingDay: 15,
+        paymentDay: 20, // hoy=15 → 20 (5 días)
+      );
+      final visaLejana = await accountsDao.create(
+        name: 'LejanaPago',
+        type: 'credit',
+        creditLimit: 10000,
+        closingDay: 5,
+        paymentDay: 10, // hoy=15 → 10 del mes siguiente (~25 días)
+      );
+      final sinDeudaB = await accountsDao.create(
+        name: 'B_SinDeuda',
+        type: 'credit',
+        creditLimit: 3000,
+        closingDay: 15,
+        paymentDay: 5,
+      );
+      final sinDeudaA = await accountsDao.create(
+        name: 'A_SinDeuda',
+        type: 'credit',
+        creditLimit: 3000,
+        closingDay: 15,
+        paymentDay: 5,
+      );
+      // Deuda solo en las 2 primeras.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: visaProxima,
+        amount: 500,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: visaLejana,
+        amount: 800,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      final list = await reports.watchCreditCards(now: refDate).first;
+      expect(list.map((s) => s.name).toList(), [
+        'ProximaPago',
+        'LejanaPago',
+        'A_SinDeuda',
+        'B_SinDeuda',
+      ]);
+      // Silence unused warnings.
+      expect([sinDeudaA, sinDeudaB], hasLength(2));
+    });
+
+    test('UT-09: usedPct correcto para deuda 5000 / límite 10000 → 50%',
+        () async {
+      await accountsDao.archive(credit);
+      final id = await accountsDao.create(
+        name: 'Mitad',
+        type: 'credit',
+        creditLimit: 10000,
+        closingDay: 15,
+        paymentDay: 5,
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: id,
+        amount: 5000,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      final list = await reports.watchCreditCards(now: refDate).first;
+      expect(list.first.usedPct, 50.0);
+      expect(list.first.availableCredit, 5000);
+      expect(list.first.isOverdue, false);
+    });
+
+    test('UT-10: usedPct = null cuando credit_limit = 0 (CB-D19)', () async {
+      await accountsDao.archive(credit);
+      final id = await accountsDao.create(
+        name: 'SinLimite',
+        type: 'credit',
+        creditLimit: 0,
+        closingDay: 15,
+        paymentDay: 5,
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: id,
+        amount: 100,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      final list = await reports.watchCreditCards(now: refDate).first;
+      expect(list.first.usedPct, isNull);
+      expect(list.first.availableCredit, 0);
+    });
+
+    test('UT-11: isOverdue = true cuando debt > credit_limit (CB-D17)',
+        () async {
+      await accountsDao.archive(credit);
+      final id = await accountsDao.create(
+        name: 'Excedida',
+        type: 'credit',
+        creditLimit: 1000,
+        closingDay: 15,
+        paymentDay: 5,
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: id,
+        amount: 1500,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      final list = await reports.watchCreditCards(now: refDate).first;
+      expect(list.first.isOverdue, true);
+      expect(list.first.usedPct, 100.0);
+      expect(list.first.availableCredit, 0);
+    });
+
+    test(
+        'UT-12: reactividad — registrar credit_expense re-emite con nueva deuda',
+        () async {
+      final events = <List<CreditCardStatus>>[];
+      final sub =
+          reports.watchCreditCards(now: refDate).listen(events.add);
+
+      // Esperar primer emit.
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(events, isNotEmpty);
+      final initial = events.last;
+      final initialDebt =
+          initial.firstWhere((s) => s.accountId == credit).debt;
+
+      // Registrar cargo.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 300,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final updated = events.last.firstWhere((s) => s.accountId == credit);
+      expect(updated.debt, greaterThan(initialDebt));
+      expect(updated.debt - initialDebt, 300);
+
+      await sub.cancel();
+    });
+
+    test('CB-D18: debt=0 con minimumPaymentPct → isDebtFree, minimumPayment=null',
+        () async {
+      await accountsDao.archive(credit);
+      final id = await accountsDao.create(
+        name: 'SinDeudaConPct',
+        type: 'credit',
+        creditLimit: 10000,
+        closingDay: 15,
+        paymentDay: 5,
+        minimumPaymentPct: 0.05,
+      );
+      final list = await reports.watchCreditCards(now: refDate).first;
+      final s = list.firstWhere((c) => c.accountId == id);
+      expect(s.isDebtFree, true);
+      expect(s.minimumPayment, isNull);
+    });
+
+    test('minimumPayment = debt × minimumPaymentPct (formato decimal 0-1)',
+        () async {
+      await accountsDao.archive(credit);
+      final id = await accountsDao.create(
+        name: 'ConMinimo',
+        type: 'credit',
+        creditLimit: 10000,
+        closingDay: 15,
+        paymentDay: 5,
+        minimumPaymentPct: 0.05,
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: id,
+        amount: 2000,
+        occurredAt: DateTime(2024, 6, 1),
+      );
+      final list = await reports.watchCreditCards(now: refDate).first;
+      final s = list.firstWhere((c) => c.accountId == id);
+      expect(s.minimumPayment, closeTo(100, 0.001)); // 2000 × 0.05
     });
   });
 }

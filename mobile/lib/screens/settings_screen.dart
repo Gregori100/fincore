@@ -204,9 +204,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
       final report = await deps.backupService.importFromJson(json);
       if (mounted) {
+        // Sprint flutter-reports-credit-cards-v1: si el JSON legacy traía
+        // cuentas credit con `credit_limit=null`, el import las ajustó a 0.
+        // Reportar el conteo para que Diego lo sepa y pueda editar límites.
+        final adjustedNote = report.adjustedAccountsCount > 0
+            ? ' (${report.adjustedAccountsCount} '
+                '${report.adjustedAccountsCount == 1 ? "cuenta ajustada" : "cuentas ajustadas"} '
+                'a límite 0)'
+            : '';
         showSuccessSnackbar(
           context,
-          'Respaldo importado: ${report.accountsCount} cuentas, '
+          'Respaldo importado: ${report.accountsCount} cuentas$adjustedNote, '
           '${report.categoriesCount} categorías, ${report.entriesCount} movimientos.',
         );
       }

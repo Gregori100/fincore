@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:fincore/data/database.dart';
+import 'package:fincore/data/date_helpers.dart';
 
 /// Reporte agregado de gasto por categoría en un rango temporal.
 ///
@@ -521,17 +522,18 @@ class ReportsService {
       final type = row.read<String>('a_type');
       final balance = row.read<double>('balance');
       final balanceNow = row.read<double>('balance_now');
-      final creditLimit = row.read<double?>('a_credit_limit');
+      // Post-schema v5 (sprint flutter-reports-credit-cards-v1), `credit_limit`
+      // es NOT NULL DEFAULT 0. Toda tarjeta contribuye a CR con
+      // `creditLimit - balance` (puede ser negativo si `debt > limit`).
+      final creditLimit = row.read<double>('a_credit_limit');
       if (type == 'cash' || type == 'debit') {
         bo += balance;
         boNow += balanceNow;
       } else if (type == 'credit') {
         de += balance;
         deNow += balanceNow;
-        if (creditLimit != null) {
-          cr += creditLimit - balance;
-          crNow += creditLimit - balanceNow;
-        }
+        cr += creditLimit - balance;
+        crNow += creditLimit - balanceNow;
       }
       accounts.add(AccountBalanceAtDate(
         id: row.read<String>('a_id'),
@@ -833,6 +835,72 @@ class ReportsService {
     final m = date.month.toString().padLeft(2, '0');
     return '$y-$m';
   }
+
+  /// Estado actual de las tarjetas de crédito activas del sprint
+  /// `flutter-reports-credit-cards-v1`.
+  ///
+  /// Emite `List<CreditCardStatus>` reactivamente cuando cambian `accounts`
+  /// (metadata o archive) o `journal_entries` (cargo o pago que mueve la
+  /// deuda). Un StreamBuilder en el UI recibe la lista actualizada sin
+  /// refresh manual.
+  ///
+  /// Cálculos:
+  /// - Deuda = `Σ origin.amount − Σ destination.amount` para la cuenta
+  ///   (patrón credit del `FinancialStateService`).
+  /// - `%usado`, `disponible`, `pagoMínimo`, `próximo corte/pago`,
+  ///   `daysTo*` se calculan en Dart post-fetch (ver `CreditCardStatus`).
+  /// - Orden: RN-CC09 — con deuda por proximidad de pago asc; sin deuda
+  ///   alfabético asc al final.
+  Stream<List<CreditCardStatus>> watchCreditCards({DateTime? now}) {
+    const sql = '''
+      SELECT
+        a.id AS account_id,
+        a.name AS name,
+        a.description AS description,
+        a.credit_limit AS credit_limit,
+        a.closing_day AS closing_day,
+        a.payment_day AS payment_day,
+        a.interest_rate AS interest_rate,
+        a.minimum_payment_pct AS minimum_payment_pct,
+        COALESCE(SUM(CASE WHEN j.account_origin_id = a.id THEN j.amount ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN j.account_destination_id = a.id THEN j.amount ELSE 0 END), 0)
+          AS debt
+      FROM accounts a
+      LEFT JOIN journal_entries j
+        ON (j.account_origin_id = a.id OR j.account_destination_id = a.id)
+        AND j.deleted_at IS NULL
+      WHERE a.deleted_at IS NULL
+        AND a.type = 'credit'
+      GROUP BY a.id, a.name, a.description, a.credit_limit,
+               a.closing_day, a.payment_day, a.interest_rate,
+               a.minimum_payment_pct
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          readsFrom: {_db.accounts, _db.journalEntries},
+        )
+        .watch()
+        .map((rows) {
+      final referenceDate = now ?? DateTime.now();
+      final statuses = rows.map((row) {
+        return CreditCardStatus.compute(
+          accountId: row.read<String>('account_id'),
+          name: row.read<String>('name'),
+          description: row.readNullable<String>('description'),
+          creditLimit: row.read<double>('credit_limit'),
+          debt: row.read<double>('debt'),
+          closingDay: row.readNullable<int>('closing_day'),
+          paymentDay: row.readNullable<int>('payment_day'),
+          interestRate: row.readNullable<double>('interest_rate'),
+          minimumPaymentPct: row.readNullable<double>('minimum_payment_pct'),
+          today: referenceDate,
+        );
+      }).toList();
+      statuses.sort(CreditCardStatus.compareForReport);
+      return statuses;
+    });
+  }
 }
 
 /// Reporte de cashflow mensual del sprint `flutter-reports-cashflow-v1`.
@@ -1127,4 +1195,162 @@ class _RawBucket {
     required this.total,
     required this.count,
   });
+}
+
+/// Estado inmutable de una tarjeta de crédito para el reporte del sprint
+/// `flutter-reports-credit-cards-v1`.
+///
+/// Construido por [ReportsService.watchCreditCards] usando el constructor
+/// factory [CreditCardStatus.compute], que aplica RN-CC04..CC08:
+///
+/// - `usedPct`: `min(debt / creditLimit, 1.0) * 100`; `null` si `creditLimit == 0`.
+/// - `availableCredit`: `max(creditLimit - debt, 0)`; nunca negativo.
+/// - `nextClosingDate` / `nextPaymentDate`: siguiente ocurrencia del día
+///   objetivo con clamp al último día del mes (helper `nextOccurrenceOfDay`).
+/// - `minimumPayment`: `debt * minimumPaymentPct` (donde `minimumPaymentPct`
+///   está en decimal 0-1, ej: 0.05 = 5%); `null` si el `%` es null o la
+///   deuda es 0.
+/// - `isOverdue`: `debt > creditLimit && creditLimit > 0`. Cuando el límite es
+///   0 (tarjeta sin cupo formal o límite indefinido), NO marcamos overdue —
+///   la card muestra "—" en el ring y disponible=0 sin badge de warning.
+///   Decisión de producto: 0 significa "límite indefinido", no "cupo cero".
+/// - `isDebtFree`: `debt <= 0`.
+class CreditCardStatus {
+  final String accountId;
+  final String name;
+  final String? description;
+  final double creditLimit;
+  final double debt;
+  final double availableCredit;
+  final double? usedPct;
+  final int? closingDay;
+  final int? paymentDay;
+  final DateTime? nextClosingDate;
+  final DateTime? nextPaymentDate;
+  final int? daysToClosing;
+  final int? daysToPayment;
+  final double? minimumPayment;
+  final double? interestRate;
+  final bool isOverdue;
+  final bool isDebtFree;
+
+  const CreditCardStatus({
+    required this.accountId,
+    required this.name,
+    required this.description,
+    required this.creditLimit,
+    required this.debt,
+    required this.availableCredit,
+    required this.usedPct,
+    required this.closingDay,
+    required this.paymentDay,
+    required this.nextClosingDate,
+    required this.nextPaymentDate,
+    required this.daysToClosing,
+    required this.daysToPayment,
+    required this.minimumPayment,
+    required this.interestRate,
+    required this.isOverdue,
+    required this.isDebtFree,
+  });
+
+  factory CreditCardStatus.compute({
+    required String accountId,
+    required String name,
+    required String? description,
+    required double creditLimit,
+    required double debt,
+    required int? closingDay,
+    required int? paymentDay,
+    required double? interestRate,
+    required double? minimumPaymentPct,
+    required DateTime today,
+  }) {
+    final normalizedDebt = debt < 0 ? 0.0 : debt;
+    final available = creditLimit - normalizedDebt;
+    final availableCredit = available < 0 ? 0.0 : available;
+
+    double? usedPct;
+    if (creditLimit > 0) {
+      final ratio = normalizedDebt / creditLimit;
+      usedPct = (ratio > 1.0 ? 1.0 : ratio) * 100;
+    }
+
+    final isOverdue = normalizedDebt > creditLimit && creditLimit > 0;
+    final isDebtFree = normalizedDebt <= 0;
+
+    final DateTime todayMidnight = DateTime(today.year, today.month, today.day);
+    DateTime? nextClosing;
+    int? daysToClosing;
+    if (closingDay != null) {
+      nextClosing = nextOccurrenceOfDay(todayMidnight, closingDay);
+      daysToClosing = nextClosing.difference(todayMidnight).inDays;
+    }
+    DateTime? nextPayment;
+    int? daysToPayment;
+    if (paymentDay != null) {
+      nextPayment = nextOccurrenceOfDay(todayMidnight, paymentDay);
+      daysToPayment = nextPayment.difference(todayMidnight).inDays;
+    }
+
+    // `minimumPaymentPct` está guardado como decimal 0-1 (compat con backup
+    // legacy que valida el rango en el import). Ej: 0.05 = 5% del saldo.
+    double? minimumPayment;
+    if (minimumPaymentPct != null && normalizedDebt > 0) {
+      minimumPayment = normalizedDebt * minimumPaymentPct;
+    }
+
+    return CreditCardStatus(
+      accountId: accountId,
+      name: name,
+      description: description,
+      creditLimit: creditLimit,
+      debt: normalizedDebt,
+      availableCredit: availableCredit,
+      usedPct: usedPct,
+      closingDay: closingDay,
+      paymentDay: paymentDay,
+      nextClosingDate: nextClosing,
+      nextPaymentDate: nextPayment,
+      daysToClosing: daysToClosing,
+      daysToPayment: daysToPayment,
+      minimumPayment: minimumPayment,
+      interestRate: interestRate,
+      isOverdue: isOverdue,
+      isDebtFree: isDebtFree,
+    );
+  }
+
+  /// Orden RN-CC09 — con deuda por proximidad de pago asc; sin `paymentDay`
+  /// van después de las que sí tienen día, ordenadas por deuda desc; sin
+  /// deuda al final ordenadas alfabéticamente asc por nombre.
+  static int compareForReport(CreditCardStatus a, CreditCardStatus b) {
+    // 1) sin deuda al final.
+    if (a.isDebtFree != b.isDebtFree) {
+      return a.isDebtFree ? 1 : -1;
+    }
+    if (a.isDebtFree && b.isDebtFree) {
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    }
+    // 2) con deuda: las que tienen paymentDay van antes que las que no.
+    final aHasPayment = a.daysToPayment != null;
+    final bHasPayment = b.daysToPayment != null;
+    if (aHasPayment != bHasPayment) {
+      return aHasPayment ? -1 : 1;
+    }
+    if (aHasPayment && bHasPayment) {
+      final cmp = a.daysToPayment!.compareTo(b.daysToPayment!);
+      if (cmp != 0) return cmp;
+      // Empate en días → deuda desc → nombre asc (tiebreak final).
+      final debtCmp = b.debt.compareTo(a.debt);
+      if (debtCmp != 0) return debtCmp;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    }
+    // Sin paymentDay ambos → deuda desc → nombre asc. El tiebreak alfabético
+    // final garantiza orden determinístico entre re-emits del stream cuando
+    // dos tarjetas tienen métricas idénticas (evita reordenamiento visual).
+    final debtCmp = b.debt.compareTo(a.debt);
+    if (debtCmp != 0) return debtCmp;
+    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  }
 }

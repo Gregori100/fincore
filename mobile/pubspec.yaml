@@ -139,7 +139,17 @@ publish_to: 'none'
 # (fade) en 3 etapas solapadas de ~900ms total. Solo afecta a testers
 # nuevos (Diego con Bolsa no ve onboarding); también se reproduce al
 # entrar desde Ayuda → "Ver tour de bienvenida".
-version: 0.12.2+70
+# 0.13.0+71 — sprint flutter-reports-credit-cards-v1. (1) Sexto tab
+# "Tarjetas" en /reports con estado por tarjeta (deuda, %, disponible,
+# próximo corte/pago, pago mínimo estimado). (2) Inputs UI para
+# `minimumPaymentPct` e `interestRate` en AccountFormScreen — controllers
+# huérfanos desde el pivote conectados a TextFields. (3) Schema bump
+# v4→v5: `credit_limit` NOT NULL DEFAULT 0 con migración aditiva +
+# ramas defensivas 3→5, 2→5, 1→5. Backup import v1 legacy con
+# credit_limit=null ajusta a 0 con contador en ImportReport. +39 tests
+# nuevos (15 date helpers, 5 DAO, 10 servicio watchCreditCards, 4 backup
+# compat, 5 widget). 406/406 verdes.
+version: 0.13.0+71
 
 environment:
   sdk: ^3.7.2

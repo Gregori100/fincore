@@ -61,7 +61,7 @@ class HelpScreen extends StatelessWidget {
           const _FaqTile(
             title: '¿Cómo se calculan los reportes?',
             body:
-                'En /reports tenés 5 tabs:\n\n'
+                'En /reports tenés 6 tabs:\n\n'
                 '• Gasto por categoría: suma de tus gastos del período '
                   'agrupados por categoría, ordenados de mayor a menor.\n'
                 '• Cashflow mensual: ingresos vs gastos por mes en el rango '
@@ -71,7 +71,10 @@ class HelpScreen extends StatelessWidget {
                 '• Saldo a fecha: cómo estaban tus cuentas (BO/DE/CR) a una '
                   'fecha pasada, con delta vs hoy.\n'
                 '• Promedio mensual: gasto promedio prorrateado al día actual '
-                  'de los últimos N meses, comparado con el mes en curso.',
+                  'de los últimos N meses, comparado con el mes en curso.\n'
+                '• Estado de tarjetas: estado actual de cada tarjeta de '
+                  'crédito activa — deuda, % usado del límite, disponible, '
+                  'próximo corte, próximo pago, pago mínimo estimado.',
           ),
           const _FaqTile(
             title: '¿Cómo funciona la sugerencia automática de categoría?',

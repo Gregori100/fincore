@@ -68,9 +68,10 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
   late final GeneratedColumn<double> creditLimit = GeneratedColumn<double>(
     'credit_limit',
     aliasedName,
-    true,
+    false,
     type: DriftSqlType.double,
     requiredDuringInsert: false,
+    defaultValue: const Constant(0),
   );
   static const VerificationMeta _closingDayMeta = const VerificationMeta(
     'closingDay',
@@ -311,10 +312,11 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
             DriftSqlType.bool,
             data['${effectivePrefix}is_protected'],
           )!,
-      creditLimit: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}credit_limit'],
-      ),
+      creditLimit:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}credit_limit'],
+          )!,
       closingDay: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}closing_day'],
@@ -360,7 +362,7 @@ class Account extends DataClass implements Insertable<Account> {
   final String type;
   final String? description;
   final bool isProtected;
-  final double? creditLimit;
+  final double creditLimit;
   final int? closingDay;
   final int? paymentDay;
   final double? interestRate;
@@ -374,7 +376,7 @@ class Account extends DataClass implements Insertable<Account> {
     required this.type,
     this.description,
     required this.isProtected,
-    this.creditLimit,
+    required this.creditLimit,
     this.closingDay,
     this.paymentDay,
     this.interestRate,
@@ -393,9 +395,7 @@ class Account extends DataClass implements Insertable<Account> {
       map['description'] = Variable<String>(description);
     }
     map['is_protected'] = Variable<bool>(isProtected);
-    if (!nullToAbsent || creditLimit != null) {
-      map['credit_limit'] = Variable<double>(creditLimit);
-    }
+    map['credit_limit'] = Variable<double>(creditLimit);
     if (!nullToAbsent || closingDay != null) {
       map['closing_day'] = Variable<int>(closingDay);
     }
@@ -426,10 +426,7 @@ class Account extends DataClass implements Insertable<Account> {
               ? const Value.absent()
               : Value(description),
       isProtected: Value(isProtected),
-      creditLimit:
-          creditLimit == null && nullToAbsent
-              ? const Value.absent()
-              : Value(creditLimit),
+      creditLimit: Value(creditLimit),
       closingDay:
           closingDay == null && nullToAbsent
               ? const Value.absent()
@@ -466,7 +463,7 @@ class Account extends DataClass implements Insertable<Account> {
       type: serializer.fromJson<String>(json['type']),
       description: serializer.fromJson<String?>(json['description']),
       isProtected: serializer.fromJson<bool>(json['isProtected']),
-      creditLimit: serializer.fromJson<double?>(json['creditLimit']),
+      creditLimit: serializer.fromJson<double>(json['creditLimit']),
       closingDay: serializer.fromJson<int?>(json['closingDay']),
       paymentDay: serializer.fromJson<int?>(json['paymentDay']),
       interestRate: serializer.fromJson<double?>(json['interestRate']),
@@ -487,7 +484,7 @@ class Account extends DataClass implements Insertable<Account> {
       'type': serializer.toJson<String>(type),
       'description': serializer.toJson<String?>(description),
       'isProtected': serializer.toJson<bool>(isProtected),
-      'creditLimit': serializer.toJson<double?>(creditLimit),
+      'creditLimit': serializer.toJson<double>(creditLimit),
       'closingDay': serializer.toJson<int?>(closingDay),
       'paymentDay': serializer.toJson<int?>(paymentDay),
       'interestRate': serializer.toJson<double?>(interestRate),
@@ -504,7 +501,7 @@ class Account extends DataClass implements Insertable<Account> {
     String? type,
     Value<String?> description = const Value.absent(),
     bool? isProtected,
-    Value<double?> creditLimit = const Value.absent(),
+    double? creditLimit,
     Value<int?> closingDay = const Value.absent(),
     Value<int?> paymentDay = const Value.absent(),
     Value<double?> interestRate = const Value.absent(),
@@ -518,7 +515,7 @@ class Account extends DataClass implements Insertable<Account> {
     type: type ?? this.type,
     description: description.present ? description.value : this.description,
     isProtected: isProtected ?? this.isProtected,
-    creditLimit: creditLimit.present ? creditLimit.value : this.creditLimit,
+    creditLimit: creditLimit ?? this.creditLimit,
     closingDay: closingDay.present ? closingDay.value : this.closingDay,
     paymentDay: paymentDay.present ? paymentDay.value : this.paymentDay,
     interestRate: interestRate.present ? interestRate.value : this.interestRate,
@@ -620,7 +617,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<String> type;
   final Value<String?> description;
   final Value<bool> isProtected;
-  final Value<double?> creditLimit;
+  final Value<double> creditLimit;
   final Value<int?> closingDay;
   final Value<int?> paymentDay;
   final Value<double?> interestRate;
@@ -705,7 +702,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<String>? type,
     Value<String?>? description,
     Value<bool>? isProtected,
-    Value<double?>? creditLimit,
+    Value<double>? creditLimit,
     Value<int?>? closingDay,
     Value<int?>? paymentDay,
     Value<double?>? interestRate,
@@ -2651,7 +2648,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required String type,
       Value<String?> description,
       Value<bool> isProtected,
-      Value<double?> creditLimit,
+      Value<double> creditLimit,
       Value<int?> closingDay,
       Value<int?> paymentDay,
       Value<double?> interestRate,
@@ -2668,7 +2665,7 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String> type,
       Value<String?> description,
       Value<bool> isProtected,
-      Value<double?> creditLimit,
+      Value<double> creditLimit,
       Value<int?> closingDay,
       Value<int?> paymentDay,
       Value<double?> interestRate,
@@ -2925,7 +2922,7 @@ class $$AccountsTableTableManager
                 Value<String> type = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<bool> isProtected = const Value.absent(),
-                Value<double?> creditLimit = const Value.absent(),
+                Value<double> creditLimit = const Value.absent(),
                 Value<int?> closingDay = const Value.absent(),
                 Value<int?> paymentDay = const Value.absent(),
                 Value<double?> interestRate = const Value.absent(),
@@ -2957,7 +2954,7 @@ class $$AccountsTableTableManager
                 required String type,
                 Value<String?> description = const Value.absent(),
                 Value<bool> isProtected = const Value.absent(),
-                Value<double?> creditLimit = const Value.absent(),
+                Value<double> creditLimit = const Value.absent(),
                 Value<int?> closingDay = const Value.absent(),
                 Value<int?> paymentDay = const Value.absent(),
                 Value<double?> interestRate = const Value.absent(),

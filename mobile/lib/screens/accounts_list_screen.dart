@@ -142,7 +142,7 @@ class _AccountRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     const Skeleton(width: 70, height: 16),
-                    if (account.type == 'credit' && account.creditLimit != null) ...[
+                    if (account.type == 'credit') ...[
                       const SizedBox(height: 4),
                       const Skeleton(width: 50, height: 11),
                     ],
@@ -160,9 +160,9 @@ class _AccountRow extends StatelessWidget {
                     formatAmount(balance),
                     style: TextStyle(color: color, fontWeight: FontWeight.w700),
                   ),
-                  if (account.type == 'credit' && account.creditLimit != null)
+                  if (account.type == 'credit')
                     Text(
-                      'de ${formatAmount(account.creditLimit!)}',
+                      'de ${formatAmount(account.creditLimit)}',
                       style: const TextStyle(
                           color: FincoreColors.textSubtle, fontSize: 11),
                     ),

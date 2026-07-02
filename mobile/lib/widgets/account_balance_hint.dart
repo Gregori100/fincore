@@ -52,7 +52,7 @@ class AccountBalanceHint extends StatelessWidget {
           }
           final balance = snapshot.data!;
           if (isCredit) {
-            final available = (selected.creditLimit ?? 0) - balance;
+            final available = selected.creditLimit - balance;
             return Row(
               children: [
                 _Chip(

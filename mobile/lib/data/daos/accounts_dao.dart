@@ -76,6 +76,16 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
     }
     await _validateNameUnique(name);
     if (type == 'credit') {
+      // Sprint flutter-reports-credit-cards-v1: `credit_limit` es obligatorio
+      // explícito para type=credit. Aunque el schema tiene DEFAULT 0, la app
+      // exige que el usuario lo declare (aunque sea como 0) para evitar cuentas
+      // credit "creadas por accidente" sin datos.
+      if (creditLimit == null) {
+        throw const AccountsDaoError(
+          'invalid_credit_limit',
+          'El límite de crédito es obligatorio.',
+        );
+      }
       _validateCreditMetadata(
         closingDay: closingDay,
         paymentDay: paymentDay,
@@ -90,7 +100,11 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
       name: name,
       type: type,
       description: Value(description),
-      creditLimit: Value(type == 'credit' ? creditLimit : null),
+      // Para type=credit siempre pasamos el valor (validado no-null arriba).
+      // Para cash/debit no pasamos nada — el schema aplica DEFAULT 0.
+      creditLimit: type == 'credit'
+          ? Value(creditLimit!)
+          : const Value.absent(),
       closingDay: Value(type == 'credit' ? closingDay : null),
       paymentDay: Value(type == 'credit' ? paymentDay : null),
       interestRate: Value(type == 'credit' ? interestRate : null),
@@ -123,6 +137,13 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
 
   /// Editar nombre, descripción o metadata de credit. Rechaza si is_protected.
   /// El type es inmutable (no se expone como parámetro).
+  ///
+  /// Semántica de parámetros nullable (`creditLimit`, `closingDay`, etc.):
+  /// `null` significa "no modificar" (usa el valor existente). Post-schema v5
+  /// `credit_limit` no puede ser null en BD, así que **no hay forma de "bajar
+  /// el límite a null" desde este DAO** — para dejar el límite en 0, pasar
+  /// `creditLimit: 0` explícito. Esta es una asimetría deliberada con
+  /// `create`, que sí rechaza `creditLimit: null` para type=credit.
   Future<void> updateAccount({
     required String id,
     String? name,
@@ -276,10 +297,13 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
         'El día de corte y el día de pago no pueden ser el mismo.',
       );
     }
-    if (creditLimit != null && creditLimit <= 0) {
+    // Sprint flutter-reports-credit-cards-v1: el límite pasa a NOT NULL DEFAULT 0
+    // en el schema (v5). Se acepta 0 como valor válido (tarjeta departamental o
+    // sin límite formal). Solo se rechazan valores negativos.
+    if (creditLimit != null && creditLimit < 0) {
       throw const AccountsDaoError(
         'invalid_credit_limit',
-        'El límite de crédito debe ser mayor a 0.',
+        'El límite de crédito no puede ser negativo.',
       );
     }
   }

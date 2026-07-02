@@ -410,9 +410,10 @@ class _Slide3 extends StatelessWidget {
             ),
             SizedBox(height: 16),
             Text(
-              '5 reportes para entender tu plata: dónde gastás más, '
+              '6 reportes para entender tu plata: dónde gastás más, '
               'cómo fluye mes a mes, qué movimientos pesan, cuánto tenés '
-              'a la fecha y cómo te ubicás vs tu promedio.',
+              'a la fecha, cómo te ubicás vs tu promedio y el estado de '
+              'tus tarjetas.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textSubtle,
@@ -421,9 +422,9 @@ class _Slide3 extends StatelessWidget {
               ),
             ),
             SizedBox(height: 24),
-            // F3 quality review v1: 5 filas explícitas para coincidir
-            // con el texto ("5 reportes") en lugar de fusionar saldo a
-            // fecha + promedio mensual.
+            // Filas explícitas para coincidir con "6 reportes" del párrafo.
+            // Se actualizó en el sprint flutter-reports-credit-cards-v1
+            // con la nueva fila "Estado de tarjetas".
             _KindRow(
               icon: Icons.pie_chart_outline,
               color: FincoreColors.accent,
@@ -448,6 +449,11 @@ class _Slide3 extends StatelessWidget {
               icon: Icons.insights_outlined,
               color: FincoreColors.positive,
               label: 'Promedio mensual',
+            ),
+            _KindRow(
+              icon: Icons.credit_card_outlined,
+              color: FincoreColors.warning,
+              label: 'Estado de tarjetas',
             ),
           ],
         ),

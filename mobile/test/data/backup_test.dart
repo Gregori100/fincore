@@ -529,4 +529,170 @@ void main() {
     // Sin Bolsa: hasBolsa = false → router debe redirigir a /first-run.
     expect(await hasBolsa(db), isFalse);
   });
+
+  // Sprint flutter-reports-credit-cards-v1: relajación de validación
+  // credit_limit + counter adjustedAccountsCount.
+  group('Import — credit_limit (sprint credit-cards)', () {
+    const jsonWithNullLimit = '''
+{
+  "version": 1,
+  "exported_at": "2026-06-19T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789a1",
+      "name": "Bolsa",
+      "type": "cash",
+      "description": null,
+      "is_protected": true,
+      "credit_limit": null,
+      "closing_day": null,
+      "payment_day": null,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    },
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789a2",
+      "name": "VisaSinLimite",
+      "type": "credit",
+      "description": null,
+      "is_protected": false,
+      "credit_limit": null,
+      "closing_day": 15,
+      "payment_day": 5,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    },
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789a3",
+      "name": "AmexConLimite",
+      "type": "credit",
+      "description": null,
+      "is_protected": false,
+      "credit_limit": 30000,
+      "closing_day": 10,
+      "payment_day": 20,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": []
+}
+''';
+
+    test('DT-01: credit_limit=null se ajusta a 0 + adjustedAccountsCount', () async {
+      final report = await backup.importFromJson(jsonWithNullLimit);
+      expect(report.accountsCount, 3);
+      expect(report.adjustedAccountsCount, 1,
+          reason: 'solo VisaSinLimite tenía credit_limit=null');
+      final all = await accountsDao.listAll();
+      final visa = all.firstWhere((a) => a.name == 'VisaSinLimite');
+      expect(visa.creditLimit, 0);
+      final amex = all.firstWhere((a) => a.name == 'AmexConLimite');
+      expect(amex.creditLimit, 30000);
+    });
+
+    test('DT-03: credit_limit=0 se acepta (antes rechazado por <=0)', () async {
+      const jsonZero = '''
+{
+  "version": 1,
+  "exported_at": "2026-06-19T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789b1",
+      "name": "Bolsa",
+      "type": "cash",
+      "description": null,
+      "is_protected": true,
+      "credit_limit": null,
+      "closing_day": null,
+      "payment_day": null,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    },
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789b2",
+      "name": "Palacio",
+      "type": "credit",
+      "description": null,
+      "is_protected": false,
+      "credit_limit": 0,
+      "closing_day": 15,
+      "payment_day": 5,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": []
+}
+''';
+      final report = await backup.importFromJson(jsonZero);
+      expect(report.accountsCount, 2);
+      expect(report.adjustedAccountsCount, 0,
+          reason: '0 explícito no cuenta como ajuste');
+    });
+
+    test('DT-04: sin cuentas credit → adjustedAccountsCount=0', () async {
+      const jsonNoCredit = '''
+{
+  "version": 1,
+  "exported_at": "2026-06-19T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01a2b3c4-5678-7abc-9def-0123456789c1",
+      "name": "Bolsa",
+      "type": "cash",
+      "description": null,
+      "is_protected": true,
+      "credit_limit": null,
+      "closing_day": null,
+      "payment_day": null,
+      "interest_rate": null,
+      "minimum_payment_pct": null,
+      "created_at": "2026-06-19T12:00:00.000Z",
+      "updated_at": "2026-06-19T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": []
+}
+''';
+      final report = await backup.importFromJson(jsonNoCredit);
+      expect(report.accountsCount, 1);
+      expect(report.adjustedAccountsCount, 0);
+    });
+
+    test('DT-05: round-trip preserva credit_limit (export siempre lo incluye)',
+        () async {
+      // Sembrar 1 Bolsa + 1 credit + 1 debit.
+      await accountsDao.createBolsa();
+      await accountsDao.create(
+        name: 'AmexRoundTrip',
+        type: 'credit',
+        creditLimit: 15000,
+        closingDay: 10,
+        paymentDay: 20,
+      );
+      await accountsDao.create(name: 'BanamexRoundTrip', type: 'debit');
+      final jsonExported = await backup.exportToJson();
+      await backup.wipeAll();
+      final report = await backup.importFromJson(jsonExported);
+      expect(report.adjustedAccountsCount, 0,
+          reason: 'export post-sprint siempre incluye credit_limit → sin ajustes');
+      final all = await accountsDao.listAll();
+      final amex = all.firstWhere((a) => a.name == 'AmexRoundTrip');
+      expect(amex.creditLimit, 15000);
+    });
+  });
 }

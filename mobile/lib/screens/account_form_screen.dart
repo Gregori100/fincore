@@ -70,11 +70,19 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
         _nameCtrl.text = account.name;
         _descCtrl.text = account.description ?? '';
         if (account.type == 'credit') {
-          _creditLimitCtrl.text = account.creditLimit?.toString() ?? '';
+          // creditLimit es no-null en el schema v5 (drift generó `double`).
+          _creditLimitCtrl.text = account.creditLimit.toStringAsFixed(2);
           _closingDayCtrl.text = account.closingDay?.toString() ?? '';
           _paymentDayCtrl.text = account.paymentDay?.toString() ?? '';
-          _interestRateCtrl.text = account.interestRate?.toString() ?? '';
-          _minPaymentPctCtrl.text = account.minimumPaymentPct?.toString() ?? '';
+          // Sprint flutter-reports-credit-cards-v1: `interestRate` y
+          // `minimumPaymentPct` se guardan como decimal 0-1 (compat con
+          // backup legacy) pero se editan como porcentaje 0-100 en la UI.
+          _interestRateCtrl.text = account.interestRate != null
+              ? (account.interestRate! * 100).toStringAsFixed(2)
+              : '';
+          _minPaymentPctCtrl.text = account.minimumPaymentPct != null
+              ? (account.minimumPaymentPct! * 100).toStringAsFixed(2)
+              : '';
         }
       });
     } on AccountsDaoError catch (e) {
@@ -98,7 +106,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           name: _nameCtrl.text.trim(),
           description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
           creditLimit: _type == AccountType.credit
-              ? double.tryParse(_creditLimitCtrl.text)
+              ? _parseDecimalInput(_creditLimitCtrl.text)
               : null,
           closingDay: _type == AccountType.credit
               ? int.tryParse(_closingDayCtrl.text)
@@ -106,11 +114,13 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           paymentDay: _type == AccountType.credit
               ? int.tryParse(_paymentDayCtrl.text)
               : null,
+          // El usuario escribe porcentaje humano (ej: 45); la BD guarda
+          // decimal (0.45). Compat con backup legacy `[0, 1]`.
           interestRate: _type == AccountType.credit && _interestRateCtrl.text.isNotEmpty
-              ? double.tryParse(_interestRateCtrl.text)
+              ? _parsePercentInput(_interestRateCtrl.text)
               : null,
           minimumPaymentPct: _type == AccountType.credit && _minPaymentPctCtrl.text.isNotEmpty
-              ? double.tryParse(_minPaymentPctCtrl.text)
+              ? _parsePercentInput(_minPaymentPctCtrl.text)
               : null,
         );
       } else {
@@ -119,7 +129,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           type: _type.apiValue,
           description: _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim(),
           creditLimit: _type == AccountType.credit
-              ? double.tryParse(_creditLimitCtrl.text)
+              ? _parseDecimalInput(_creditLimitCtrl.text)
               : null,
           closingDay: _type == AccountType.credit
               ? int.tryParse(_closingDayCtrl.text)
@@ -127,11 +137,13 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           paymentDay: _type == AccountType.credit
               ? int.tryParse(_paymentDayCtrl.text)
               : null,
+          // El usuario escribe porcentaje humano (ej: 45); la BD guarda
+          // decimal (0.45). Compat con backup legacy `[0, 1]`.
           interestRate: _type == AccountType.credit && _interestRateCtrl.text.isNotEmpty
-              ? double.tryParse(_interestRateCtrl.text)
+              ? _parsePercentInput(_interestRateCtrl.text)
               : null,
           minimumPaymentPct: _type == AccountType.credit && _minPaymentPctCtrl.text.isNotEmpty
-              ? double.tryParse(_minPaymentPctCtrl.text)
+              ? _parsePercentInput(_minPaymentPctCtrl.text)
               : null,
         );
       }
@@ -146,6 +158,22 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Parsea porcentaje humano (0-100) del text field y lo convierte a decimal
+  /// (0-1) para persistir. Retorna null si el texto no es un número válido.
+  /// Normaliza coma → punto (algunos teclados numéricos Android en es_MX
+  /// renderean coma como separador decimal).
+  double? _parsePercentInput(String text) {
+    final n = _parseDecimalInput(text);
+    if (n == null) return null;
+    return n / 100;
+  }
+
+  /// Parsea un decimal aceptando `,` o `.` como separador. Normaliza a `.`
+  /// antes de `double.tryParse`.
+  double? _parseDecimalInput(String text) {
+    return double.tryParse(text.trim().replaceAll(',', '.'));
   }
 
   Future<void> _archive() async {
@@ -284,11 +312,18 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                     helperText: ' ',
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                  inputFormatters: [
+                    // Aceptar tanto `.` como `,` — algunos teclados numéricos
+                    // Android en es_MX renderean coma; se normaliza a `.` en
+                    // el `_parseDecimalInput` antes de `double.tryParse`.
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'Requerido.';
-                    final n = double.tryParse(v);
-                    if (n == null || n <= 0) return 'Debe ser mayor a 0.';
+                    final n = _parseDecimalInput(v);
+                    if (n == null || n < 0) {
+                      return 'No puede ser negativo.';
+                    }
                     return null;
                   },
                 ),
@@ -335,6 +370,53 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                       ),
                     ),
                   ],
+                ),
+                // Sprint flutter-reports-credit-cards-v1: inputs para
+                // `minimumPaymentPct` e `interestRate` que estaban declarados
+                // pero no conectados a la UI desde el pivote. El usuario
+                // escribe porcentaje humano (0-100); la BD guarda decimal
+                // (0-1) para compat con backup legacy.
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _minPaymentPctCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Pago mínimo (% del saldo)',
+                    suffixText: '%',
+                    helperText: 'Opcional. Ej: 5 = 5% del saldo pendiente.',
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = _parseDecimalInput(v);
+                    if (n == null) return 'Debe ser numérico.';
+                    if (n < 0 || n > 100) return '0 a 100.';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _interestRateCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Tasa de interés anual',
+                    suffixText: '% anual',
+                    helperText: 'Opcional. Se usará en futuros reportes.',
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                  ],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = _parseDecimalInput(v);
+                    if (n == null) return 'Debe ser numérico.';
+                    if (n < 0 || n > 100) return '0 a 100.';
+                    return null;
+                  },
                 ),
               ],
               const SizedBox(height: 32),
