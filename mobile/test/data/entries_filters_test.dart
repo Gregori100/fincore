@@ -237,4 +237,40 @@ void main() {
       expect(link, contains('maxAmount=1500'));
     });
   });
+
+  // Sprint flutter-reports-income-by-category-v1 (RF-004).
+  group('forIncomeBucket', () {
+    final from = DateTime(2026, 6, 1);
+    final to = DateTime(2026, 6, 30, 23, 59, 59, 999);
+
+    test(
+        'UT-I11: con categoryId → kinds=[income], datePreset=custom, categoryIds contiene el id',
+        () {
+      final f = EntriesFilters.forIncomeBucket(
+        categoryId: '01a2b3c4-5678-7abc-9def-000000000042',
+        from: from,
+        to: to,
+      );
+      expect(f.kinds, ['income']);
+      expect(f.datePreset, DateRangePreset.custom);
+      expect(f.from, from);
+      expect(f.to, to);
+      expect(f.categoryIds, ['01a2b3c4-5678-7abc-9def-000000000042']);
+    });
+
+    test(
+        'UT-I12: con categoryId=null → categoryIds contiene el token "sin categoría"',
+        () {
+      final f = EntriesFilters.forIncomeBucket(
+        categoryId: null,
+        from: from,
+        to: to,
+      );
+      expect(f.kinds, ['income']);
+      // El token de "sin categoría" es privado — verificamos que hay
+      // exactamente 1 elemento y NO es un UUID vacío.
+      expect(f.categoryIds, hasLength(1));
+      expect(f.categoryIds.first, isNotEmpty);
+    });
+  });
 }

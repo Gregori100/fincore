@@ -61,7 +61,7 @@ class HelpScreen extends StatelessWidget {
           const _FaqTile(
             title: '¿Cómo se calculan los reportes?',
             body:
-                'En /reports hay 7 pestañas:\n\n'
+                'En /reports hay 8 pestañas:\n\n'
                 '• Gasto por categoría: suma de los gastos del período '
                   'agrupados por categoría, ordenados de mayor a menor.\n'
                 '• Cashflow mensual: ingresos vs gastos por mes en el rango '
@@ -77,7 +77,10 @@ class HelpScreen extends StatelessWidget {
                   'próximo corte, próximo pago, pago mínimo estimado.\n'
                 '• Presupuestos: progreso del mes en curso por categoría '
                   'con presupuesto definido — gastado, % usado, disponible, '
-                  'y estado OK/Warning/Excedido.',
+                  'y estado OK/Warning/Excedido.\n'
+                '• Ingreso por categoría: suma de los ingresos del período '
+                  'agrupados por categoría, con drill-down por bucket para '
+                  'ver los movimientos exactos.',
           ),
           const _FaqTile(
             title: '¿Cómo se define un presupuesto?',

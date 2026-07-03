@@ -2299,4 +2299,255 @@ void main() {
               'Solo el expense (100) cuenta; el transfer (500) y el debt_payment (200) no.');
     });
   });
+
+  // Sprint flutter-reports-income-by-category-v1
+  group('incomeByCategory (sprint income-by-category)', () {
+    // Rango que engloba junio completo.
+    final iFrom = DateTime(2026, 6, 1);
+    final iTo = DateTime(2026, 6, 30, 23, 59, 59, 999);
+
+    late String catIncomeSueldo;
+    late String catIncomeFreelance;
+    late String catBothMisc;
+
+    setUp(() async {
+      catIncomeSueldo = await categoriesDao.create(
+        name: 'Sueldo_Test',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+      catIncomeFreelance = await categoriesDao.create(
+        name: 'Freelance_Test',
+        appliesTo: 'income',
+        colorSlug: 'blue',
+        iconSlug: 'briefcase',
+      );
+      catBothMisc = await categoriesDao.create(
+        name: 'Otros_Test',
+        appliesTo: 'both',
+        colorSlug: 'gray',
+        iconSlug: 'tag',
+      );
+    });
+
+    test('UT-I01: BD sin incomes en el rango → isEmpty=true', () async {
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.isEmpty, isTrue);
+      expect(report.total, 0);
+      expect(report.count, 0);
+      expect(report.buckets, isEmpty);
+    });
+
+    test('UT-I02: 1 income con categoría income → 1 bucket 100%', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 30000,
+        categoryId: catIncomeSueldo,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.buckets, hasLength(1));
+      expect(report.buckets.first.categoryId, catIncomeSueldo);
+      expect(report.buckets.first.total, 30000);
+      expect(report.buckets.first.percent, closeTo(1.0, 0.001));
+      expect(report.total, 30000);
+      expect(report.count, 1);
+    });
+
+    test(
+        'UT-I03: mix (null + archivada + expense) → 1 solo bucket "Sin categoría"',
+        () async {
+      // Case a: sin category_id (registro normal por DAO).
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 100,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      // Case b: categoría archivada. Registramos y luego archivamos.
+      final archivedId = await categoriesDao.create(
+        name: 'Vieja_Test',
+        appliesTo: 'income',
+        colorSlug: 'red',
+        iconSlug: 'tag',
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 200,
+        categoryId: archivedId,
+        occurredAt: DateTime(2026, 6, 6),
+      );
+      await categoriesDao.archive(archivedId);
+      // Case c: income con categoría applies_to=expense. El DAO valida
+      // y rechaza este combo, pero un backup legacy podría traerlo.
+      // Simulamos con customStatement bypaseando el DAO.
+      await db.customStatement(
+        "INSERT INTO journal_entries(id, kind, account_origin_id, "
+        "account_destination_id, amount, description, occurred_at, "
+        "category_id, created_at, updated_at) "
+        "VALUES('01a2b3c4-5678-7abc-9def-i03legacyexp', 'income', NULL, ?, "
+        "300, NULL, '2026-06-07T00:00:00.000', ?, "
+        "'2026-06-07T00:00:00.000', '2026-06-07T00:00:00.000')",
+        [bolsa, catComida], // catComida es applies_to='expense'
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.buckets, hasLength(1),
+          reason: 'Los 3 casos merge en un solo bucket "Sin categoría".');
+      expect(report.buckets.first.categoryId, isNull);
+      expect(report.buckets.first.name, 'Sin categoría');
+      expect(report.buckets.first.total, 600);
+      expect(report.buckets.first.count, 3);
+    });
+
+    test('UT-I04: applies_to=both con income → sí aparece', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        categoryId: catBothMisc,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.buckets, hasLength(1));
+      expect(report.buckets.first.categoryId, catBothMisc);
+      expect(report.buckets.first.name, 'Otros_Test');
+    });
+
+    test('UT-I05: empate en total → orden alfabético asc', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncomeFreelance,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncomeSueldo,
+        occurredAt: DateTime(2026, 6, 6),
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.buckets, hasLength(2));
+      // "Freelance_Test" < "Sueldo_Test" alfabéticamente.
+      expect(report.buckets[0].name, 'Freelance_Test');
+      expect(report.buckets[1].name, 'Sueldo_Test');
+    });
+
+    test('UT-I06: distintos totales → orden por total desc', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        categoryId: catIncomeFreelance,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 30000,
+        categoryId: catIncomeSueldo,
+        occurredAt: DateTime(2026, 6, 6),
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.buckets[0].name, 'Sueldo_Test'); // 30000 primero
+      expect(report.buckets[1].name, 'Freelance_Test'); // 5000 segundo
+    });
+
+    test(
+        'UT-I07: otros kinds NO cuentan aunque tengan category_id compatible',
+        () async {
+      // Referencia: 1 income con categoría income válida.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        categoryId: catIncomeSueldo,
+        occurredAt: DateTime(2026, 6, 8),
+      );
+      // Expenses con categoría expense (permitido por DAO).
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 100,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 200,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 6, 6),
+      );
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 7),
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.total, 500,
+          reason: 'Solo el income cuenta; expense/credit_expense/transfer no.');
+      expect(report.count, 1);
+    });
+
+    test('UT-I08: reactividad — registrar income re-emite', () async {
+      // Sin Future.delayed: emitsThrough espera hasta el snapshot que
+      // matchea el predicate, sin importar cuántos emits previos hubo.
+      // Robusto contra flakiness en CI cargado.
+      final stream = reports.incomeByCategory(from: iFrom, to: iTo);
+      final future = expectLater(
+        stream,
+        emitsThrough(
+          predicate<IncomeReport>((r) => r.total == 1000 && r.count == 1),
+        ),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncomeSueldo,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await future;
+    });
+
+    test('UT-I09: percent calculado correctamente para 2 buckets', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncomeFreelance,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 3000,
+        categoryId: catIncomeSueldo,
+        occurredAt: DateTime(2026, 6, 6),
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      // Sueldo=3000 → 75%, Freelance=1000 → 25%.
+      expect(report.buckets[0].percent, closeTo(0.75, 0.001));
+      expect(report.buckets[1].percent, closeTo(0.25, 0.001));
+    });
+
+    test(
+        'UT-I10: defensiva division/zero — income con amount=0 no crashea y percent=0',
+        () async {
+      // El DAO valida `amount > 0`, pero un backup legacy o corrupción
+      // externa podría traer amount=0. Bypaseamos con customStatement.
+      // Verifica que el guard `total > 0 ? r.total / total : 0` en
+      // `_buildIncomeReport` no revienta por división por cero.
+      await db.customStatement(
+        "INSERT INTO journal_entries(id, kind, account_origin_id, "
+        "account_destination_id, amount, description, occurred_at, "
+        "category_id, created_at, updated_at) "
+        "VALUES('01a2b3c4-5678-7abc-9def-000000000110', 'income', NULL, ?, "
+        "0.0, NULL, '2026-06-10T00:00:00.000', ?, "
+        "'2026-06-10T00:00:00.000', '2026-06-10T00:00:00.000')",
+        [bolsa, catIncomeSueldo],
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.total, 0);
+      expect(report.buckets, hasLength(1));
+      expect(report.buckets.first.total, 0);
+      expect(report.buckets.first.percent, 0,
+          reason: 'Guard defensivo: total_general=0 no divide, retorna 0.');
+      expect(report.isEmpty, isFalse,
+          reason: 'Hay un bucket presente aunque total sea 0.');
+    });
+  });
 }

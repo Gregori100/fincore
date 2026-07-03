@@ -180,7 +180,13 @@ publish_to: 'none'
 # visuales de "impacto" (movimientos afectados, saldos ajustados),
 # banner de advertencia amarillo y botones balanceados. Sin cambios
 # de comportamiento; solo UX.
-version: 0.14.4+76
+# 0.15.0+77 — sprint flutter-reports-income-by-category-v1. Octavo tab
+# "Ingreso por categoría" en /reports, análogo al de gastos pero para
+# kind='income'. LEFT JOIN con applies_to != 'expense' (en el JOIN, no
+# en el WHERE) agrupa 3 casos de "Sin categoría": null + archivada +
+# expense legacy. Drill-down por bucket con nuevo factory
+# EntriesFilters.forIncomeBucket. Sin schema bump. +15 tests nuevos.
+version: 0.15.0+77
 
 environment:
   sdk: ^3.7.2

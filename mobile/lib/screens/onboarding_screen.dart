@@ -420,10 +420,11 @@ class _Slide3 extends StatelessWidget {
             ),
             SizedBox(height: 16),
             Text(
-              '7 reportes para entender el dinero: en qué se gasta más, '
-              'cómo fluye mes a mes, qué movimientos pesan, cuánto hay '
-              'a la fecha, la comparación contra el promedio, el estado '
-              'de las tarjetas y el progreso de los presupuestos.',
+              '8 reportes para entender el dinero: en qué se gasta más, '
+              'de dónde viene cada peso, cómo fluye mes a mes, qué '
+              'movimientos pesan, cuánto hay a la fecha, la comparación '
+              'contra el promedio, el estado de las tarjetas y el '
+              'progreso de los presupuestos.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textSubtle,
@@ -469,6 +470,11 @@ class _Slide3 extends StatelessWidget {
               icon: Icons.savings_outlined,
               color: FincoreColors.positive,
               label: 'Presupuestos',
+            ),
+            _KindRow(
+              icon: Icons.trending_up,
+              color: FincoreColors.positive,
+              label: 'Ingreso por categoría',
             ),
                 ],
               ),

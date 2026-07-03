@@ -28,6 +28,59 @@ class SpendingReport {
   bool get isEmpty => buckets.isEmpty;
 }
 
+/// Reporte agregado de ingreso por categoría en un rango temporal. Sprint
+/// `flutter-reports-income-by-category-v1`.
+///
+/// Simétrico a [SpendingReport] pero para `kind='income'`. Cubre RF-001 del
+/// sprint: `total`, `count`, `from`, `to`, `buckets`.
+class IncomeReport {
+  final double total;
+  final int count;
+  final DateTime from;
+  final DateTime to;
+  final List<IncomeBucket> buckets;
+
+  const IncomeReport({
+    required this.total,
+    required this.count,
+    required this.from,
+    required this.to,
+    required this.buckets,
+  });
+
+  bool get isEmpty => buckets.isEmpty;
+}
+
+/// Bucket de ingreso por categoría. Simétrico a [SpendingBucket]. Cubre
+/// RF-002 del sprint `flutter-reports-income-by-category-v1`.
+///
+/// - `categoryId` es null cuando representa el bucket "Sin categoría"
+///   (entries con `category_id IS NULL`, categoría archivada, o categoría
+///   con `applies_to='expense'` — los 3 merge en un solo bucket gracias al
+///   `LEFT JOIN ... AND deleted_at IS NULL AND applies_to != 'expense'`
+///   que deja `c.id` en NULL en todos esos casos).
+/// - `colorSlug`/`iconSlug` null → fallback gris + label_outline.
+/// - `percent` en [0.0, 1.0]. Si `report.total == 0` retorna 0 (defensivo).
+class IncomeBucket {
+  final String? categoryId;
+  final String name;
+  final String? colorSlug;
+  final String? iconSlug;
+  final double total;
+  final double percent;
+  final int count;
+
+  const IncomeBucket({
+    required this.categoryId,
+    required this.name,
+    required this.colorSlug,
+    required this.iconSlug,
+    required this.total,
+    required this.percent,
+    required this.count,
+  });
+}
+
 /// Bucket de gasto por categoría.
 ///
 /// - `categoryId` es null cuando representa el bucket especial "Sin categoría"
@@ -287,6 +340,125 @@ class ReportsService {
       return a.name.compareTo(b.name);
     });
     return SpendingReport(
+      total: total,
+      count: count,
+      from: from,
+      to: to,
+      buckets: buckets,
+    );
+  }
+
+  /// Ingreso por categoría agregado en el rango `[from, to]` inclusivo en
+  /// ambos extremos. Sprint `flutter-reports-income-by-category-v1`.
+  ///
+  /// Simétrico a [spendingByCategory] pero para `kind='income'` y con
+  /// filtro adicional `c.applies_to != 'expense'` en el LEFT JOIN.
+  ///
+  /// Filtros:
+  /// - `kind = 'income'` (RN-I01). Excluye expense, credit_expense,
+  ///   debt_payment, transfer.
+  /// - `journal_entries.deleted_at IS NULL` (RN-I02).
+  /// - Bucket "Sin categoría" acumula 3 casos gracias al `LEFT JOIN`:
+  ///   (a) entries con `category_id NULL`;
+  ///   (b) entries con categoría archivada (`c.deleted_at IS NOT NULL`);
+  ///   (c) entries con categoría de tipo `applies_to='expense'` (edge
+  ///   legacy, RN-I05). El filtro se aplica en el JOIN — NO en el WHERE —
+  ///   porque en el WHERE excluiría el income entero en vez de asignarlo
+  ///   al bucket "Sin categoría".
+  ///
+  /// Reactividad: el Stream re-emite ante cambios en `journal_entries` o
+  /// `categories`.
+  ///
+  /// Orden RN-I06: monto desc, tiebreak alfabético asc por nombre.
+  Stream<IncomeReport> incomeByCategory({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    const sql = '''
+      SELECT
+        c.id AS category_id,
+        c.name AS category_name,
+        c.color_slug AS color_slug,
+        c.icon_slug AS icon_slug,
+        SUM(j.amount) AS total,
+        COUNT(*) AS count
+      FROM journal_entries j
+      LEFT JOIN categories c
+        ON c.id = j.category_id
+        AND c.deleted_at IS NULL
+        AND c.applies_to != 'expense'
+      WHERE j.kind = 'income'
+        AND j.deleted_at IS NULL
+        AND j.occurred_at >= ?
+        AND j.occurred_at <= ?
+      GROUP BY c.id, c.name, c.color_slug, c.icon_slug
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(from),
+            Variable.withDateTime(to),
+          ],
+          readsFrom: {_db.journalEntries, _db.categories},
+        )
+        .watch()
+        .map((rows) => _buildIncomeReport(rows, from: from, to: to));
+  }
+
+  IncomeReport _buildIncomeReport(
+    List<QueryRow> rows, {
+    required DateTime from,
+    required DateTime to,
+  }) {
+    if (rows.isEmpty) {
+      return IncomeReport(
+        total: 0,
+        count: 0,
+        from: from,
+        to: to,
+        buckets: const [],
+      );
+    }
+    double total = 0;
+    int count = 0;
+    final raws = <_RawBucket>[];
+    for (final row in rows) {
+      final categoryId = row.read<String?>('category_id');
+      final categoryName = row.read<String?>('category_name');
+      final colorSlug = row.read<String?>('color_slug');
+      final iconSlug = row.read<String?>('icon_slug');
+      final bucketTotal = row.read<double>('total');
+      final bucketCount = row.read<int>('count');
+      total += bucketTotal;
+      count += bucketCount;
+      final isUncategorized = categoryId == null || categoryName == null;
+      raws.add(_RawBucket(
+        categoryId: isUncategorized ? null : categoryId,
+        name: isUncategorized ? kUncategorizedBucketName : categoryName,
+        colorSlug: isUncategorized ? null : colorSlug,
+        iconSlug: isUncategorized ? null : iconSlug,
+        total: bucketTotal,
+        count: bucketCount,
+      ));
+    }
+    final buckets = raws.map((r) {
+      return IncomeBucket(
+        categoryId: r.categoryId,
+        name: r.name,
+        colorSlug: r.colorSlug,
+        iconSlug: r.iconSlug,
+        total: r.total,
+        percent: total > 0 ? r.total / total : 0,
+        count: r.count,
+      );
+    }).toList();
+    buckets.sort((a, b) {
+      final cmp = b.total.compareTo(a.total);
+      if (cmp != 0) return cmp;
+      return a.name.compareTo(b.name);
+    });
+    return IncomeReport(
       total: total,
       count: count,
       from: from,

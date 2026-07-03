@@ -81,6 +81,25 @@ class EntriesFilters {
     );
   }
 
+  /// Factory para el deep link desde un bucket del reporte de ingreso por
+  /// categoría. Sprint `flutter-reports-income-by-category-v1` (RF-004).
+  /// Simétrico a [forCategoryBucket] pero con `kinds: ['income']` — el
+  /// tap en un bucket lleva a `/entries` mostrando solo los ingresos de
+  /// esa categoría en el rango exacto del reporte.
+  factory EntriesFilters.forIncomeBucket({
+    required String? categoryId,
+    required DateTime from,
+    required DateTime to,
+  }) {
+    return EntriesFilters(
+      datePreset: DateRangePreset.custom,
+      from: from,
+      to: to,
+      kinds: const ['income'],
+      categoryIds: [categoryId ?? kUncategorizedFilterToken],
+    );
+  }
+
   /// Cuenta cuántas dimensiones tienen al menos un valor distinto del default.
   /// Usado para el badge numérico en el AppBar. Max 4.
   int get activeCount {
