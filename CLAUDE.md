@@ -102,6 +102,11 @@ data/
 - `EntriesDao` valida tipos de cuenta por kind (RN-011) antes de cualquier otra cosa.
 - `accountBalanceNow(id)` sincrónico para Action que necesita el balance dentro de una transacción.
 - `watchAccountBalance(id, type)` para UI reactiva.
+- **Token `kUncategorizedFilterToken` en `EntriesDao.watchPage`** (sprint `flutter-reports-drilldown-parity-v1`): la definición operativa de "Sin categoría" en el DAO se amplía cuando el filtro `kinds` está restringido a un único tipo de flujo, para alinear el drill-down con los reportes por categoría:
+  - `kinds == ['income']` → agrupa `category_id IS NULL` + categoría archivada + categoría con `applies_to = 'expense'` (edge legacy: una categoría income que fue editada a expense post-facto sin quitarle sus entries).
+  - `kinds ⊆ {'expense', 'credit_expense'}` (no vacío) → agrupa `category_id IS NULL` + archivada + `applies_to = 'income'` (edge simétrico).
+  - `kinds` `null`, vacío, mixto ingreso+gasto, o con `transfer`/`debt_payment` → solo `category_id IS NULL` + archivada (comportamiento clásico). No hay "opuesto" único.
+  - La expansión aplica al filtro programático desde reportes (drill-down) y al filtro manual desde el sheet de `/entries`. Los reportes `ReportsService.incomeByCategory` y `spendingByCategory` usan el filtro simétrico en el `ON` del LEFT JOIN (`applies_to != 'expense'` / `applies_to != 'income'`) para blindar el mismo edge.
 
 ### Migraciones de schema (RN-H02 del sprint flutter-local-hardening)
 

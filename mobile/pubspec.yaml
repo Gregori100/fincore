@@ -186,7 +186,13 @@ publish_to: 'none'
 # en el WHERE) agrupa 3 casos de "Sin categoría": null + archivada +
 # expense legacy. Drill-down por bucket con nuevo factory
 # EntriesFilters.forIncomeBucket. Sin schema bump. +15 tests nuevos.
-version: 0.15.0+77
+# 0.15.1+78 — sprint flutter-reports-drilldown-parity-v1. Cierra la
+# brecha reporte↔drill-down para el bucket "Sin categoría": (a) filtro
+# simétrico `applies_to != 'income'` en el JOIN de spendingByCategory;
+# (b) EntriesDao.watchPage amplía la definición del token cuando el
+# filtro `kinds` está restringido a un único tipo de flujo. Sin schema
+# bump, sin cambios de UI. +9 tests nuevos.
+version: 0.15.1+78
 
 environment:
   sdk: ^3.7.2

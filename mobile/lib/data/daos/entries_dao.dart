@@ -116,20 +116,27 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       );
     }
     // Multi-categoría con token especial __null__ — RF-003, RN-M02/M03.
+    // Sprint `flutter-reports-drilldown-parity-v1` (RN-P01/P02/P03): la
+    // definición operativa de "Sin categoría" se amplía cuando el filtro
+    // está restringido a un único tipo de flujo, para blindar el edge en
+    // el que una categoría fue editada de `applies_to=income` a `expense`
+    // (o simétrico) después de tener entries asociadas.
+    // - kinds efectivo == {'income'}          → agrega applies_to='expense'
+    // - kinds efectivo ⊆ {'expense','credit_expense'} → agrega applies_to='income'
+    // - resto (null, mixto, transfer, debt_payment, …) → solo `id IS NULL`
+    //   (comportamiento clásico). Ver plan/plan.md del slug para detalle.
     if (categoryIds != null && categoryIds.isNotEmpty) {
       final hasNullToken = categoryIds.contains(kUncategorizedFilterToken);
       final realIds = categoryIds
           .where((id) => id != kUncategorizedFilterToken)
           .toList(growable: false);
+      final Expression<bool> uncategorizedCondition =
+          _uncategorizedCondition(effectiveKinds);
       if (hasNullToken && realIds.isEmpty) {
-        // Solo "Sin categoría": NULL en journal o categoría archivada. El
-        // LEFT JOIN con filtro `deleted_at IS NULL` deja categories.id en
-        // NULL para ambos casos.
-        query.where(categories.id.isNull());
+        query.where(uncategorizedCondition);
       } else if (hasNullToken) {
         query.where(
-          journalEntries.categoryId.isIn(realIds) |
-              categories.id.isNull(),
+          journalEntries.categoryId.isIn(realIds) | uncategorizedCondition,
         );
       } else {
         query.where(journalEntries.categoryId.isIn(realIds));
@@ -596,5 +603,33 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         'La categoría no aplica a este tipo de movimiento.',
       );
     }
+  }
+
+  // Sprint `flutter-reports-drilldown-parity-v1` (RN-P01/P02/P03).
+  // Devuelve la condición que representa "Sin categoría" para el filtro
+  // `kUncategorizedFilterToken` según el conjunto efectivo de kinds:
+  // - {'income'}                       → id IS NULL OR applies_to='expense'
+  // - subset no vacío de gastos        → id IS NULL OR applies_to='income'
+  // - resto (null/mixto/transfer/…)    → id IS NULL (clásico)
+  //
+  // La expansión captura el edge de categorías editadas post-facto (una
+  // categoría income cuyo applies_to fue cambiado a expense, o simétrico)
+  // que el reporte trata como "Sin categoría" gracias al filtro del JOIN
+  // en `ReportsService.incomeByCategory` / `spendingByCategory`. Alinear
+  // la definición aquí garantiza paridad reporte↔drill-down.
+  Expression<bool> _uncategorizedCondition(List<String>? effectiveKinds) {
+    final base = categories.id.isNull();
+    if (effectiveKinds == null || effectiveKinds.isEmpty) {
+      return base;
+    }
+    final kindSet = effectiveKinds.toSet();
+    if (kindSet.length == 1 && kindSet.contains('income')) {
+      return base | categories.appliesTo.equals('expense');
+    }
+    const spendingKinds = {'expense', 'credit_expense'};
+    if (kindSet.every(spendingKinds.contains)) {
+      return base | categories.appliesTo.equals('income');
+    }
+    return base;
   }
 }

@@ -540,6 +540,131 @@ void main() {
     });
   });
 
+  // Sprint `flutter-reports-drilldown-parity-v1`: simétrico al blindaje del
+  // sprint income. Un expense con categoría cuyo `applies_to` fue cambiado a
+  // 'income' post-facto debe caer en el bucket "Sin categoría" del reporte
+  // (nuevo comportamiento vía filtro `!= 'income'` en el JOIN) y estar
+  // presente en el drill-down con `kinds:['expense']` + token.
+  group('spendingByCategory — paridad reporte↔drill-down (sprint drilldown-parity)',
+      () {
+    test(
+        'UT-DP02: paridad spending con edge (3) inverso + kinds=[expense]',
+        () async {
+      // Registrar un expense con catComida (applies_to='expense', normal).
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        categoryId: catComida,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      // Cambio post-facto: catComida pasa a applies_to='income'.
+      await categoriesDao.updateCategory(
+        id: catComida,
+        appliesTo: 'income',
+      );
+      final report = await reports
+          .spendingByCategory(from: from, to: to)
+          .first;
+      expect(report.buckets, hasLength(1));
+      expect(report.buckets.first.name, kUncategorizedBucketName,
+          reason: 'RN-P04: filtro JOIN blindaje edge (3) simétrico.');
+      expect(report.buckets.first.count, 1);
+      // Drill-down: kinds=[expense] + token → mismo entry.
+      final entries = await entriesDao.watchPage(
+        kinds: ['expense'],
+        categoryIds: [kUncategorizedFilterToken],
+        from: from,
+        to: to,
+        limit: 100,
+      ).first;
+      expect(entries.length, 1,
+          reason: 'Paridad: report.count == drillDown.length.');
+      expect(entries.first.entry.kind, 'expense');
+      expect(entries.first.entry.categoryId, catComida);
+    });
+
+    test(
+        'UT-DP03: kinds=[expense, credit_expense] expande el token',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        categoryId: catComida,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        categoryId: catComida,
+        amount: 200,
+        occurredAt: DateTime(2026, 6, 6),
+      );
+      await categoriesDao.updateCategory(
+        id: catComida,
+        appliesTo: 'income',
+      );
+      final entries = await entriesDao.watchPage(
+        kinds: ['expense', 'credit_expense'],
+        categoryIds: [kUncategorizedFilterToken],
+        from: from,
+        to: to,
+        limit: 100,
+      ).first;
+      expect(entries.length, 2,
+          reason: 'Ambos kinds de gasto expanden el token.');
+    });
+
+    test(
+        'UT-DP04: kinds=null + token con edge (3) presente → NO incluye',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        categoryId: catComida,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await categoriesDao.updateCategory(
+        id: catComida,
+        appliesTo: 'income',
+      );
+      // Sin filtro de kinds (kinds=null) → RN-P03: solo id IS NULL cuenta.
+      // El expense con la categoría cambiada NO debe aparecer en el token.
+      final entries = await entriesDao.watchPage(
+        kinds: null,
+        categoryIds: [kUncategorizedFilterToken],
+        from: from,
+        to: to,
+        limit: 100,
+      ).first;
+      expect(entries, isEmpty,
+          reason: 'kinds=null preserva comportamiento clásico del token.');
+    });
+
+    test(
+        'UT-DP05: kinds mixto (income+expense) + token → NO expande (RN-P03)',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        categoryId: catComida,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await categoriesDao.updateCategory(
+        id: catComida,
+        appliesTo: 'income',
+      );
+      // Kinds mezcla ingreso y gasto → semántica ambigua, NO expandir.
+      final entries = await entriesDao.watchPage(
+        kinds: ['income', 'expense'],
+        categoryIds: [kUncategorizedFilterToken],
+        from: from,
+        to: to,
+        limit: 100,
+      ).first;
+      expect(entries, isEmpty,
+          reason: 'Kinds mixto no tiene "opuesto" único; RN-P03 aplica.');
+    });
+  });
+
   // ===========================================================================
   // cashflowByMonth — sprint `flutter-reports-cashflow-v1`
   // Cubre RN-C01 a RN-C08 + casos borde CB-T01 a CB-T13 del test-plan.
@@ -2548,6 +2673,60 @@ void main() {
           reason: 'Guard defensivo: total_general=0 no divide, retorna 0.');
       expect(report.isEmpty, isFalse,
           reason: 'Hay un bucket presente aunque total sea 0.');
+    });
+
+    // Sprint `flutter-reports-drilldown-parity-v1`: paridad reporte↔drill-down
+    // con edge (3) presente. Sembramos 2 incomes con categoría income normal,
+    // cambiamos post-facto su applies_to a 'expense' vía updateCategory (la
+    // UI expone esto y el DAO no lo bloquea), y verificamos que el reporte
+    // los agrupa en "Sin categoría" Y el drill-down con watchPage lista los
+    // mismos entries.
+    test(
+        'UT-DP01: paridad reporte↔drill-down con edge (3) post-facto',
+        () async {
+      final catFlip = await categoriesDao.create(
+        name: 'FlipIncome_DP01',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catFlip,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        categoryId: catFlip,
+        occurredAt: DateTime(2026, 6, 8),
+      );
+      // Cambio post-facto: catFlip pasa a applies_to='expense'.
+      await categoriesDao.updateCategory(
+        id: catFlip,
+        appliesTo: 'expense',
+      );
+      final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
+      expect(report.buckets, hasLength(1));
+      expect(report.buckets.first.name, kUncategorizedBucketName,
+          reason: 'edge (3) cae en "Sin categoría" (RN-I05 del sprint income).');
+      expect(report.buckets.first.count, 2);
+      expect(report.buckets.first.total, 1500);
+      // Drill-down: mismo rango + kinds=[income] + token → debe listar los 2.
+      final entries = await entriesDao.watchPage(
+        kinds: ['income'],
+        categoryIds: [kUncategorizedFilterToken],
+        from: iFrom,
+        to: iTo,
+        limit: 100,
+      ).first;
+      expect(entries.length, 2,
+          reason: 'Paridad: report.count == drillDown.length.');
+      for (final e in entries) {
+        expect(e.entry.kind, 'income');
+        expect(e.entry.categoryId, catFlip);
+      }
     });
   });
 }

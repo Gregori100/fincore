@@ -202,6 +202,166 @@ void main() {
     });
   });
 
+  // Sprint `flutter-reports-drilldown-parity-v1`: paridad reporte↔drill-down.
+  // Cuando el filtro `__null__` se combina con kinds restringidos a un solo
+  // tipo de flujo (solo income o solo gastos), la definición operativa de
+  // "Sin categoría" se amplía para incluir el edge de una categoría cuyo
+  // `applies_to` fue cambiado post-facto al opuesto del kind. Alinea el
+  // drill-down con el reporte.
+  group('watchPage — token __null__ + kinds (sprint drilldown-parity)', () {
+    test(
+        'UT-DP06: applies_to=both con income + token NO cae en el bucket',
+        () async {
+      // El seed tiene 1 income con cat NULL. Ese sí matchea por base.
+      // Agregamos 1 income con catBoth (applies_to='both'): NO es edge (3),
+      // matchea por categoryId normal. NO debe caer en "Sin categoría"
+      // ampliado.
+      final catBoth = await categoriesDao.create(
+        name: 'Ambos_DP06',
+        appliesTo: 'both',
+        colorSlug: 'gray',
+        iconSlug: 'tag',
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 100,
+        categoryId: catBoth,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      final entries = await entriesDao.watchPage(
+        kinds: ['income'],
+        categoryIds: [kUncategorizedFilterToken],
+        from: DateTime(2026, 6, 1),
+        to: DateTime(2026, 6, 30),
+        limit: 100,
+      ).first;
+      // Solo el income del seed (cat null); mi income con catBoth NO aparece.
+      expect(entries, hasLength(1));
+      expect(entries.first.entry.categoryId, isNull,
+          reason: 'catBoth (applies_to=both) NO cae en la extensión.');
+    });
+
+    test(
+        'UT-DP07: token + catReal + kinds=[income] con edge (3) → unión',
+        () async {
+      // catIncomeReal (applies_to='income') queda como categoría "real"
+      // que el usuario selecciona en el filtro.
+      final catIncomeReal = await categoriesDao.create(
+        name: 'Sueldo_DP07',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+      // catEdge: creada como income, será cambiada a expense abajo. Sus
+      // entries se convierten en edge (3).
+      final catEdge = await categoriesDao.create(
+        name: 'FreelanceEdge_DP07',
+        appliesTo: 'income',
+        colorSlug: 'blue',
+        iconSlug: 'tag',
+      );
+      // 1 income con catIncomeReal (debe aparecer por matcheo IN realIds).
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncomeReal,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      // 1 income con catEdge (será edge (3) tras el update).
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        categoryId: catEdge,
+        occurredAt: DateTime(2026, 6, 6),
+      );
+      // Cambio post-facto: catEdge pasa a applies_to='expense'.
+      await categoriesDao.updateCategory(
+        id: catEdge,
+        appliesTo: 'expense',
+      );
+      final entries = await entriesDao.watchPage(
+        kinds: ['income'],
+        categoryIds: [catIncomeReal, kUncategorizedFilterToken],
+        from: DateTime(2026, 6, 1),
+        to: DateTime(2026, 6, 30),
+        limit: 100,
+      ).first;
+      // Unión: 1 income cat null (seed) + 1 catIncomeReal + 1 edge (3).
+      expect(entries.length, 3);
+      final ids = entries.map((e) => e.entry.categoryId).toSet();
+      expect(ids, {null, catIncomeReal, catEdge});
+    });
+
+    test(
+        'UT-DP08: kinds=[transfer] + token NO expande (RN-P03)',
+        () async {
+      // Sembramos un edge (3) inverso vía updateCategory (el DAO no valida
+      // que la categoría siga siendo compatible con entries existentes).
+      // catTransporte del seed pasa de 'expense' a 'income': su expense
+      // asociado (150) queda como edge (3) inverso. Kinds=[transfer] NO
+      // debe expandir, así que el edge (3) NO debe aparecer; solo el
+      // transfer sin categoría del seed cuenta.
+      await categoriesDao.updateCategory(
+        id: catTransporte,
+        appliesTo: 'income',
+      );
+      final entries = await entriesDao.watchPage(
+        kinds: ['transfer'],
+        categoryIds: [kUncategorizedFilterToken],
+        from: DateTime(2026, 6, 1),
+        to: DateTime(2026, 6, 30),
+        limit: 100,
+      ).first;
+      // Solo el transfer del seed sin cat. RN-P03: no expande.
+      expect(entries.length, 1);
+      expect(entries.first.entry.kind, 'transfer');
+    });
+
+    test(
+        'UT-DP09: reactividad — cambiar applies_to re-emite con edge (3) incluido',
+        () async {
+      // Seed tiene 1 income con cat null (matchea el token base).
+      // Sembramos 1 income con catA (applies_to='income'): NO matchea la
+      // condición extendida pre-update (id no null, applies_to != expense).
+      // Post-update de catA a 'expense', SÍ matchea → re-emit con 2 entries.
+      final catA = await categoriesDao.create(
+        name: 'SueldoReactive_DP09',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 3000,
+        categoryId: catA,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      final stream = entriesDao.watchPage(
+        kinds: ['income'],
+        categoryIds: [kUncategorizedFilterToken],
+        from: DateTime(2026, 6, 1),
+        to: DateTime(2026, 6, 30),
+        limit: 100,
+      );
+      // Sin Future.delayed: emitsThrough espera hasta que la lista contiene
+      // el income con catA (edge (3) tras el update).
+      final future = expectLater(
+        stream,
+        emitsThrough(
+          predicate<List<EntryWithRelations>>(
+            (list) =>
+                list.length == 2 &&
+                list.any((e) => e.entry.categoryId == catA),
+          ),
+        ),
+      );
+      // Cambio post-facto: catA pasa a 'expense' → el income queda como
+      // edge (3) y debe aparecer en el stream por RN-P01.
+      await categoriesDao.updateCategory(id: catA, appliesTo: 'expense');
+      await future;
+    });
+  });
+
   group('watchPage — combinaciones AND (RN-M06)', () {
     test('kinds + categoryIds: AND entre dimensiones', () async {
       // Solo gastos en Comida (excluye income, transfer, otras categorías).

@@ -136,6 +136,12 @@ class ReportsService {
   /// - Entries con `category_id` NULL o categoría archivada agrupan en bucket
   ///   "Sin categoría" gracias al `LEFT JOIN ... AND deleted_at IS NULL` que
   ///   deja c.id en NULL para esos casos (RN-R03/R04).
+  /// - Sprint `flutter-reports-drilldown-parity-v1` (RN-P04): el JOIN también
+  ///   filtra `c.applies_to != 'income'` para blindar el edge legacy en el
+  ///   que un expense tiene categoría cuyo `applies_to` fue cambiado a
+  ///   `income` post-facto. Esos entries caen en "Sin categoría" en lugar
+  ///   de mostrar el nombre de la categoría income-only. Simétrico al filtro
+  ///   `!= 'expense'` de `incomeByCategory`.
   ///
   /// Reactividad: el Stream re-emite cuando cambian `journal_entries` o
   /// `categories` (declarado en `readsFrom`).
@@ -158,7 +164,9 @@ class ReportsService {
         COUNT(*) AS count
       FROM journal_entries j
       LEFT JOIN categories c
-        ON c.id = j.category_id AND c.deleted_at IS NULL
+        ON c.id = j.category_id
+        AND c.deleted_at IS NULL
+        AND c.applies_to != 'income'
       WHERE j.kind IN ('expense', 'credit_expense')
         AND j.deleted_at IS NULL
         AND j.occurred_at >= ?
@@ -352,7 +360,9 @@ class ReportsService {
   /// ambos extremos. Sprint `flutter-reports-income-by-category-v1`.
   ///
   /// Simétrico a [spendingByCategory] pero para `kind='income'` y con
-  /// filtro adicional `c.applies_to != 'expense'` en el LEFT JOIN.
+  /// filtro adicional `c.applies_to != 'expense'` en el LEFT JOIN. El
+  /// simétrico `!= 'income'` de [spendingByCategory] se agregó después
+  /// en el sprint `flutter-reports-drilldown-parity-v1`.
   ///
   /// Filtros:
   /// - `kind = 'income'` (RN-I01). Excluye expense, credit_expense,
