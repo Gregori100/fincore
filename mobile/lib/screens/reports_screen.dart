@@ -1,4 +1,5 @@
 import 'package:fincore/screens/reports/balance_at_date_tab.dart';
+import 'package:fincore/screens/reports/budgets_tab.dart';
 import 'package:fincore/screens/reports/cashflow_tab.dart';
 import 'package:fincore/screens/reports/credit_cards_tab.dart';
 import 'package:fincore/screens/reports/monthly_average_tab.dart';
@@ -14,6 +15,7 @@ import 'package:flutter/material.dart';
 /// 4. "Saldo a fecha" (sprint `flutter-reports-balance-at-date-v1`).
 /// 5. "Promedio mensual" (sprint `flutter-reports-monthly-average-v1`).
 /// 6. "Tarjetas" (sprint `flutter-reports-credit-cards-v1`).
+/// 7. "Presupuestos" (sprint `flutter-budgets-v1`).
 ///
 /// `initialIndex` default = 0 para mantener hábito y para no romper tests
 /// del primer sprint.
@@ -23,7 +25,7 @@ class ReportsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Reportes'),
@@ -39,6 +41,7 @@ class ReportsScreen extends StatelessWidget {
               Tab(text: 'Saldo a fecha'),
               Tab(text: 'Promedio mensual'),
               Tab(text: 'Tarjetas'),
+              Tab(text: 'Presupuestos'),
             ],
           ),
         ),
@@ -50,6 +53,7 @@ class ReportsScreen extends StatelessWidget {
             BalanceAtDateTab(),
             MonthlyAverageTab(),
             CreditCardsTab(),
+            BudgetsTab(),
           ],
         ),
       ),

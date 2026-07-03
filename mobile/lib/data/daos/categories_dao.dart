@@ -61,6 +61,7 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     _validateAppliesTo(appliesTo);
     _validateColorSlug(colorSlug);
     _validateIconSlug(iconSlug);
+    _validateMonthlyLimit(appliesTo: appliesTo, monthlyLimit: monthlyLimit);
     await _validateNameUnique(name);
 
     final now = DateTime.now();
@@ -78,13 +79,20 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     return id;
   }
 
+  /// Actualiza una categoría existente. Todos los parámetros son opcionales.
+  ///
+  /// Sprint flutter-budgets-v1: `monthlyLimit` acepta `Value<double?>` para
+  /// distinguir 3 casos:
+  ///   - `Value.absent()` (default): no modificar el campo.
+  ///   - `Value(5000)`: setear a 5000.
+  ///   - `Value(null)`: limpiar explícitamente (para cambio a `applies_to=income`).
   Future<void> updateCategory({
     required String id,
     String? name,
     String? appliesTo,
     String? colorSlug,
     String? iconSlug,
-    double? monthlyLimit,
+    Value<double?> monthlyLimit = const Value.absent(),
   }) async {
     final existing = await findById(id);
     if (existing == null) {
@@ -96,6 +104,16 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     if (name != null && name != existing.name) {
       await _validateNameUnique(name, excludeId: id);
     }
+    // Validar binomio applies_to + monthly_limit con el valor efectivo
+    // post-update: si `monthlyLimit` es Value.absent() (no cambia), usamos
+    // el existente; si viene explícito (present), usamos el nuevo (incluye
+    // Value(null) que limpia).
+    final effectiveMonthlyLimit =
+        monthlyLimit.present ? monthlyLimit.value : existing.monthlyLimit;
+    _validateMonthlyLimit(
+      appliesTo: appliesTo ?? existing.appliesTo,
+      monthlyLimit: effectiveMonthlyLimit,
+    );
 
     await (update(categories)..where((c) => c.id.equals(id))).write(
       CategoriesCompanion(
@@ -103,9 +121,7 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
         appliesTo: appliesTo != null ? Value(appliesTo) : const Value.absent(),
         colorSlug: colorSlug != null ? Value(colorSlug) : const Value.absent(),
         iconSlug: iconSlug != null ? Value(iconSlug) : const Value.absent(),
-        monthlyLimit: monthlyLimit != null
-            ? Value(monthlyLimit)
-            : const Value.absent(),
+        monthlyLimit: monthlyLimit,
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -166,6 +182,30 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
       throw const CategoriesDaoError(
         'invalid_icon_slug',
         'El ícono seleccionado no está disponible.',
+      );
+    }
+  }
+
+  /// Sprint flutter-budgets-v1: `monthly_limit` es opcional pero cuando existe
+  /// debe cumplir dos reglas: (1) no puede ser negativo (0 es válido, significa
+  /// "meta de no gastar en esta categoría"); (2) no puede coexistir con
+  /// `applies_to = 'income'` porque los presupuestos aplican solo a categorías
+  /// que pueden recibir gastos.
+  void _validateMonthlyLimit({
+    required String appliesTo,
+    required double? monthlyLimit,
+  }) {
+    if (monthlyLimit == null) return;
+    if (monthlyLimit < 0) {
+      throw const CategoriesDaoError(
+        'invalid_monthly_limit',
+        'El presupuesto mensual no puede ser negativo.',
+      );
+    }
+    if (appliesTo == 'income') {
+      throw const CategoriesDaoError(
+        'invalid_monthly_limit_for_income',
+        'Las categorías de tipo ingreso no pueden tener presupuesto.',
       );
     }
   }

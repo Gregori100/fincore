@@ -1,4 +1,5 @@
 import 'package:fincore/data/backup.dart';
+import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/models/domain_error.dart';
 import 'package:fincore/theme/fincore_colors.dart';
@@ -138,6 +139,30 @@ SnackBar _buildFincoreSnackBar({
   );
 }
 
+/// Mapeo de códigos del `CategoriesDao` a mensajes amigables. Sprint
+/// `flutter-budgets-v1` agregó `invalid_monthly_limit` e
+/// `invalid_monthly_limit_for_income`; el resto son pre-existentes.
+String categoriesDaoErrorToMessage(CategoriesDaoError error) {
+  switch (error.code) {
+    case 'invalid_monthly_limit':
+      return 'El presupuesto mensual no puede ser negativo.';
+    case 'invalid_monthly_limit_for_income':
+      return 'Las categorías de tipo ingreso no llevan presupuesto.';
+    case 'duplicate_category_name':
+      return 'Ya tenés una categoría con ese nombre.';
+    case 'invalid_category_applies_to':
+      return 'El tipo de categoría no es válido.';
+    case 'invalid_color_slug':
+      return 'El color seleccionado no está disponible.';
+    case 'invalid_icon_slug':
+      return 'El ícono seleccionado no está disponible.';
+    case 'not_found':
+      return 'Esa categoría ya no existe.';
+    default:
+      return error.message;
+  }
+}
+
 /// Mapeo de códigos del `SavedViewsDao` a mensajes amigables (sprint
 /// `flutter-entries-saved-views-v1`, RF-011).
 String savedViewsDaoErrorToMessage(SavedViewsDaoError error) {
@@ -160,6 +185,7 @@ void showErrorSnackbar(BuildContext context, Object error) {
   final message = switch (error) {
     BackupError() => backupErrorToMessage(error),
     DomainError() => domainErrorToMessage(error),
+    CategoriesDaoError() => categoriesDaoErrorToMessage(error),
     SavedViewsDaoError() => savedViewsDaoErrorToMessage(error),
     Exception() => error.toString().replaceFirst('Exception: ', ''),
     _ => 'Error inesperado.',

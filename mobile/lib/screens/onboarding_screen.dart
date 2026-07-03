@@ -387,12 +387,22 @@ class _Slide3 extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+    // Patrón `LayoutBuilder + ConstrainedBox + IntrinsicHeight` para
+    // permitir scroll cuando el contenido excede la altura disponible
+    // (7 reportes = mucho contenido en pantallas chicas), preservando
+    // el centrado vertical cuando sí cabe. Sprint flutter-budgets-v1.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight - 48, // resta padding vertical
+            ),
+            child: const IntrinsicHeight(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
             Icon(
               Icons.insights_outlined,
               color: FincoreColors.accent,
@@ -410,10 +420,10 @@ class _Slide3 extends StatelessWidget {
             ),
             SizedBox(height: 16),
             Text(
-              '6 reportes para entender tu plata: dónde gastás más, '
+              '7 reportes para entender tu plata: dónde gastás más, '
               'cómo fluye mes a mes, qué movimientos pesan, cuánto tenés '
-              'a la fecha, cómo te ubicás vs tu promedio y el estado de '
-              'tus tarjetas.',
+              'a la fecha, cómo te ubicás vs tu promedio, el estado de '
+              'tus tarjetas y el progreso de tus presupuestos.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textSubtle,
@@ -455,9 +465,17 @@ class _Slide3 extends StatelessWidget {
               color: FincoreColors.warning,
               label: 'Estado de tarjetas',
             ),
-          ],
-        ),
-      ),
+            _KindRow(
+              icon: Icons.savings_outlined,
+              color: FincoreColors.positive,
+              label: 'Presupuestos',
+            ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

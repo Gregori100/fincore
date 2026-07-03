@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
@@ -1942,6 +1943,360 @@ void main() {
       final list = await reports.watchCreditCards(now: refDate).first;
       final s = list.firstWhere((c) => c.accountId == id);
       expect(s.minimumPayment, closeTo(100, 0.001)); // 2000 × 0.05
+    });
+  });
+
+  // Sprint flutter-budgets-v1
+  group('watchBudgetsProgress (sprint budgets)', () {
+    // Anchor fijo para tests deterministas: junio 2024.
+    final anchor = DateTime(2024, 6, 15);
+
+    test('UT-B05: BD sin presupuestos → lista vacía', () async {
+      // Seed default no crea categorías con monthly_limit.
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list, isEmpty);
+    });
+
+    test(
+        'UT-B06: 2 categorías con presupuesto + 1 sin presupuesto → emite 2 entradas',
+        () async {
+      await categoriesDao.updateCategory(
+        id: catComida,
+        monthlyLimit: const Value(3000),
+      );
+      await categoriesDao.updateCategory(
+        id: catTransporte,
+        monthlyLimit: const Value(1500),
+      );
+      // catSalud sin presupuesto.
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list, hasLength(2));
+      expect(
+        list.map((p) => p.categoryName).toSet(),
+        {'Comida_Test', 'Transporte_Test'},
+      );
+    });
+
+    test('UT-B07: categoría archivada con presupuesto → NO aparece',
+        () async {
+      await categoriesDao.updateCategory(
+        id: catComida,
+        monthlyLimit: const Value(3000),
+      );
+      await categoriesDao.archive(catComida);
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list, isEmpty);
+    });
+
+    test(
+        'UT-B09: `spent` solo incluye gastos del mes en curso (no meses pasados)',
+        () async {
+      await categoriesDao.updateCategory(
+        id: catComida,
+        monthlyLimit: const Value(3000),
+      );
+      // Gasto del mes anchor.
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 500,
+        categoryId: catComida,
+        occurredAt: DateTime(2024, 6, 5),
+      );
+      // Gasto del mes anterior — NO cuenta.
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 999,
+        categoryId: catComida,
+        occurredAt: DateTime(2024, 5, 30),
+      );
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list, hasLength(1));
+      expect(list.first.spent, 500);
+    });
+
+    test('UT-B10: credit_expense cuenta como spent', () async {
+      await categoriesDao.updateCategory(
+        id: catComida,
+        monthlyLimit: const Value(3000),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 200,
+        categoryId: catComida,
+        occurredAt: DateTime(2024, 6, 5),
+      );
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list.first.spent, 200);
+    });
+
+    test(
+        'UT-B11: debt_payment y transfer NO cuentan como spent (aunque tengan categoría)',
+        () async {
+      await categoriesDao.updateCategory(
+        id: catComida,
+        monthlyLimit: const Value(3000),
+      );
+      // Los debt_payment no aceptan categoryId — pero cualquier movimiento
+      // con category_id que no sea expense o credit_expense no cuenta.
+      // Sembramos un expense de control:
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 100,
+        categoryId: catComida,
+        occurredAt: DateTime(2024, 6, 5),
+      );
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list.first.spent, 100);
+    });
+
+    test('UT-B13: BudgetProgress.compute — límite 1000, spent 800 → warning',
+        () {
+      final p = BudgetProgress.compute(
+        categoryId: 'x',
+        categoryName: 'X',
+        colorSlug: 'red',
+        iconSlug: 'tag',
+        monthlyLimit: 1000,
+        spent: 800,
+      );
+      expect(p.usedPct, 80.0);
+      expect(p.isWarning, isTrue);
+      expect(p.isOverBudget, isFalse);
+      expect(p.isNoSpend, isFalse);
+      expect(p.available, 200);
+    });
+
+    test(
+        'UT-B14: compute — límite 1000, spent 1200 → overBudget con clamp 100%',
+        () {
+      final p = BudgetProgress.compute(
+        categoryId: 'x',
+        categoryName: 'X',
+        colorSlug: 'red',
+        iconSlug: 'tag',
+        monthlyLimit: 1000,
+        spent: 1200,
+      );
+      expect(p.isOverBudget, isTrue);
+      expect(p.usedPct, 100.0);
+      expect(p.available, 0);
+      expect(p.overBy, 200);
+    });
+
+    test('UT-B15: compute — límite 0, spent 0 → usedPct null, isNoSpend', () {
+      final p = BudgetProgress.compute(
+        categoryId: 'x',
+        categoryName: 'X',
+        colorSlug: 'red',
+        iconSlug: 'tag',
+        monthlyLimit: 0,
+        spent: 0,
+      );
+      expect(p.usedPct, isNull);
+      expect(p.isNoSpend, isTrue);
+      expect(p.isOverBudget, isFalse);
+    });
+
+    test('UT-B16: compute — límite 0, spent 50 → overBudget con overBy=50',
+        () {
+      final p = BudgetProgress.compute(
+        categoryId: 'x',
+        categoryName: 'X',
+        colorSlug: 'red',
+        iconSlug: 'tag',
+        monthlyLimit: 0,
+        spent: 50,
+      );
+      expect(p.usedPct, isNull);
+      expect(p.isOverBudget, isTrue);
+      expect(p.overBy, 50);
+    });
+
+    // A1 del quality review: blindaje del filtro `applies_to != 'income'`
+    // contra backup legacy. Bypaseamos el DAO con customStatement para
+    // insertar la combinación inválida y verificamos que la query la excluye.
+    test(
+        'UT-B08: query filtra categorías `applies_to=income + monthly_limit != null` (edge legacy)',
+        () async {
+      // Inserto directo bypaseando el DAO (que rechazaría la combinación).
+      await db.customStatement(
+        "INSERT INTO categories(id, name, applies_to, color_slug, icon_slug, "
+        "monthly_limit, created_at, updated_at) "
+        "VALUES ('01a2b3c4-5678-7abc-9def-legacyincomex', 'FantasmaSueldo', "
+        "'income', 'green', 'briefcase', 5000, '2024-01-01T00:00:00.000', "
+        "'2024-01-01T00:00:00.000')",
+      );
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list, isEmpty,
+          reason:
+              'Aunque BD tenga la combinación inválida, el reporte NO la muestra.');
+    });
+
+    // A2 + M1 del quality review: orden RN-B11 con dataset mixto. Incluye
+    // fix del comparador que ordena las excedidas por `overBy` desc (no por
+    // usedPct que se clampa a 100 y todas las excedidas empatarían).
+    test(
+        'UT-B17: orden RN-B11 con 4 estados; excedidas por overBy desc, no alfabético',
+        () async {
+      // Sembramos 4 categorías con distintos estados:
+      // - Salud_Overdue: gastó 3000 sobre límite 1000 → overBy=2000 (peor).
+      // - Comida_Overdue: gastó 1500 sobre límite 1000 → overBy=500.
+      // - Transporte_Warning: gastó 900 sobre límite 1000 → 90% (warning).
+      // - Regalos_NoSpend: sin gasto sobre límite 500.
+      final salud = await categoriesDao.create(
+        name: 'Salud_B17',
+        appliesTo: 'expense',
+        colorSlug: 'red',
+        iconSlug: 'heart',
+        monthlyLimit: 1000,
+      );
+      final comida = await categoriesDao.create(
+        name: 'Comida_B17',
+        appliesTo: 'expense',
+        colorSlug: 'orange',
+        iconSlug: 'shopping-cart',
+        monthlyLimit: 1000,
+      );
+      final transporte = await categoriesDao.create(
+        name: 'Transporte_B17',
+        appliesTo: 'expense',
+        colorSlug: 'blue',
+        iconSlug: 'truck',
+        monthlyLimit: 1000,
+      );
+      await categoriesDao.create(
+        name: 'Regalos_B17',
+        appliesTo: 'expense',
+        colorSlug: 'purple',
+        iconSlug: 'gift',
+        monthlyLimit: 500,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 3000,
+        categoryId: salud,
+        occurredAt: DateTime(2024, 6, 5),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 1500,
+        categoryId: comida,
+        occurredAt: DateTime(2024, 6, 6),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 900,
+        categoryId: transporte,
+        occurredAt: DateTime(2024, 6, 7),
+      );
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      final names = list.map((p) => p.categoryName).toList();
+      expect(names, [
+        'Salud_B17', // overBy=2000, primera
+        'Comida_B17', // overBy=500, segunda
+        'Transporte_B17', // warning 90%
+        'Regalos_B17', // sin gasto, alfabético al final
+      ]);
+    });
+
+    // M2 del quality review: reactividad del stream. Verifica que
+    // registrar un expense re-emite con nueva deuda sin refresh manual.
+    test(
+        'UT-B18: reactividad — registrar expense re-emite con nuevo spent',
+        () async {
+      await categoriesDao.updateCategory(
+        id: catComida,
+        monthlyLimit: const Value(3000),
+      );
+      final events = <List<BudgetProgress>>[];
+      final sub = reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .listen(events.add);
+      // Esperar el emit inicial.
+      await Future.delayed(const Duration(milliseconds: 50));
+      expect(events, isNotEmpty);
+      final initial =
+          events.last.firstWhere((p) => p.categoryId == catComida);
+      expect(initial.spent, 0);
+
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 400,
+        categoryId: catComida,
+        occurredAt: DateTime(2024, 6, 10),
+      );
+      await Future.delayed(const Duration(milliseconds: 100));
+      final updated =
+          events.last.firstWhere((p) => p.categoryId == catComida);
+      expect(updated.spent, 400);
+
+      await sub.cancel();
+    });
+
+    // L1 del quality review: UT-B11 ampliado. Verificar explícitamente
+    // que transfer y debt_payment NO cuentan como spent aunque tengan
+    // categoría (los registeers no aceptan categoryId, forzamos vía
+    // customStatement/update para simular data corrupta).
+    test(
+        'UT-B11b: transfer y debt_payment con categoryId no cuentan como spent',
+        () async {
+      await categoriesDao.updateCategory(
+        id: catComida,
+        monthlyLimit: const Value(3000),
+      );
+      // Referencia: expense normal cuenta.
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 100,
+        categoryId: catComida,
+        occurredAt: DateTime(2024, 6, 5),
+      );
+      // Sembramos un transfer "corrupto" con category_id vía update
+      // post-registro (el DAO de transfer no acepta categoryId; simulamos
+      // data legacy o corrupción).
+      final transferId = await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 500,
+        occurredAt: DateTime(2024, 6, 6),
+      );
+      // Sembramos un debt_payment vía customStatement (el DAO exige que
+      // haya deuda previa; para el test no queremos setup adicional).
+      await db.customStatement(
+        "INSERT INTO journal_entries("
+        "id, kind, account_origin_id, account_destination_id, amount, "
+        "description, occurred_at, category_id, created_at, updated_at) "
+        "VALUES('01a2b3c4-5678-7abc-9def-b11btransfer2', 'debt_payment', ?, ?, "
+        "200, NULL, '2024-06-07T00:00:00.000', ?, "
+        "'2024-06-07T00:00:00.000', '2024-06-07T00:00:00.000')",
+        [bolsa, credit, catComida],
+      );
+      await db.customStatement(
+        "UPDATE journal_entries SET category_id = ? WHERE id = ?",
+        [catComida, transferId],
+      );
+      final list = await reports
+          .watchBudgetsProgress(monthAnchor: anchor)
+          .first;
+      expect(list.first.spent, 100,
+          reason:
+              'Solo el expense (100) cuenta; el transfer (500) y el debt_payment (200) no.');
     });
   });
 }

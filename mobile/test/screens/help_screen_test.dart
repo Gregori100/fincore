@@ -19,7 +19,7 @@ void main() {
       final harness = await pumpFincoreApp(tester);
       await openHelp(tester);
       expect(find.byType(HelpScreen), findsOneWidget);
-      expect(find.byType(ExpansionTile), findsNWidgets(6));
+      expect(find.byType(ExpansionTile), findsNWidgets(7));
       await harness.dispose();
     });
 

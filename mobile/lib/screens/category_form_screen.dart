@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
@@ -9,6 +10,7 @@ import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/icon_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class CategoryFormScreen extends StatefulWidget {
   final String? categoryId;
@@ -21,6 +23,9 @@ class CategoryFormScreen extends StatefulWidget {
 class _CategoryFormScreenState extends State<CategoryFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
+  // Sprint flutter-budgets-v1: input opcional del presupuesto mensual.
+  // El usuario tipea en pesos; la BD guarda como double directo.
+  final _monthlyLimitCtrl = TextEditingController();
   String _appliesTo = 'expense';
   String _colorSlug = 'blue';
   String _iconSlug = 'tag';
@@ -42,6 +47,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _monthlyLimitCtrl.dispose();
     super.dispose();
   }
 
@@ -59,6 +65,16 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
         _appliesTo = c.appliesTo;
         _colorSlug = c.colorSlug;
         _iconSlug = c.iconSlug;
+        // Sprint flutter-budgets-v1: cargar el presupuesto guardado; si es
+        // null, dejar el input vacío. Se formatea sin decimales cuando el
+        // valor es entero para que no se vea "5000.00" cuando el usuario
+        // escribió "5000".
+        if (c.monthlyLimit != null) {
+          final v = c.monthlyLimit!;
+          _monthlyLimitCtrl.text = v == v.truncateToDouble()
+              ? v.toInt().toString()
+              : v.toStringAsFixed(2);
+        }
       });
     } on CategoriesDaoError catch (e) {
       if (mounted) showErrorSnackbar(context, e);
@@ -75,6 +91,11 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
     final deps = AppDependencies.of(context);
     setState(() => _saving = true);
     try {
+      // Sprint flutter-budgets-v1: applies_to=income fuerza monthlyLimit=null
+      // en el submit (defensivo contra edición del picker con budget previo).
+      final monthlyLimitValue = _appliesTo == 'income'
+          ? null
+          : _parseDecimalInput(_monthlyLimitCtrl.text);
       if (_isEdit) {
         await deps.categoriesDao.updateCategory(
           id: widget.categoryId!,
@@ -82,6 +103,10 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
           appliesTo: _appliesTo,
           colorSlug: _colorSlug,
           iconSlug: _iconSlug,
+          // Value<double?> distingue "no cambiar" (Value.absent) de
+          // "setear a null" (Value(null)) para permitir limpiar el budget
+          // al cambiar applies_to a income.
+          monthlyLimit: Value(monthlyLimitValue),
         );
       } else {
         await deps.categoriesDao.create(
@@ -89,6 +114,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
           appliesTo: _appliesTo,
           colorSlug: _colorSlug,
           iconSlug: _iconSlug,
+          monthlyLimit: monthlyLimitValue,
         );
       }
       if (mounted) {
@@ -102,6 +128,12 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Parsea un decimal aceptando `,` o `.` como separador. Normaliza a `.`
+  /// antes de `double.tryParse`.
+  double? _parseDecimalInput(String text) {
+    return double.tryParse(text.trim().replaceAll(',', '.'));
   }
 
   Future<void> _archive() async {
@@ -196,9 +228,39 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
               const SizedBox(height: 8),
               AppliesToPicker(
                 value: _appliesTo,
-                onChanged: (v) => setState(() => _appliesTo = v),
+                onChanged: (v) => setState(() {
+                  _appliesTo = v;
+                  // Sprint flutter-budgets-v1: limpiar el input de presupuesto
+                  // si el usuario cambia a income (los ingresos no reciben
+                  // presupuesto de gasto).
+                  if (v == 'income') _monthlyLimitCtrl.clear();
+                }),
                 enabled: !_saving,
               ),
+              if (_appliesTo != 'income') ...[
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _monthlyLimitCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Presupuesto mensual',
+                    prefixText: r'$ ',
+                    helperText:
+                        'Opcional. \$ 0 = meta de no gastar en esta categoría.',
+                  ),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final n = _parseDecimalInput(v);
+                    if (n == null) return 'Debe ser numérico.';
+                    if (n < 0) return 'No puede ser negativo.';
+                    return null;
+                  },
+                ),
+              ],
               const SizedBox(height: 24),
               const Text('Color', style: TextStyle(color: FincoreColors.textMuted, fontSize: 13)),
               const SizedBox(height: 8),

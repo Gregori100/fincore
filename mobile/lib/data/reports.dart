@@ -901,6 +901,79 @@ class ReportsService {
       return statuses;
     });
   }
+
+  /// Progreso del mes en curso por categoría con presupuesto, del sprint
+  /// `flutter-budgets-v1`.
+  ///
+  /// Retorna `Stream<List<BudgetProgress>>` reactivo. Re-emite cuando cambian
+  /// `categories` (edición de `monthly_limit`, archive) o `journal_entries`
+  /// (registro/cancelación de gastos en el mes).
+  ///
+  /// Filtros:
+  /// - Categorías activas (`c.deleted_at IS NULL`) con `monthly_limit != null`.
+  /// - Excluye categorías `applies_to='income'` (RN-B07, blindaje contra edge
+  ///   legacy: import de backup con la combinación inválida no rechaza pero
+  ///   el reporte la filtra).
+  /// - `spent` = suma de gastos activos con `kind ∈ {expense, credit_expense}`
+  ///   en el rango del mes en curso, con `category_id` que coincide con la
+  ///   categoría (LEFT JOIN acepta 0 gastos).
+  ///
+  /// Orden RN-B11 en Dart post-fetch (ver `BudgetProgress.compareForReport`).
+  ///
+  /// Trade-off de reactividad temporal: `monthAnchor` se evalúa al construir
+  /// el Stream (una sola vez). Si el usuario deja el tab abierto y cruza
+  /// medianoche del último día del mes, el rango [from, to] sigue apuntando
+  /// al mes cerrado hasta que se registre cualquier evento reactivo o se
+  /// re-monte el tab. Consistente con el patrón de `watchCreditCards`;
+  /// aceptable para uso single-user esporádico.
+  Stream<List<BudgetProgress>> watchBudgetsProgress({DateTime? monthAnchor}) {
+    final anchor = monthAnchor ?? DateTime.now();
+    final range = monthRange(anchor);
+    const sql = '''
+      SELECT
+        c.id AS category_id,
+        c.name AS category_name,
+        c.color_slug AS color_slug,
+        c.icon_slug AS icon_slug,
+        c.monthly_limit AS monthly_limit,
+        COALESCE(SUM(j.amount), 0) AS spent
+      FROM categories c
+      LEFT JOIN journal_entries j
+        ON j.category_id = c.id
+        AND j.deleted_at IS NULL
+        AND j.kind IN ('expense', 'credit_expense')
+        AND j.occurred_at >= ?
+        AND j.occurred_at <= ?
+      WHERE c.deleted_at IS NULL
+        AND c.monthly_limit IS NOT NULL
+        AND c.applies_to != 'income'
+      GROUP BY c.id, c.name, c.color_slug, c.icon_slug, c.monthly_limit
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(range.from),
+            Variable.withDateTime(range.to),
+          ],
+          readsFrom: {_db.categories, _db.journalEntries},
+        )
+        .watch()
+        .map((rows) {
+      final progresses = rows.map((row) {
+        return BudgetProgress.compute(
+          categoryId: row.read<String>('category_id'),
+          categoryName: row.read<String>('category_name'),
+          colorSlug: row.read<String>('color_slug'),
+          iconSlug: row.read<String>('icon_slug'),
+          monthlyLimit: row.read<double>('monthly_limit'),
+          spent: row.read<double>('spent'),
+        );
+      }).toList();
+      progresses.sort(BudgetProgress.compareForReport);
+      return progresses;
+    });
+  }
 }
 
 /// Reporte de cashflow mensual del sprint `flutter-reports-cashflow-v1`.
@@ -1352,5 +1425,150 @@ class CreditCardStatus {
     final debtCmp = b.debt.compareTo(a.debt);
     if (debtCmp != 0) return debtCmp;
     return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  }
+}
+
+/// Progreso del presupuesto de una categoría en el mes en curso. Sprint
+/// `flutter-budgets-v1`.
+///
+/// Inmutable. Construido por [ReportsService.watchBudgetsProgress] usando el
+/// constructor factory [BudgetProgress.compute].
+///
+/// Cálculos aplicados (RN-B08, RN-B09):
+/// - `usedPct`: `min(spent / monthlyLimit, 1.0) * 100`; `null` si
+///   `monthlyLimit == 0` (no calculable).
+/// - `available`: `max(monthlyLimit - spent, 0)`; nunca negativo.
+/// - `overBy`: `spent - monthlyLimit` cuando el gasto excede el límite;
+///   `null` en caso contrario.
+/// - Estados: `isOverBudget` (spent > limit), `isWarning` (80-100% sin
+///   exceder), `isNoSpend` (spent == 0). Son mutuamente excluyentes con
+///   `isOverBudget` prevaleciendo cuando `monthlyLimit == 0 && spent > 0`.
+class BudgetProgress {
+  final String categoryId;
+  final String categoryName;
+  final String colorSlug;
+  final String iconSlug;
+  final double monthlyLimit;
+  final double spent;
+  final double available;
+  final double? usedPct;
+  final double? overBy;
+  final bool isOverBudget;
+  final bool isWarning;
+  final bool isNoSpend;
+
+  const BudgetProgress({
+    required this.categoryId,
+    required this.categoryName,
+    required this.colorSlug,
+    required this.iconSlug,
+    required this.monthlyLimit,
+    required this.spent,
+    required this.available,
+    required this.usedPct,
+    required this.overBy,
+    required this.isOverBudget,
+    required this.isWarning,
+    required this.isNoSpend,
+  });
+
+  factory BudgetProgress.compute({
+    required String categoryId,
+    required String categoryName,
+    required String colorSlug,
+    required String iconSlug,
+    required double monthlyLimit,
+    required double spent,
+  }) {
+    final normalizedSpent = spent < 0 ? 0.0 : spent;
+    final available = monthlyLimit - normalizedSpent;
+    final availableClamped = available < 0 ? 0.0 : available;
+
+    double? usedPct;
+    if (monthlyLimit > 0) {
+      final ratio = normalizedSpent / monthlyLimit;
+      usedPct = (ratio > 1.0 ? 1.0 : ratio) * 100;
+    }
+
+    final isOverBudget =
+        normalizedSpent > monthlyLimit && normalizedSpent > 0;
+    final isNoSpend = normalizedSpent <= 0;
+    // Warning: 80% ≤ % < 100% del límite. No aplica si ya está excedido
+    // ni si `monthlyLimit == 0` (usedPct null).
+    final isWarning = !isOverBudget &&
+        !isNoSpend &&
+        usedPct != null &&
+        usedPct >= 80;
+
+    double? overBy;
+    if (isOverBudget) {
+      overBy = normalizedSpent - monthlyLimit;
+    }
+
+    return BudgetProgress(
+      categoryId: categoryId,
+      categoryName: categoryName,
+      colorSlug: colorSlug,
+      iconSlug: iconSlug,
+      monthlyLimit: monthlyLimit,
+      spent: normalizedSpent,
+      available: availableClamped,
+      usedPct: usedPct,
+      overBy: overBy,
+      isOverBudget: isOverBudget,
+      isWarning: isWarning,
+      isNoSpend: isNoSpend,
+    );
+  }
+
+  /// Orden RN-B11:
+  /// 1. Excedidas primero, ordenadas por `overBy` desc (la que peor va,
+  ///    primero — más útil que ordenar por `usedPct` que se clampa a 100
+  ///    y termina empatando todas las excedidas).
+  /// 2. Warning (mayor `usedPct` desc).
+  /// 3. OK con gasto (mayor `usedPct` desc).
+  /// 4. Sin gasto al final (alfabético por nombre asc).
+  /// Tiebreak final por nombre asc para orden determinístico entre re-emits.
+  static int compareForReport(BudgetProgress a, BudgetProgress b) {
+    // 1) Sin gasto siempre al final.
+    if (a.isNoSpend != b.isNoSpend) {
+      return a.isNoSpend ? 1 : -1;
+    }
+    if (a.isNoSpend && b.isNoSpend) {
+      return a.categoryName
+          .toLowerCase()
+          .compareTo(b.categoryName.toLowerCase());
+    }
+    // 2) Excedidas antes que el resto.
+    if (a.isOverBudget != b.isOverBudget) {
+      return a.isOverBudget ? -1 : 1;
+    }
+    // 3) Ambas excedidas: ordenar por `overBy` desc (la que peor va primero).
+    //    Sin este paso, todas las excedidas terminan con usedPct=100 (clamp)
+    //    y caen al tiebreak alfabético, escondiendo la más grave.
+    if (a.isOverBudget && b.isOverBudget) {
+      if (a.overBy != null && b.overBy != null) {
+        final cmp = b.overBy!.compareTo(a.overBy!);
+        if (cmp != 0) return cmp;
+      } else if (a.overBy == null && b.overBy != null) {
+        return 1;
+      } else if (a.overBy != null && b.overBy == null) {
+        return -1;
+      }
+    } else {
+      // 4) Dentro de Warning u OK: ordenar por `usedPct` desc.
+      if (a.usedPct != null && b.usedPct != null) {
+        final cmp = b.usedPct!.compareTo(a.usedPct!);
+        if (cmp != 0) return cmp;
+      } else if (a.usedPct == null && b.usedPct != null) {
+        return 1;
+      } else if (a.usedPct != null && b.usedPct == null) {
+        return -1;
+      }
+    }
+    // Tiebreak alfabético asc.
+    return a.categoryName
+        .toLowerCase()
+        .compareTo(b.categoryName.toLowerCase());
   }
 }

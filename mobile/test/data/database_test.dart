@@ -734,6 +734,61 @@ void main() {
       expect(account!.creditLimit, 0);
     });
 
+    test('UT-B01: CategoriesDao.create(applies_to=income, monthlyLimit=100) → invalid_monthly_limit_for_income', () async {
+      await expectLater(
+        categoriesDao.create(
+          name: 'Sueldo',
+          appliesTo: 'income',
+          colorSlug: 'green',
+          iconSlug: 'briefcase',
+          monthlyLimit: 100,
+        ),
+        throwsA(isA<CategoriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_monthly_limit_for_income')),
+      );
+    });
+
+    test('UT-B02: CategoriesDao.create(applies_to=expense, monthlyLimit=-50) → invalid_monthly_limit', () async {
+      await expectLater(
+        categoriesDao.create(
+          name: 'Comida',
+          appliesTo: 'expense',
+          colorSlug: 'red',
+          iconSlug: 'shopping-cart',
+          monthlyLimit: -50,
+        ),
+        throwsA(isA<CategoriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_monthly_limit')),
+      );
+    });
+
+    test('UT-B03: updateCategory con monthlyLimit=-1 sobre expense → invalid_monthly_limit', () async {
+      final id = await categoriesDao.create(
+        name: 'Transporte',
+        appliesTo: 'expense',
+        colorSlug: 'blue',
+        iconSlug: 'truck',
+      );
+      await expectLater(
+        categoriesDao.updateCategory(id: id, monthlyLimit: const Value(-1)),
+        throwsA(isA<CategoriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_monthly_limit')),
+      );
+    });
+
+    test('UT-B04: create(applies_to=both, monthlyLimit=0) OK', () async {
+      final id = await categoriesDao.create(
+        name: 'Salud',
+        appliesTo: 'both',
+        colorSlug: 'green',
+        iconSlug: 'heart',
+        monthlyLimit: 0,
+      );
+      final cat = await categoriesDao.findById(id);
+      expect(cat != null, isTrue);
+      expect(cat!.monthlyLimit, 0);
+    });
+
     test('UT-19: onUpgrade(4→5) sobre BD limpia es idempotente', () async {
       // La BD in-memory ya está en v5. Correr onUpgrade otra vez no debe
       // romper (backfill sin nulls + alterTable sobre schema actual + CREATE

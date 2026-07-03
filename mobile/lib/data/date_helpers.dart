@@ -49,3 +49,22 @@ int _daysInMonth(int year, int month) {
   // Truco: día 0 del mes siguiente = último día del mes actual.
   return DateTime(year, month + 1, 0).day;
 }
+
+/// Retorna el rango del mes calendario local que contiene [anchor]:
+/// `from` = día 1 a las 00:00:00, `to` = último día del mes a las
+/// 23:59:59.999. Usado por el sprint `flutter-budgets-v1` para acotar
+/// el `spent` del mes en curso en el reporte de presupuestos.
+({DateTime from, DateTime to}) monthRange(DateTime anchor) {
+  final from = DateTime(anchor.year, anchor.month, 1);
+  final lastDay = _daysInMonth(anchor.year, anchor.month);
+  final to = DateTime(
+    anchor.year,
+    anchor.month,
+    lastDay,
+    23,
+    59,
+    59,
+    999,
+  );
+  return (from: from, to: to);
+}

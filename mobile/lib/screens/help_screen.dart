@@ -61,7 +61,7 @@ class HelpScreen extends StatelessWidget {
           const _FaqTile(
             title: '¿Cómo se calculan los reportes?',
             body:
-                'En /reports tenés 6 tabs:\n\n'
+                'En /reports tenés 7 tabs:\n\n'
                 '• Gasto por categoría: suma de tus gastos del período '
                   'agrupados por categoría, ordenados de mayor a menor.\n'
                 '• Cashflow mensual: ingresos vs gastos por mes en el rango '
@@ -74,7 +74,25 @@ class HelpScreen extends StatelessWidget {
                   'de los últimos N meses, comparado con el mes en curso.\n'
                 '• Estado de tarjetas: estado actual de cada tarjeta de '
                   'crédito activa — deuda, % usado del límite, disponible, '
-                  'próximo corte, próximo pago, pago mínimo estimado.',
+                  'próximo corte, próximo pago, pago mínimo estimado.\n'
+                '• Presupuestos: progreso del mes en curso por categoría '
+                  'con presupuesto seteado — gastado, % usado, disponible, '
+                  'y estado OK/Warning/Excedido.',
+          ),
+          const _FaqTile(
+            title: '¿Cómo defino un presupuesto?',
+            body:
+                'Los presupuestos son mensuales y se definen por categoría:\n\n'
+                '1. Andá a Configuración → Categorías (o desde el dashboard).\n'
+                '2. Tocá la categoría que querés presupuestar (debe ser de '
+                  'tipo Gasto o Ambos — las de Ingreso no aceptan presupuesto).\n'
+                '3. Llená el campo "Presupuesto mensual" con el monto.\n'
+                '4. Guardá.\n\n'
+                'La categoría aparecerá en el tab "Presupuestos" de /reports '
+                'con el progreso del mes en curso. El límite es recurrente '
+                'mensual (se reinicia cada primer día del mes calendario). '
+                'Podés setear \$ 0 como "meta de no gastar en esta categoría" '
+                '— cualquier gasto será marcado como excedido.',
           ),
           const _FaqTile(
             title: '¿Cómo funciona la sugerencia automática de categoría?',
