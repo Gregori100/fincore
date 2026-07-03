@@ -170,7 +170,17 @@ publish_to: 'none'
 # es el mes en curso; aviso "El límite mostrado es el actual" cuando
 # es un mes histórico (el schema no guarda snapshots del monthly_limit).
 # Sin cambios de schema. 437/437 verdes.
-version: 0.14.2+74
+# 0.14.3+75 — diálogo de archivar categoría ahora cuenta cuántos
+# movimientos usan esa categoría y advierte que quedarán huérfanos.
+# Nuevo helper `CategoriesDao.countAssociatedEntries` simétrico al de
+# accounts. Sin cambios de schema ni comportamiento en el archive.
+# 0.14.4+76 — rediseño de los diálogos de confirmación destructiva
+# (archivar cuenta + archivar categoría). Nuevo widget
+# `DestructiveDialog` con ícono destacado en círculo negativo, chips
+# visuales de "impacto" (movimientos afectados, saldos ajustados),
+# banner de advertencia amarillo y botones balanceados. Sin cambios
+# de comportamiento; solo UX.
+version: 0.14.4+76
 
 environment:
   sdk: ^3.7.2

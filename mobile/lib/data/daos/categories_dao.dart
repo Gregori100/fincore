@@ -127,6 +127,18 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     );
   }
 
+  /// Cuenta cuántos movimientos activos (no cancelados) referencian esta
+  /// categoría vía `category_id`. La UI lo usa para advertir al usuario
+  /// cuántos entries quedarán huérfanos (sin badge) tras el archive.
+  Future<int> countAssociatedEntries(String categoryId) async {
+    final query = selectOnly(attachedDatabase.journalEntries)
+      ..addColumns([attachedDatabase.journalEntries.id.count()])
+      ..where(attachedDatabase.journalEntries.categoryId.equals(categoryId) &
+          attachedDatabase.journalEntries.deletedAt.isNull());
+    final row = await query.getSingle();
+    return row.read<int>(attachedDatabase.journalEntries.id.count()) ?? 0;
+  }
+
   /// Archivar (soft delete). Los entries históricos conservan category_id pero
   /// la UI los muestra sin badge (porque las queries de listado filtran activos).
   Future<void> archive(String id) async {

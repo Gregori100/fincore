@@ -6,7 +6,7 @@ import 'package:fincore/data/database.dart' as db;
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/applies_to_picker.dart';
 import 'package:fincore/widgets/color_picker.dart';
-import 'package:fincore/widgets/confirm_dialog.dart';
+import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/icon_picker.dart';
 import 'package:flutter/material.dart';
@@ -138,12 +138,57 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
 
   Future<void> _archive() async {
     final deps = AppDependencies.of(context);
-    final confirmed = await showConfirmDialog(
+    // Conteo de movimientos que quedarán huérfanos ANTES de mostrar la
+    // confirmación, para que el usuario dimensione el impacto real.
+    setState(() => _saving = true);
+    final int affected;
+    try {
+      affected =
+          await deps.categoriesDao.countAssociatedEntries(widget.categoryId!);
+    } catch (e) {
+      if (mounted) {
+        showErrorSnackbar(context, e);
+        setState(() => _saving = false);
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _saving = false);
+
+    final impacts = <DestructiveImpact>[
+      if (affected > 0)
+        DestructiveImpact(
+          icon: Icons.receipt_long_outlined,
+          label: '$affected ${affected == 1 ? "movimiento" : "movimientos"} '
+              '${affected == 1 ? "quedará" : "quedarán"} huérfanos '
+              '(aparecerán como "Sin categoría").',
+        ),
+      if (affected > 0)
+        const DestructiveImpact(
+          icon: Icons.account_balance_wallet_outlined,
+          label: 'Los saldos y montos no se modifican.',
+        ),
+      if (affected == 0)
+        const DestructiveImpact(
+          icon: Icons.check_circle_outline,
+          label: 'Ningún movimiento activo usa esta categoría.',
+        ),
+    ];
+    final description = affected == 0
+        ? 'La categoría dejará de aparecer en pickers y reportes.'
+        : 'La categoría dejará de aparecer en pickers y reportes. Los '
+            'movimientos existentes conservan la referencia interna pero '
+            'el badge de color ya no se mostrará.';
+
+    final confirmed = await showDestructiveDialog(
       context,
       title: 'Archivar categoría',
-      message: '¿Archivar "${_existing!.name}"? Los movimientos existentes la conservan en la base, '
-          'pero el badge no aparecerá más.',
-      confirmLabel: 'Archivar',
+      objectName: _existing!.name,
+      icon: Icons.archive_outlined,
+      impacts: impacts,
+      description: description,
+      confirmLabel:
+          affected == 0 ? 'Archivar' : 'Archivar y dejar huérfanos',
     );
     if (!confirmed) return;
     if (!mounted) return;

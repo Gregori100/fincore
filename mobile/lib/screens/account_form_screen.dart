@@ -4,7 +4,7 @@ import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/account_type_picker.dart';
-import 'package:fincore/widgets/confirm_dialog.dart';
+import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -194,23 +194,40 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     if (!mounted) return;
     setState(() => _saving = false);
 
-    final message = affected == 0
-        ? '¿Archivar "${_existing!.name}"? Esta cuenta no tiene movimientos asociados. '
-            'La acción es definitiva: no podrás reactivarla.'
-        : '¿Archivar "${_existing!.name}"?\n\n'
-            'Se cancelarán también los $affected movimientos donde esta cuenta '
-            'aparece como origen o destino (incluyendo pagos a tarjetas y '
-            'transferencias). El saldo de las otras cuentas que reciban estos '
-            'movimientos también se ajustará.\n\n'
-            'Esta acción es definitiva: no podrás reactivar la cuenta ni recuperar '
-            'los movimientos cancelados.';
+    final impacts = <DestructiveImpact>[
+      if (affected > 0)
+        DestructiveImpact(
+          icon: Icons.receipt_long_outlined,
+          label: '$affected ${affected == 1 ? "movimiento" : "movimientos"} '
+              '${affected == 1 ? "se cancelará" : "se cancelarán"} '
+              '(origen o destino).',
+        ),
+      if (affected > 0)
+        const DestructiveImpact(
+          icon: Icons.account_balance_wallet_outlined,
+          label: 'El saldo de las otras cuentas que reciban esos '
+              'movimientos se ajustará.',
+        ),
+      if (affected == 0)
+        const DestructiveImpact(
+          icon: Icons.check_circle_outline,
+          label: 'Esta cuenta no tiene movimientos asociados.',
+        ),
+    ];
+    final description = affected == 0
+        ? 'La cuenta dejará de aparecer en pickers, listas y reportes.'
+        : 'Incluye pagos a tarjetas y transferencias. La cuenta y sus '
+            'movimientos no podrán recuperarse.';
 
-    final confirmed = await showConfirmDialog(
+    final confirmed = await showDestructiveDialog(
       context,
       title: 'Archivar cuenta',
-      message: message,
-      confirmLabel: 'Archivar y cancelar movimientos',
-      destructive: true,
+      objectName: _existing!.name,
+      icon: Icons.archive_outlined,
+      impacts: impacts,
+      description: description,
+      confirmLabel:
+          affected == 0 ? 'Archivar' : 'Archivar y cancelar',
     );
     if (!confirmed) return;
     if (!mounted) return;
