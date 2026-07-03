@@ -153,4 +153,43 @@ void main() {
 
     await harness.dispose();
   });
+
+  testWidgets(
+      'WT-B09: selector de mes muestra badge "Hoy" en el mes actual',
+      (tester) async {
+    final harness = await pumpFincoreApp(tester);
+    await openBudgetsTab(tester);
+    // El mes actual dispara el chip "Hoy".
+    expect(find.text('Hoy'), findsOneWidget);
+    // No debe aparecer el aviso del límite histórico en el mes en curso.
+    expect(
+      find.textContaining('El límite mostrado es el actual'),
+      findsNothing,
+    );
+    await harness.dispose();
+  });
+
+  testWidgets(
+      'WT-B10: chevron_left navega al mes anterior + muestra aviso del límite histórico',
+      (tester) async {
+    final harness = await pumpFincoreApp(tester);
+    await openBudgetsTab(tester);
+    // Estado inicial: mes actual, sin aviso.
+    expect(find.text('Hoy'), findsOneWidget);
+    // Tap en chevron_left (dos IconButton: prev + next).
+    final prevBtn = find.byIcon(Icons.chevron_left);
+    expect(prevBtn, findsOneWidget);
+    await tester.tap(prevBtn);
+    await tester.pumpAndSettle();
+    // Ya no es el mes actual → badge "Hoy" desaparece + aviso visible.
+    expect(find.text('Hoy'), findsNothing);
+    expect(
+      find.textContaining('El límite mostrado es el actual'),
+      findsOneWidget,
+    );
+    // chevron_right ahora debe estar habilitado (podemos volver al mes actual).
+    final nextBtn = find.byIcon(Icons.chevron_right);
+    expect(nextBtn, findsOneWidget);
+    await harness.dispose();
+  });
 }

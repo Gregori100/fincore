@@ -165,7 +165,12 @@ publish_to: 'none'
 # impersonal (infinitivos: "Registrar movimiento", "Verificar las fechas")
 # + vocabulario neutral latino (dinero, celular, aquí). Sin cambios de
 # comportamiento ni schema. 435/435 verdes.
-version: 0.14.1+73
+# 0.14.2+74 — selector de mes en la pestaña Presupuestos. Chevrons <
+# ›  + tap en el nombre del mes abre un date picker. Badge "Hoy" cuando
+# es el mes en curso; aviso "El límite mostrado es el actual" cuando
+# es un mes histórico (el schema no guarda snapshots del monthly_limit).
+# Sin cambios de schema. 437/437 verdes.
+version: 0.14.2+74
 
 environment:
   sdk: ^3.7.2

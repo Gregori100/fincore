@@ -7,13 +7,19 @@ import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 /// Tab "Presupuestos" del reporte. Sprint `flutter-budgets-v1`.
 ///
-/// Muestra el progreso del mes en curso por categoría con `monthly_limit`
-/// seteado: gastado vs límite, % usado, disponible, badges de estado
+/// Muestra el progreso por categoría con `monthly_limit` definido:
+/// gastado vs límite, % usado, disponible, badges de estado
 /// (OK/Warning/Excedido/Sin gasto). Reactivo: cambios de presupuesto o
 /// registro de gastos actualizan el reporte sin refresh.
+///
+/// Selector de mes (sprint `flutter-budgets-month-picker-v1`): permite
+/// ver el progreso de meses pasados. Como no se guarda historial del
+/// `monthly_limit`, el límite mostrado siempre es el vigente hoy
+/// (documentado en el aviso de la UI cuando no es el mes en curso).
 class BudgetsTab extends StatefulWidget {
   const BudgetsTab({super.key});
 
@@ -23,36 +29,243 @@ class BudgetsTab extends StatefulWidget {
 
 class _BudgetsTabState extends State<BudgetsTab> {
   Stream<List<BudgetProgress>>? _stream;
+  late DateTime _monthAnchor;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _monthAnchor = DateTime(now.year, now.month, 1);
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _stream ??=
-        AppDependencies.of(context).reportsService.watchBudgetsProgress();
+    _stream ??= _buildStream();
+  }
+
+  Stream<List<BudgetProgress>> _buildStream() {
+    return AppDependencies.of(context)
+        .reportsService
+        .watchBudgetsProgress(monthAnchor: _monthAnchor);
+  }
+
+  bool get _isCurrentMonth {
+    final now = DateTime.now();
+    return _monthAnchor.year == now.year && _monthAnchor.month == now.month;
+  }
+
+  bool get _isFutureMonth {
+    final now = DateTime.now();
+    if (_monthAnchor.year > now.year) return true;
+    if (_monthAnchor.year == now.year && _monthAnchor.month > now.month) {
+      return true;
+    }
+    return false;
+  }
+
+  void _shiftMonth(int delta) {
+    setState(() {
+      _monthAnchor =
+          DateTime(_monthAnchor.year, _monthAnchor.month + delta, 1);
+      _stream = _buildStream();
+    });
+  }
+
+  Future<void> _pickMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _monthAnchor,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: DateTime(DateTime.now().year + 5, 12, 31),
+      helpText: 'Seleccionar mes',
+      initialDatePickerMode: DatePickerMode.year,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _monthAnchor = DateTime(picked.year, picked.month, 1);
+      _stream = _buildStream();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<List<BudgetProgress>>(
-      stream: _stream,
-      builder: (context, snap) {
-        if (snap.hasError) {
-          return _ErrorState(error: snap.error);
-        }
-        if (!snap.hasData) {
-          return const _LoadingState();
-        }
-        final items = snap.data!;
-        if (items.isEmpty) {
-          return const _EmptyState();
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, i) => _BudgetTile(progress: items[i]),
-        );
-      },
+    return Column(
+      children: [
+        _MonthSelector(
+          anchor: _monthAnchor,
+          isCurrentMonth: _isCurrentMonth,
+          canGoForward: !_isFutureMonth,
+          onPrev: () => _shiftMonth(-1),
+          onNext: () => _shiftMonth(1),
+          onTap: _pickMonth,
+        ),
+        if (!_isCurrentMonth) const _HistoricalLimitNotice(),
+        Expanded(
+          child: StreamBuilder<List<BudgetProgress>>(
+            stream: _stream,
+            builder: (context, snap) {
+              if (snap.hasError) {
+                return _ErrorState(error: snap.error);
+              }
+              if (!snap.hasData) {
+                return const _LoadingState();
+              }
+              final items = snap.data!;
+              if (items.isEmpty) {
+                return const _EmptyState();
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+                itemCount: items.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, i) => _BudgetTile(progress: items[i]),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MonthSelector extends StatelessWidget {
+  final DateTime anchor;
+  final bool isCurrentMonth;
+  final bool canGoForward;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onTap;
+
+  const _MonthSelector({
+    required this.anchor,
+    required this.isCurrentMonth,
+    required this.canGoForward,
+    required this.onPrev,
+    required this.onNext,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final label = DateFormat('MMMM yyyy', 'es_MX').format(anchor);
+    // Capitalizar la primera letra del nombre del mes (español pone en
+    // minúscula por default).
+    final display = label.isEmpty
+        ? label
+        : '${label[0].toUpperCase()}${label.substring(1)}';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: onPrev,
+            tooltip: 'Mes anterior',
+            color: FincoreColors.textSubtle,
+          ),
+          Expanded(
+            child: Center(
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.calendar_month_outlined,
+                        size: 18,
+                        color: FincoreColors.accent,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        display,
+                        style: const TextStyle(
+                          color: FincoreColors.textPrimary,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (isCurrentMonth) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: FincoreColors.accent.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Text(
+                            'Hoy',
+                            style: TextStyle(
+                              color: FincoreColors.accent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: canGoForward ? onNext : null,
+            tooltip: 'Mes siguiente',
+            color: FincoreColors.textSubtle,
+            disabledColor:
+                FincoreColors.textSubtle.withValues(alpha: 0.3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoricalLimitNotice extends StatelessWidget {
+  const _HistoricalLimitNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: FincoreColors.warning.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: FincoreColors.warning.withValues(alpha: 0.3),
+          ),
+        ),
+        child: const Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              size: 16,
+              color: FincoreColors.warning,
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'El límite mostrado es el actual, no el que estaba vigente '
+                'ese mes. El gasto sí corresponde al mes seleccionado.',
+                style: TextStyle(
+                  color: FincoreColors.warning,
+                  fontSize: 11,
+                  height: 1.3,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
