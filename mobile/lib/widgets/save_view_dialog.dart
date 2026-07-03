@@ -69,7 +69,7 @@ class _SaveViewSheetState extends State<_SaveViewSheet> {
   void _submit() {
     final trimmed = _ctrl.text.trim();
     if (trimmed.isEmpty) {
-      setState(() => _errorText = 'Ingresá un nombre.');
+      setState(() => _errorText = 'Ingresar un nombre.');
       return;
     }
     if (trimmed.length > 50) {

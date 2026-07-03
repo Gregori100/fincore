@@ -101,8 +101,8 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Editá una categoría de gasto y definí cuánto querés '
-              'gastar por mes. Vas a ver el progreso acá.',
+              'Editar una categoría de gasto y definir el monto '
+              'mensual. El progreso aparece aquí.',
               style: TextStyle(
                 color: FincoreColors.textSubtle,
                 fontSize: 13,

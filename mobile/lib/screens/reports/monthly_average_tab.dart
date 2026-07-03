@@ -447,7 +447,7 @@ class _EmptyState extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'Registrá tus gastos diariamente y este reporte ganará valor mes a mes.',
+            'Registrar los gastos a diario para que este reporte gane valor mes a mes.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: FincoreColors.textSubtle,

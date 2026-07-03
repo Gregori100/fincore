@@ -159,7 +159,13 @@ publish_to: 'none'
 # Slide 3 del onboarding a "7 reportes" con scroll interno; FAQ Ayuda
 # actualizado + tile nuevo "¿Cómo defino un presupuesto?". +19 tests
 # nuevos. 431/431 verdes.
-version: 0.14.0+72
+# 0.14.1+73 — neutralización del español. Se remueve el voseo argentino
+# ("tenés", "seteás", "andá", "querés") y vocabulario local ("plata",
+# "cel", "acá") de todos los textos visibles al usuario. Registro neutro
+# impersonal (infinitivos: "Registrar movimiento", "Verificar las fechas")
+# + vocabulario neutral latino (dinero, celular, aquí). Sin cambios de
+# comportamiento ni schema. 435/435 verdes.
+version: 0.14.1+73
 
 environment:
   sdk: ^3.7.2

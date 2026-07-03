@@ -91,7 +91,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Aún no tenés tarjetas de crédito',
+              'No hay tarjetas de crédito todavía',
               style: TextStyle(
                 color: FincoreColors.textPrimary,
                 fontSize: 16,
@@ -101,7 +101,7 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Creá una desde el ícono + para verla acá con su deuda, '
+              'Crear una desde el ícono + para verla aquí con su deuda, '
               'límite disponible y próximas fechas de corte y pago.',
               style: TextStyle(
                 color: FincoreColors.textSubtle,

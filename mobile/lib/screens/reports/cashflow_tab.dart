@@ -89,7 +89,7 @@ class _CashflowTabState extends State<CashflowTab> {
     if (newFrom.isAfter(_to)) {
       showWarningSnackbar(
         context,
-        'El rango no es válido. Revisá las fechas.',
+        'El rango no es válido. Verificar las fechas.',
       );
       return;
     }
@@ -111,7 +111,7 @@ class _CashflowTabState extends State<CashflowTab> {
     if (newTo.isBefore(_from)) {
       showWarningSnackbar(
         context,
-        'El rango no es válido. Revisá las fechas.',
+        'El rango no es válido. Verificar las fechas.',
       );
       return;
     }
@@ -523,7 +523,7 @@ class _EmptyState extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'Ajustá las fechas o registrá un movimiento.',
+            'Ajustar las fechas o registrar un movimiento.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: FincoreColors.textSubtle,

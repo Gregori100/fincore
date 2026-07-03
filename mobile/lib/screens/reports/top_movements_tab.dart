@@ -113,7 +113,7 @@ class _TopMovementsTabState extends State<TopMovementsTab> {
     if (newFrom.isAfter(_to)) {
       showWarningSnackbar(
         context,
-        'El rango no es válido. Revisá las fechas.',
+        'El rango no es válido. Verificar las fechas.',
       );
       return;
     }
@@ -135,7 +135,7 @@ class _TopMovementsTabState extends State<TopMovementsTab> {
     if (newTo.isBefore(_from)) {
       showWarningSnackbar(
         context,
-        'El rango no es válido. Revisá las fechas.',
+        'El rango no es válido. Verificar las fechas.',
       );
       return;
     }
@@ -230,8 +230,8 @@ class _TopMovementsTabState extends State<TopMovementsTab> {
         // Body: si no hay kinds seleccionados → empty state forzado.
         if (_selectedKinds.isEmpty)
           const _EmptyState(
-            title: 'Seleccioná al menos un tipo de movimiento.',
-            subtitle: 'Tocá los chips de arriba para activar tipos.',
+            title: 'Seleccionar al menos un tipo de movimiento.',
+            subtitle: 'Tocar los chips de arriba para activar tipos.',
             icon: Icons.filter_list_off,
           )
         else
@@ -253,7 +253,7 @@ class _TopMovementsTabState extends State<TopMovementsTab> {
               if (report.isEmpty) {
                 return const _EmptyState(
                   title: 'No hay movimientos en este rango.',
-                  subtitle: 'Ajustá las fechas o registrá un movimiento.',
+                  subtitle: 'Ajustar las fechas o registrar un movimiento.',
                   icon: Icons.list_alt_outlined,
                 );
               }

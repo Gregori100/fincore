@@ -54,7 +54,7 @@ String backupErrorToMessage(BackupError error) {
 String domainErrorToMessage(DomainError error) {
   switch (error.code) {
     case 'overpay_debt':
-      return 'No podés pagar más de lo que debés a la tarjeta.';
+      return 'El pago no puede ser mayor a la deuda de la tarjeta.';
     case 'insufficient_funds':
       return 'No hay fondos suficientes.';
     case 'credit_limit_exceeded':
@@ -66,13 +66,13 @@ String domainErrorToMessage(DomainError error) {
     case 'invalid_credit_metadata':
       return 'El día de corte y el día de pago no pueden ser el mismo.';
     case 'duplicate_account_name':
-      return 'Ya tenés una cuenta con ese nombre.';
+      return 'Ya existe una cuenta con ese nombre.';
     case 'account_not_empty':
-      return 'No podés archivar una cuenta con saldo distinto de cero.';
+      return 'No se puede archivar una cuenta con saldo distinto de cero.';
     case 'protected_account':
       return 'La Bolsa no se puede modificar ni eliminar.';
     case 'duplicate_category_name':
-      return 'Ya tenés una categoría con ese nombre.';
+      return 'Ya existe una categoría con ese nombre.';
     case 'invalid_category_applies_to':
       return 'La categoría no aplica a este tipo de movimiento.';
     case 'invalid_color_slug':
@@ -149,7 +149,7 @@ String categoriesDaoErrorToMessage(CategoriesDaoError error) {
     case 'invalid_monthly_limit_for_income':
       return 'Las categorías de tipo ingreso no llevan presupuesto.';
     case 'duplicate_category_name':
-      return 'Ya tenés una categoría con ese nombre.';
+      return 'Ya existe una categoría con ese nombre.';
     case 'invalid_category_applies_to':
       return 'El tipo de categoría no es válido.';
     case 'invalid_color_slug':
@@ -170,7 +170,7 @@ String savedViewsDaoErrorToMessage(SavedViewsDaoError error) {
     case 'invalid_name':
       return 'El nombre no es válido. Probá con 1-50 caracteres.';
     case 'duplicate_name':
-      return 'Ya tenés una vista con ese nombre.';
+      return 'Ya existe una vista con ese nombre.';
     case 'not_found':
       return 'Esa vista ya no existe.';
     default:

@@ -114,7 +114,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('No tenés vistas guardadas todavía.'),
+        find.text('No hay vistas guardadas todavía.'),
         findsOneWidget,
       );
 

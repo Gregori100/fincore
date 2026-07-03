@@ -209,7 +209,7 @@ class _EmptyState extends StatelessWidget {
             ),
             SizedBox(height: 12),
             Text(
-              'No tenés vistas guardadas todavía.',
+              'No hay vistas guardadas todavía.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textPrimary,

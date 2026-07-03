@@ -129,7 +129,7 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                   const FincoreLogo(fontSize: 72),
                   const SizedBox(height: 32),
                   const Text(
-                    'Para empezar elegí una opción:',
+                    'Para comenzar, elegir una opción:',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: FincoreColors.textMuted, fontSize: 14),
                   ),
@@ -138,7 +138,7 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                     icon: Icons.cloud_download_outlined,
                     title: 'Importar respaldo',
                     description:
-                        'Restaurá un archivo JSON exportado previamente desde Settings.',
+                        'Restaurar un archivo JSON exportado previamente desde Configuración.',
                     enabled: !_working,
                     onTap: _importBackup,
                   ),

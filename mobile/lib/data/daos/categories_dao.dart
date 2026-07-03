@@ -152,7 +152,7 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     if (existing != null) {
       throw const CategoriesDaoError(
         'duplicate_category_name',
-        'Ya tenés una categoría con ese nombre.',
+        'Ya existe una categoría con ese nombre.',
       );
     }
   }

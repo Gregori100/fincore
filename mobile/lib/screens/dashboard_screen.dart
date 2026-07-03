@@ -142,7 +142,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (accounts.isEmpty) {
                 return const BaseCard(
                   child: Text(
-                    'Aún no tenés cuentas. Creá una desde "Cuentas".',
+                    'No hay cuentas todavía. Crear una desde "Cuentas".',
                     style: TextStyle(color: FincoreColors.textMuted),
                   ),
                 );
@@ -185,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if (entries.isEmpty) {
                 return const BaseCard(
                   child: Text(
-                    'Aún no hay movimientos. Tocá "Movimiento" para registrar uno.',
+                    'Aún no hay movimientos. Tocar "Movimiento" para registrar uno.',
                     style: TextStyle(color: FincoreColors.textMuted),
                   ),
                 );

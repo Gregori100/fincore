@@ -274,7 +274,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       if (amount > deuda) {
         throw const EntriesDaoError(
           'overpay_debt',
-          'No podés pagar más de lo que debés a la tarjeta.',
+          'El pago no puede ser mayor a la deuda de la tarjeta.',
         );
       }
       return _register(

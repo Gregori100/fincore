@@ -32,7 +32,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(CreditCardsTab), findsOneWidget);
-    expect(find.text('Aún no tenés tarjetas de crédito'), findsOneWidget);
+    expect(find.text('No hay tarjetas de crédito todavía'), findsOneWidget);
     expect(find.text('Agregar tarjeta'), findsOneWidget);
 
     await harness.dispose();

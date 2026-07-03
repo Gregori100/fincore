@@ -84,7 +84,7 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
     if (!context.mounted) return;
     final newFrom = DateTime(picked.year, picked.month, picked.day);
     if (newFrom.isAfter(_editing.to)) {
-      showWarningSnackbar(context, 'El rango no es válido. Revisá las fechas.');
+      showWarningSnackbar(context, 'El rango no es válido. Verificar las fechas.');
       return;
     }
     setState(() {
@@ -107,7 +107,7 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
     if (!context.mounted) return;
     final newTo = DateTime(picked.year, picked.month, picked.day, 23, 59, 59, 999);
     if (newTo.isBefore(_editing.from)) {
-      showWarningSnackbar(context, 'El rango no es válido. Revisá las fechas.');
+      showWarningSnackbar(context, 'El rango no es válido. Verificar las fechas.');
       return;
     }
     setState(() {
@@ -171,7 +171,7 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
     if (min != null && max != null && min > max) {
       showWarningSnackbar(
         context,
-        'El rango de monto no es válido. Revisá los montos.',
+        'El rango de monto no es válido. Verificar los montos.',
       );
       return;
     }
@@ -207,7 +207,7 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
     if (min != null && max != null && min > max) {
       showWarningSnackbar(
         context,
-        'El rango de monto no es válido. Revisá los montos.',
+        'El rango de monto no es válido. Verificar los montos.',
       );
       return;
     }

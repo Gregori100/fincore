@@ -41,7 +41,7 @@ void main() {
       );
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
-      expect(find.text('Registrá cada movimiento'), findsOneWidget);
+      expect(find.text('Registrar cada movimiento'), findsOneWidget);
       await harness.dispose();
     });
 
@@ -57,7 +57,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Siguiente'));
       await tester.pumpAndSettle();
-      expect(find.text('Mirá tus reportes y patrones'), findsOneWidget);
+      expect(find.text('Ver reportes y patrones'), findsOneWidget);
       expect(find.text('Empezar'), findsOneWidget);
       expect(find.text('Siguiente'), findsNothing);
       await harness.dispose();
@@ -122,7 +122,7 @@ void main() {
       // Hay 1 GestureDetector por dot (3 en total). Tappeamos el último.
       await tester.tap(dots.at(2));
       await tester.pumpAndSettle();
-      expect(find.text('Mirá tus reportes y patrones'), findsOneWidget);
+      expect(find.text('Ver reportes y patrones'), findsOneWidget);
       expect(find.text('Empezar'), findsOneWidget);
       await harness.dispose();
     });

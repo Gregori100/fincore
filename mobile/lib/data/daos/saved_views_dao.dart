@@ -167,7 +167,7 @@ class SavedViewsDao extends DatabaseAccessor<FincoreDatabase>
       if (id != excludeId) {
         throw const SavedViewsDaoError(
           'duplicate_name',
-          'Ya tenés una vista con ese nombre.',
+          'Ya existe una vista con ese nombre.',
         );
       }
     }

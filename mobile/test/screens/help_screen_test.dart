@@ -61,7 +61,7 @@ void main() {
       );
       expect(find.text('¿Qué son las vistas guardadas?'), findsOneWidget);
       expect(
-        find.text('¿Cómo hacer backup y por qué importa?'),
+        find.text('¿Cómo hacer respaldo y por qué importa?'),
         findsOneWidget,
       );
       await harness.dispose();

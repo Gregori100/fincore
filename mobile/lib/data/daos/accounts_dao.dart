@@ -269,7 +269,7 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
     if (existing != null) {
       throw const AccountsDaoError(
         'duplicate_account_name',
-        'Ya tenés una cuenta con ese nombre.',
+        'Ya existe una cuenta con ese nombre.',
       );
     }
   }

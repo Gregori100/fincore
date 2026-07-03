@@ -59,7 +59,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final result = await Share.shareXFiles(
       [XFile(file.path)],
       subject: 'Respaldo FinCore $stamp',
-      text: 'Guardá este archivo en lugar seguro.',
+      text: 'Guardar este archivo en un lugar seguro.',
     ).timeout(
       const Duration(minutes: 2),
       onTimeout: () => const ShareResult('timeout', ShareResultStatus.unavailable),
@@ -177,7 +177,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // que no sea sorpresa silenciosa post-import.
       message: 'Esto REEMPLAZA toda la BD actual con el contenido del archivo. '
           'Tus vistas guardadas se perderán. '
-          'No hay vuelta atrás (excepto si tenés otro respaldo guardado).',
+          'No hay vuelta atrás (a menos que exista otro respaldo guardado).',
       confirmLabel: 'Continuar',
     );
     if (!confirmed) return;
@@ -289,8 +289,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Tu BD local. Exportá regularmente y guardalo en lugar seguro '
-                  '(Drive, email a vos mismo, etc.) para no perder datos.',
+                  'La BD es local. Exportar el respaldo con regularidad y '
+                  'guardarlo en un lugar seguro (Drive, correo, etc.) para '
+                  'no perder datos.',
                   style: TextStyle(color: FincoreColors.textMuted, fontSize: 13),
                 ),
                 const SizedBox(height: 16),
@@ -463,8 +464,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const BaseCard(
             child: Text(
               'El backend Laravel y la Vue web están en la rama '
-              'legacy/web-and-online-flutter del repo. Si necesitás recuperar '
-              'datos del backend antiguo, hacé checkout de esa rama.',
+              'legacy/web-and-online-flutter del repo. Para recuperar datos '
+              'del backend antiguo, hacer checkout de esa rama.',
               style: TextStyle(color: FincoreColors.textMuted, fontSize: 13),
             ),
           ),

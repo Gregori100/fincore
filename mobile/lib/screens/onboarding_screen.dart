@@ -292,7 +292,7 @@ class _Slide1State extends State<_Slide1>
               opacity: _textOpacity,
               child: const Text(
                 'Una libreta digital privada para tus cuentas, gastos e '
-                'ingresos. Todo en tu cel, sin servidores ni cuentas.',
+                'ingresos. Todo en tu celular, sin servidores ni cuentas.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: FincoreColors.textSubtle,
@@ -326,7 +326,7 @@ class _Slide2 extends StatelessWidget {
             ),
             SizedBox(height: 24),
             Text(
-              'Registrá cada movimiento',
+              'Registrar cada movimiento',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textPrimary,
@@ -337,8 +337,8 @@ class _Slide2 extends StatelessWidget {
             SizedBox(height: 16),
             Text(
               'Ingresos, gastos, cargos a tarjeta, pagos de tarjeta y '
-              'transferencias entre cuentas. Categorizá para entender '
-              'a dónde se va tu plata.',
+              'transferencias entre cuentas. Categorizar cada uno para '
+              'entender a dónde se va el dinero.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textSubtle,
@@ -410,7 +410,7 @@ class _Slide3 extends StatelessWidget {
             ),
             SizedBox(height: 24),
             Text(
-              'Mirá tus reportes y patrones',
+              'Ver reportes y patrones',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textPrimary,
@@ -420,10 +420,10 @@ class _Slide3 extends StatelessWidget {
             ),
             SizedBox(height: 16),
             Text(
-              '7 reportes para entender tu plata: dónde gastás más, '
-              'cómo fluye mes a mes, qué movimientos pesan, cuánto tenés '
-              'a la fecha, cómo te ubicás vs tu promedio, el estado de '
-              'tus tarjetas y el progreso de tus presupuestos.',
+              '7 reportes para entender el dinero: en qué se gasta más, '
+              'cómo fluye mes a mes, qué movimientos pesan, cuánto hay '
+              'a la fecha, la comparación contra el promedio, el estado '
+              'de las tarjetas y el progreso de los presupuestos.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textSubtle,

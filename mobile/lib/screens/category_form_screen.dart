@@ -221,7 +221,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
                 textCapitalization: TextCapitalization.sentences,
                 onChanged: (_) => setState(() {}),
                 validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Ingresá un nombre.' : null,
+                    (v == null || v.trim().isEmpty) ? 'Ingresar un nombre.' : null,
               ),
               const SizedBox(height: 16),
               const Text('Aplica a', style: TextStyle(color: FincoreColors.textMuted, fontSize: 13)),

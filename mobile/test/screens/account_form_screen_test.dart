@@ -170,7 +170,7 @@ void main() {
           reason: 'Debería aparecer un snackbar de error');
       // El error_snackbar mapea duplicate_account_name a "Ya existe una cuenta..."
       expect(
-        find.textContaining('Ya tenés una cuenta'),
+        find.textContaining('Ya existe una cuenta'),
         findsOneWidget,
         reason: 'El snackbar debería contener el mensaje de duplicate_account_name',
       );

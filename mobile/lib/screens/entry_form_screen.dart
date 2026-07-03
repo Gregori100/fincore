@@ -263,11 +263,11 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
     // Cubrimos a mano que origin/destination requeridos por el kind estén.
     final k = _kind!;
     if (_needsOrigin(k) && _originId == null) {
-      _showFieldError('Seleccioná la cuenta origen.');
+      _showFieldError('Seleccionar la cuenta origen.');
       return;
     }
     if (_needsDestination(k) && _destId == null) {
-      _showFieldError('Seleccioná la cuenta destino.');
+      _showFieldError('Seleccionar la cuenta destino.');
       return;
     }
 
@@ -580,7 +580,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
           validator: (v) {
-            if (v == null || v.trim().isEmpty) return 'Ingresá el monto.';
+            if (v == null || v.trim().isEmpty) return 'Ingresar el monto.';
             final n = double.tryParse(v);
             if (n == null || n <= 0) return 'Debe ser mayor a 0.';
             return null;

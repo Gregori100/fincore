@@ -87,7 +87,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.text('Seleccioná al menos un tipo de movimiento.'),
+        find.text('Seleccionar al menos un tipo de movimiento.'),
         findsOneWidget,
       );
 

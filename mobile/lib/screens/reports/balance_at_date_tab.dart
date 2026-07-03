@@ -421,7 +421,7 @@ class _EmptyState extends StatelessWidget {
           ),
           SizedBox(height: 6),
           Text(
-            'Creá una cuenta para empezar.',
+            'Crear una cuenta para empezar.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: FincoreColors.textSubtle,

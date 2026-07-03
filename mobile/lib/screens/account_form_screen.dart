@@ -281,7 +281,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                 ),
                 textCapitalization: TextCapitalization.sentences,
                 validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Ingresá un nombre.' : null,
+                    (v == null || v.trim().isEmpty) ? 'Ingresar un nombre.' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(

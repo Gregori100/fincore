@@ -41,7 +41,7 @@ class AccountPicker extends StatelessWidget {
           border: Border.all(color: FincoreColors.border),
         ),
         child: const Text(
-          'No hay cuentas compatibles. Creá una primero.',
+          'No hay cuentas compatibles. Crear una primero.',
           style: TextStyle(color: FincoreColors.textMuted),
         ),
       );
