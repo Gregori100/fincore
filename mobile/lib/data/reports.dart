@@ -147,6 +147,84 @@ class DayActivity {
   bool get hasAny => hasIncome || hasSpending || hasInternal;
 }
 
+/// Nivel de intensidad de gasto para el heatmap anual (sprint
+/// `flutter-reports-spending-heatmap-v1`, RN-HM06). Los 5 niveles
+/// se calculan por cuartiles relativos al año en foco.
+enum IntensityLevel { none, low, medium, high, veryHigh }
+
+/// Reporte del heatmap anual de gastos (sprint
+/// `flutter-reports-spending-heatmap-v1`). Contiene el mapa día→total de
+/// los gastos (`kind ∈ {expense, credit_expense}`) del año, cuartiles
+/// precalculados y agregados para la leyenda.
+///
+/// - `daySpending`: solo días con gasto > 0. Claves normalizadas a
+///   `DateTime(y, m, d)` con hora 0 (RN-HM02).
+/// - `total`: suma anual de todos los gastos.
+/// - `daysWithSpending`: número de días con gasto > 0.
+/// - `p25`/`p50`/`p75`: cuartiles calculados sobre los valores de
+///   `daySpending`. Con `daysWithSpending < 4` se aplica el fallback
+///   RN-HM05 (todos igual a `max`), lo que pinta todos los días con
+///   gasto como `veryHigh`.
+///
+/// El método [intensityFor] mapea un día al color correspondiente:
+///
+/// - Clave ausente o `total == 0` → [IntensityLevel.none].
+/// - `0 < total ≤ p25` → [IntensityLevel.low].
+/// - `p25 < total ≤ p50` → [IntensityLevel.medium].
+/// - `p50 < total ≤ p75` → [IntensityLevel.high].
+/// - `total > p75` → [IntensityLevel.veryHigh].
+class SpendingHeatmap {
+  final Map<DateTime, double> daySpending;
+  final double total;
+  final int daysWithSpending;
+  final double p25;
+  final double p50;
+  final double p75;
+
+  const SpendingHeatmap({
+    required this.daySpending,
+    required this.total,
+    required this.daysWithSpending,
+    required this.p25,
+    required this.p50,
+    required this.p75,
+  });
+
+  IntensityLevel intensityFor(DateTime day) {
+    final normalized = DateTime(day.year, day.month, day.day);
+    final value = daySpending[normalized];
+    if (value == null || value <= 0) return IntensityLevel.none;
+    if (value <= p25) return IntensityLevel.low;
+    if (value <= p50) return IntensityLevel.medium;
+    if (value <= p75) return IntensityLevel.high;
+    return IntensityLevel.veryHigh;
+  }
+}
+
+/// Interpolación estándar de cuartiles sobre una lista ordenada asc.
+/// Con `sortedValues.length < 4` retorna `(max, max, max)` como fallback
+/// (RN-HM05): con tan pocos datos los cuartiles no son estadísticamente
+/// significativos, así que todos los días con gasto se pintan como
+/// `veryHigh` (visualmente uniforme).
+(double, double, double) _computeQuartiles(List<double> sortedValues) {
+  if (sortedValues.isEmpty) return (0, 0, 0);
+  if (sortedValues.length < 4) {
+    // RN-HM05: con < 4 datos los cuartiles no son significativos.
+    // Retornamos (0, 0, 0) para que TODOS los días con gasto caigan en
+    // `veryHigh` (value > p75 = 0). Visualmente uniforme.
+    return (0, 0, 0);
+  }
+  double percentile(double p) {
+    final rank = (sortedValues.length - 1) * p;
+    final lower = rank.floor();
+    final upper = rank.ceil();
+    if (lower == upper) return sortedValues[lower];
+    final weight = rank - lower;
+    return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+  }
+  return (percentile(0.25), percentile(0.5), percentile(0.75));
+}
+
 /// Servicio de reportes agregados sobre `journal_entries` + `categories`.
 ///
 /// Independiente de `FinancialStateService` para no contaminar los streams BO/
@@ -1280,6 +1358,81 @@ class ReportsService {
       );
     }
     return result;
+  }
+
+  /// Heatmap anual de gastos (sprint
+  /// `flutter-reports-spending-heatmap-v1`).
+  ///
+  /// - `year` es el año calendario a consultar (1900..2100 aceptables).
+  /// - Consulta `journal_entries` con `kind IN ('expense', 'credit_expense')`
+  ///   (RN-HM01). Excluye `income`, `transfer`, `debt_payment`.
+  /// - Excluye soft-deleted (RN-HM03).
+  /// - Rango: `firstDayOfYear 00:00:00` a `lastDayOfYear 23:59:59.999`
+  ///   (RN-HM08).
+  /// - Agrupa por día vía `strftime('%Y-%m-%d', occurred_at, 'localtime')`
+  ///   (RN-HM02, fecha local del cel). Sin `'localtime'` entries cerca de
+  ///   medianoche caerían en el día equivocado (drift almacena UTC).
+  ///
+  /// Reactividad: `readsFrom: {journalEntries}` — re-emite ante cualquier
+  /// cambio en la tabla (incluye cancelaciones y edits). No lee
+  /// `categories`, así que archivar/desarchivar categorías no dispara
+  /// re-emit (RN-HM12).
+  ///
+  /// Retorna un [SpendingHeatmap] con `daySpending` (solo días con gasto
+  /// > 0), `total`, `daysWithSpending` y cuartiles precalculados
+  /// (RN-HM04/HM05).
+  Stream<SpendingHeatmap> spendingHeatmap({required int year}) {
+    final from = DateTime(year, 1, 1);
+    final to = DateTime(year, 12, 31, 23, 59, 59, 999);
+    const sql = '''
+      SELECT strftime('%Y-%m-%d', occurred_at, 'localtime') AS day,
+             SUM(amount) AS total
+      FROM journal_entries
+      WHERE kind IN ('expense', 'credit_expense')
+        AND deleted_at IS NULL
+        AND occurred_at >= ?
+        AND occurred_at <= ?
+      GROUP BY day
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(from),
+            Variable.withDateTime(to),
+          ],
+          readsFrom: {_db.journalEntries},
+        )
+        .watch()
+        .map(_buildSpendingHeatmap);
+  }
+
+  SpendingHeatmap _buildSpendingHeatmap(List<QueryRow> rows) {
+    final daySpending = <DateTime, double>{};
+    var total = 0.0;
+    for (final row in rows) {
+      final dayStr = row.read<String>('day');
+      final dayTotal = row.read<double>('total');
+      // Un día con SUM=0 (edge legacy con amount=0) NO entra al Map — el
+      // heatmap solo cuenta días con gasto real.
+      if (dayTotal <= 0) continue;
+      final parts = dayStr.split('-');
+      final y = int.parse(parts[0]);
+      final m = int.parse(parts[1]);
+      final d = int.parse(parts[2]);
+      daySpending[DateTime(y, m, d)] = dayTotal;
+      total += dayTotal;
+    }
+    final sortedValues = daySpending.values.toList()..sort();
+    final (p25, p50, p75) = _computeQuartiles(sortedValues);
+    return SpendingHeatmap(
+      daySpending: daySpending,
+      total: total,
+      daysWithSpending: daySpending.length,
+      p25: p25,
+      p50: p50,
+      p75: p75,
+    );
   }
 }
 

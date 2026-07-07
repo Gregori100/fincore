@@ -5,6 +5,7 @@ import 'package:fincore/screens/reports/credit_cards_tab.dart';
 import 'package:fincore/screens/reports/income_by_category_tab.dart';
 import 'package:fincore/screens/reports/monthly_average_tab.dart';
 import 'package:fincore/screens/reports/movements_calendar_tab.dart';
+import 'package:fincore/screens/reports/spending_heatmap_tab.dart';
 import 'package:fincore/screens/reports/spending_by_category_tab.dart';
 import 'package:fincore/screens/reports/top_movements_tab.dart';
 import 'package:fincore/theme/fincore_colors.dart';
@@ -28,7 +29,7 @@ class ReportsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 9,
+      length: 10,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Reportes'),
@@ -47,6 +48,7 @@ class ReportsScreen extends StatelessWidget {
               Tab(text: 'Presupuestos'),
               Tab(text: 'Ingreso por categoría'),
               Tab(text: 'Calendario'),
+              Tab(text: 'Heatmap'),
             ],
           ),
         ),
@@ -61,6 +63,7 @@ class ReportsScreen extends StatelessWidget {
             BudgetsTab(),
             IncomeByCategoryTab(),
             MovementsCalendarTab(),
+            SpendingHeatmapTab(),
           ],
         ),
       ),

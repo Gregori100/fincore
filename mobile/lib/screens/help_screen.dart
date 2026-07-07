@@ -61,7 +61,7 @@ class HelpScreen extends StatelessWidget {
           const _FaqTile(
             title: '¿Cómo se calculan los reportes?',
             body:
-                'En /reports hay 9 pestañas:\n\n'
+                'En /reports hay 10 pestañas:\n\n'
                 '• Gasto por categoría: suma de los gastos del período '
                   'agrupados por categoría, ordenados de mayor a menor.\n'
                 '• Cashflow mensual: ingresos vs gastos por mes en el rango '
@@ -84,7 +84,14 @@ class HelpScreen extends StatelessWidget {
                 '• Calendario: vista mensual con marcadores por día según '
                   'el tipo de movimiento (verde ingreso, rojo gasto, azul '
                   'movimiento interno). Tap en un día abre la lista de los '
-                  'movimientos exactos de ese día.',
+                  'movimientos exactos de ese día.\n'
+                '• Heatmap anual: año completo estilo GitHub con intensidad '
+                  'de color por día según el gasto total (solo expense + '
+                  'gasto a tarjeta). Los 5 niveles se calculan por cuartiles '
+                  'relativos al año. A diferencia del calendario (que '
+                  'detalla el mes por tipo de movimiento), el heatmap '
+                  'muestra el año por intensidad de gasto. Tap en un día '
+                  'abre los gastos exactos.',
           ),
           const _FaqTile(
             title: '¿Cómo se define un presupuesto?',

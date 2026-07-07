@@ -220,7 +220,14 @@ publish_to: 'none'
 # interno). Tap en un día abre /entries con filter custom `from=to=día`.
 # Nuevo método `ReportsService.movementsByDay` + factory
 # `EntriesFilters.forDay`. Sin schema bump. +18 tests.
-version: 0.16.0+82
+# 0.16.1+83 — sprint flutter-reports-spending-heatmap-v1: 10mo tab
+# "Heatmap" en /reports con vista año completo estilo GitHub. Grilla
+# 7 filas x ~53 columnas con intensidad de color por día según gasto
+# (solo expense + credit_expense) en 5 niveles calculados por cuartiles
+# relativos al año. Selector de año con chevrons. Tap en día abre
+# /entries con filter custom + kinds=['expense','credit_expense'].
+# CustomPaint sin dep externa. +20 tests. Sin schema bump.
+version: 0.16.1+83
 
 environment:
   sdk: ^3.7.2

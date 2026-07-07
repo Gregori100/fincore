@@ -2997,4 +2997,341 @@ void main() {
       await future;
     });
   });
+
+  // ===========================================================================
+  // spendingHeatmap — sprint `flutter-reports-spending-heatmap-v1`
+  // ===========================================================================
+  group('spendingHeatmap (sprint spending-heatmap)', () {
+    late FincoreDatabase db;
+    late AccountsDao accountsDao;
+    late CategoriesDao categoriesDao;
+    late EntriesDao entriesDao;
+    late ReportsService reports;
+    late String bolsa;
+    late String debit;
+    late String credit;
+    late String catComida;
+    late String catIncome;
+
+    setUp(() async {
+      db = FincoreDatabase(NativeDatabase.memory());
+      accountsDao = AccountsDao(db);
+      categoriesDao = CategoriesDao(db);
+      entriesDao = EntriesDao(db);
+      reports = ReportsService(db);
+      await seedDefaults(
+        db: db,
+        accountsDao: accountsDao,
+        categoriesDao: categoriesDao,
+      );
+      bolsa = (await accountsDao.listAll())
+          .firstWhere((a) => a.type == 'cash')
+          .id;
+      debit = await accountsDao.create(name: 'BBVA_HM', type: 'debit');
+      credit = await accountsDao.create(
+        name: 'Visa_HM',
+        type: 'credit',
+        creditLimit: 50000,
+      );
+      catComida = await categoriesDao.create(
+        name: 'Comida_HM',
+        appliesTo: 'expense',
+        colorSlug: 'red',
+        iconSlug: 'shopping-cart',
+      );
+      catIncome = await categoriesDao.create(
+        name: 'Sueldo_HM',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+    });
+
+    tearDown(() async {
+      await db.close();
+    });
+
+    test('UT-HM01: año sin gastos → daySpending vacío, cuartiles=0', () async {
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daySpending, isEmpty);
+      expect(hm.total, 0);
+      expect(hm.daysWithSpending, 0);
+      expect(hm.p25, 0);
+      expect(hm.p50, 0);
+      expect(hm.p75, 0);
+    });
+
+    test(
+        'UT-HM02: 1 expense de \$100 → fallback n<4, cuartiles=0, día veryHigh',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 100,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daysWithSpending, 1);
+      expect(hm.total, 100);
+      // Fallback RN-HM05: cuartiles = 0 → todos los días con gasto son
+      // veryHigh (visualmente uniforme).
+      expect(hm.p25, 0);
+      expect(hm.p50, 0);
+      expect(hm.p75, 0);
+      expect(
+        hm.intensityFor(DateTime(2026, 6, 15)),
+        IntensityLevel.veryHigh,
+        reason: 'Fallback RN-HM05: con <4 días todos van a veryHigh.',
+      );
+    });
+
+    test('UT-HM03: 3 expenses con montos distintos → todos veryHigh (fallback)',
+        () async {
+      const dailyAmounts = [
+        (day: 5, amount: 100.0),
+        (day: 10, amount: 300.0),
+        (day: 15, amount: 200.0),
+      ];
+      for (final entry in dailyAmounts) {
+        await entriesDao.registerExpense(
+          accountOriginId: debit,
+          amount: entry.amount,
+          categoryId: catComida,
+          occurredAt: DateTime(2026, 6, entry.day),
+        );
+      }
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daysWithSpending, 3);
+      expect(hm.intensityFor(DateTime(2026, 6, 5)), IntensityLevel.veryHigh);
+      expect(hm.intensityFor(DateTime(2026, 6, 10)), IntensityLevel.veryHigh);
+      expect(hm.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.veryHigh);
+    });
+
+    test(
+        'UT-HM04: 4 expenses 100/200/300/400 → cuartiles calculados; niveles distintos',
+        () async {
+      final montos = [100.0, 200.0, 300.0, 400.0];
+      for (var i = 0; i < montos.length; i++) {
+        await entriesDao.registerExpense(
+          accountOriginId: debit,
+          amount: montos[i],
+          categoryId: catComida,
+          occurredAt: DateTime(2026, 6, 5 + i * 5),
+        );
+      }
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daysWithSpending, 4);
+      expect(hm.total, 1000);
+      // p25 ≈ 175, p50 ≈ 250, p75 ≈ 325.
+      expect(hm.p25, closeTo(175, 1));
+      expect(hm.p50, closeTo(250, 1));
+      expect(hm.p75, closeTo(325, 1));
+      // 100 ≤ p25 → low. 200 ≤ p50 → medium. 300 ≤ p75 → high. 400 > p75 → veryHigh.
+      expect(hm.intensityFor(DateTime(2026, 6, 5)), IntensityLevel.low);
+      expect(hm.intensityFor(DateTime(2026, 6, 10)), IntensityLevel.medium);
+      expect(hm.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.high);
+      expect(hm.intensityFor(DateTime(2026, 6, 20)), IntensityLevel.veryHigh);
+    });
+
+    test('UT-HM05: credit_expense cuenta como gasto', () async {
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 500,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 3, 10),
+      );
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daysWithSpending, 1);
+      expect(hm.total, 500);
+    });
+
+    test('UT-HM06: income/transfer/debt_payment NO cuentan', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        categoryId: catIncome,
+        occurredAt: DateTime(2026, 3, 10),
+      );
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 3, 11),
+      );
+      // Sembrar deuda primero para poder pagar.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 1000,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 3, 1),
+      );
+      await entriesDao.registerDebtPayment(
+        accountOriginId: bolsa,
+        accountDestinationId: credit,
+        amount: 500,
+        occurredAt: DateTime(2026, 3, 12),
+      );
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      // Solo el credit_expense del día 1 cuenta.
+      expect(hm.daysWithSpending, 1);
+      expect(hm.total, 1000);
+      expect(hm.daySpending[DateTime(2026, 3, 1)], 1000);
+    });
+
+    test('UT-HM07: entry soft-deleted no cuenta', () async {
+      final entryId = await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await entriesDao.cancel(entryId);
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daySpending, isEmpty);
+      expect(hm.total, 0);
+    });
+
+    test('UT-HM08: día con 3 expenses → 1 entrada con total = SUM', () async {
+      for (var i = 0; i < 3; i++) {
+        await entriesDao.registerExpense(
+          accountOriginId: debit,
+          amount: 100.0 + i * 50,
+          categoryId: catComida,
+          occurredAt: DateTime(2026, 6, 10, 8 + i * 4),
+        );
+      }
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daysWithSpending, 1);
+      expect(hm.daySpending[DateTime(2026, 6, 10)], 100 + 150 + 200);
+    });
+
+    test(
+        'UT-HM09: entry en borde lastDayOfYear 23:59:59.999 → cae en 31/12',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 50,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 12, 31, 23, 59, 59, 999),
+      );
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daySpending[DateTime(2026, 12, 31)], 50,
+          reason: "'localtime' preserva el día local.");
+    });
+
+    test('UT-HM10: entries de otros años NO cuentan', () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 300,
+        categoryId: catComida,
+        occurredAt: DateTime(2025, 12, 15),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 400,
+        categoryId: catComida,
+        occurredAt: DateTime(2027, 1, 10),
+      );
+      final hm = await reports.spendingHeatmap(year: 2026).first;
+      expect(hm.daySpending, isEmpty);
+    });
+
+    test('UT-HM11: reactividad — registrar expense re-emite', () async {
+      final stream = reports.spendingHeatmap(year: 2026);
+      final future = expectLater(
+        stream,
+        emitsThrough(
+          predicate<SpendingHeatmap>(
+            (hm) => hm.daySpending[DateTime(2026, 6, 15)] == 200,
+          ),
+        ),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      await future;
+    });
+  });
+
+  // ===========================================================================
+  // SpendingHeatmap.intensityFor — unit tests del modelo (sprint spending-heatmap)
+  // ===========================================================================
+  group('SpendingHeatmap.intensityFor (unit tests del modelo)', () {
+    SpendingHeatmap hm({
+      Map<DateTime, double> daySpending = const {},
+      double p25 = 100,
+      double p50 = 200,
+      double p75 = 300,
+    }) {
+      final total = daySpending.values.fold<double>(0, (a, b) => a + b);
+      return SpendingHeatmap(
+        daySpending: daySpending,
+        total: total,
+        daysWithSpending: daySpending.length,
+        p25: p25,
+        p50: p50,
+        p75: p75,
+      );
+    }
+
+    test('UT-HM12: día ausente del Map → none', () {
+      final report = hm();
+      expect(report.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.none);
+    });
+
+    test('UT-HM13: día con total 0 → none (defensivo)', () {
+      // Simular clave con 0 (no debería ocurrir en producción por RN-HM04
+      // que excluye 0 del Map, pero el getter es defensivo).
+      final report = hm(daySpending: {DateTime(2026, 6, 15): 0});
+      expect(report.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.none);
+    });
+
+    test('UT-HM14: 0 < total ≤ p25 → low', () {
+      final report = hm(daySpending: {DateTime(2026, 6, 15): 100});
+      expect(report.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.low);
+    });
+
+    test('UT-HM15: los 3 niveles medio/alto/muy alto', () {
+      // p25=100, p50=200, p75=300.
+      final report = hm(
+        daySpending: {
+          DateTime(2026, 6, 1): 150, // p25<x≤p50 → medium
+          DateTime(2026, 6, 2): 250, // p50<x≤p75 → high
+          DateTime(2026, 6, 3): 400, // >p75 → veryHigh
+        },
+      );
+      expect(report.intensityFor(DateTime(2026, 6, 1)), IntensityLevel.medium);
+      expect(report.intensityFor(DateTime(2026, 6, 2)), IntensityLevel.high);
+      expect(
+        report.intensityFor(DateTime(2026, 6, 3)),
+        IntensityLevel.veryHigh,
+      );
+    });
+
+    test('UT-HM16: fallback p25=p50=p75=0 → todos veryHigh (RN-HM05)', () {
+      final report = hm(
+        daySpending: {
+          DateTime(2026, 6, 1): 100,
+          DateTime(2026, 6, 2): 200,
+          DateTime(2026, 6, 3): 300,
+        },
+        p25: 0,
+        p50: 0,
+        p75: 0,
+      );
+      // Con cuartiles=0, cualquier valor > 0 salta las 3 primeras
+      // condiciones (value <= 0) y cae en veryHigh.
+      expect(
+        report.intensityFor(DateTime(2026, 6, 1)),
+        IntensityLevel.veryHigh,
+      );
+      expect(
+        report.intensityFor(DateTime(2026, 6, 3)),
+        IntensityLevel.veryHigh,
+      );
+    });
+  });
 }

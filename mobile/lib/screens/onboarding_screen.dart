@@ -420,11 +420,12 @@ class _Slide3 extends StatelessWidget {
             ),
             SizedBox(height: 16),
             Text(
-              '9 reportes para entender el dinero: en qué se gasta más, '
+              '10 reportes para entender el dinero: en qué se gasta más, '
               'de dónde viene cada peso, cómo fluye mes a mes, qué '
               'movimientos pesan, cuánto hay a la fecha, la comparación '
               'contra el promedio, el estado de las tarjetas, el '
-              'progreso de los presupuestos y el calendario del mes.',
+              'progreso de los presupuestos, el calendario del mes y '
+              'el heatmap anual de gastos.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: FincoreColors.textSubtle,
@@ -480,6 +481,11 @@ class _Slide3 extends StatelessWidget {
               icon: Icons.calendar_month,
               color: FincoreColors.accent,
               label: 'Calendario',
+            ),
+            _KindRow(
+              icon: Icons.grid_view,
+              color: FincoreColors.negative,
+              label: 'Heatmap anual',
             ),
                 ],
               ),

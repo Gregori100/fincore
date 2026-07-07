@@ -198,7 +198,7 @@ void main() {
     GoRouter.of(ctx).push('/reports');
     await tester.pumpAndSettle();
 
-    expect(find.byType(Tab), findsNWidgets(9));
+    expect(find.byType(Tab), findsNWidgets(10));
     expect(find.widgetWithText(Tab, 'Gasto por categoría'), findsOneWidget);
     expect(find.widgetWithText(Tab, 'Tarjetas'), findsOneWidget);
 
