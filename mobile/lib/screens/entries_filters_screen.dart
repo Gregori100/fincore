@@ -158,6 +158,24 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
     });
   }
 
+  // Sprint `flutter-reports-drilldown-parity-v1`: cuando el usuario
+  // combina "Sin categoría" con kinds puramente `income` o puramente
+  // gastos, el DAO amplía la definición del bucket para incluir el edge
+  // de categorías cuyo `applies_to` fue editado al opuesto (RN-P01/P02).
+  // Este hint anticipa el comportamiento para evitar sorpresa al abrir
+  // la lista y ver entries con categoría visible pero clasificados como
+  // "Sin categoría". La condición replica la del helper
+  // `EntriesDao._uncategorizedCondition`.
+  bool get _shouldShowUncategorizedHint {
+    if (!_editing.categoryIds.contains(kUncategorizedFilterToken)) return false;
+    if (_editing.kinds.isEmpty) return false;
+    final kindSet = _editing.kinds.toSet();
+    if (kindSet.length == 1 && kindSet.contains('income')) return true;
+    const spendingKinds = {'expense', 'credit_expense'};
+    if (kindSet.every(spendingKinds.contains)) return true;
+    return false;
+  }
+
   /// Parsea ambos controllers, valida `min <= max` cuando ambos están
   /// presentes (RN-A05), y emite el resultado al caller. Si la validación
   /// falla, muestra snackbar warning y NO emite — el panel queda abierto
@@ -422,6 +440,40 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
               ],
             );
           }),
+          if (_shouldShowUncategorizedHint) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: FincoreColors.accent.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: FincoreColors.accent.withValues(alpha: 0.3),
+                ),
+              ),
+              child: const Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: FincoreColors.accent,
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '"Sin categoría" también incluye entries con categorías '
+                      'cuyo tipo fue editado a otro flujo.',
+                      style: TextStyle(
+                        color: FincoreColors.accent,
+                        fontSize: 11,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 24),
 
           // ===========================================================

@@ -332,4 +332,111 @@ void main() {
       await harness.dispose();
     });
   });
+
+  // ==========================================================================
+  // Hint "Sin categoría" — sprint `flutter-reports-drilldown-parity-v1`
+  // ==========================================================================
+  group('EntriesFiltersScreen — hint Sin categoría', () {
+    Future<EntriesFilters?> openPanelWith(
+      WidgetTester tester, {
+      required EntriesFilters initial,
+    }) {
+      final ctx = tester.element(find.byType(Scaffold).first);
+      return Navigator.of(ctx).push<EntriesFilters>(
+        MaterialPageRoute(
+          builder: (_) => EntriesFiltersScreen(
+            initial: initial,
+            accounts: const [],
+            categories: const [],
+          ),
+          fullscreenDialog: true,
+        ),
+      );
+    }
+
+    const hintFragment = 'categorías cuyo tipo fue editado a otro flujo';
+
+    // El screen usa `ListView` (lazy loading), así que el hint queda fuera
+    // del tree hasta que scrolleamos la sección "Categorías" al viewport.
+    // Usamos el chip "Sin categoría" como ancla (siempre visible en la
+    // sección) y hacemos un drag adicional hacia arriba para forzar el
+    // renderizado del hint que vive justo debajo del Wrap.
+    Future<void> scrollToCategoriesSection(WidgetTester tester) async {
+      await tester.scrollUntilVisible(
+        find.text('Sin categoría'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.drag(
+        find.byType(Scrollable).first,
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('WT-DPH01: token + kinds=[income] → hint visible',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      final initial = EntriesFilters.thisMonth().copyWith(
+        kinds: const ['income'],
+        categoryIds: const ['__null__'],
+      );
+      // ignore: unused_local_variable
+      final future = openPanelWith(tester, initial: initial);
+      await tester.pumpAndSettle();
+      await scrollToCategoriesSection(tester);
+
+      expect(find.textContaining(hintFragment), findsOneWidget);
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-DPH02: token + kinds=[expense, credit_expense] → hint visible',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      final initial = EntriesFilters.thisMonth().copyWith(
+        kinds: const ['expense', 'credit_expense'],
+        categoryIds: const ['__null__'],
+      );
+      // ignore: unused_local_variable
+      final future = openPanelWith(tester, initial: initial);
+      await tester.pumpAndSettle();
+      await scrollToCategoriesSection(tester);
+
+      expect(find.textContaining(hintFragment), findsOneWidget);
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-DPH03: token + kinds mixto (income+expense) → hint NO visible (RN-P03)',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      final initial = EntriesFilters.thisMonth().copyWith(
+        kinds: const ['income', 'expense'],
+        categoryIds: const ['__null__'],
+      );
+      // ignore: unused_local_variable
+      final future = openPanelWith(tester, initial: initial);
+      await tester.pumpAndSettle();
+      await scrollToCategoriesSection(tester);
+
+      expect(find.textContaining(hintFragment), findsNothing);
+      await harness.dispose();
+    });
+
+    testWidgets('WT-DPH04: sin token → hint NO visible', (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      final initial = EntriesFilters.thisMonth().copyWith(
+        kinds: const ['income'],
+        categoryIds: const [],
+      );
+      // ignore: unused_local_variable
+      final future = openPanelWith(tester, initial: initial);
+      await tester.pumpAndSettle();
+      await scrollToCategoriesSection(tester);
+
+      expect(find.textContaining(hintFragment), findsNothing);
+      await harness.dispose();
+    });
+  });
 }

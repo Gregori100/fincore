@@ -192,7 +192,12 @@ publish_to: 'none'
 # (b) EntriesDao.watchPage amplía la definición del token cuando el
 # filtro `kinds` está restringido a un único tipo de flujo. Sin schema
 # bump, sin cambios de UI. +9 tests nuevos.
-version: 0.15.1+78
+# 0.15.2+79 — hint informativo en el chip "Sin categoría" del sheet de
+# filtros: banner sutil con Icons.info_outline que aparece cuando el
+# usuario combina el token con kinds puramente income o subset de
+# gastos. Anticipa el comportamiento ampliado del DAO (RN-P01/P02).
+# Sin cambios de datos ni de rutas. +4 widget tests.
+version: 0.15.2+79
 
 environment:
   sdk: ^3.7.2
