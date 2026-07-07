@@ -1,16 +1,10 @@
 import 'package:fincore/app_dependencies.dart';
-import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/entries_filters.dart';
-import 'package:fincore/models/category.dart' as model;
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
-import 'package:fincore/widgets/base_card.dart';
-import 'package:fincore/widgets/category_badge.dart' as cb;
 import 'package:fincore/widgets/entries_empty_state.dart';
+import 'package:fincore/widgets/movement_row.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 /// Lista paginada de movimientos con scroll infinito (sprint
 /// `flutter-movements-pagination-v1`).
@@ -192,7 +186,7 @@ class _EntriesPaginatedListState extends State<EntriesPaginatedList> {
                 reachedMaxLimit: _reachedMaxLimit,
               );
             }
-            return _Row(item: entries[i]);
+            return MovementRow(item: entries[i]);
           },
         );
       },
@@ -254,103 +248,3 @@ const int _kMaxLimit = 2000;
 /// `_loadMore` automáticamente.
 const double _kScrollLoadMoreThreshold = 300;
 
-class _Row extends StatelessWidget {
-  final EntryWithRelations item;
-  const _Row({required this.item});
-
-  @override
-  Widget build(BuildContext context) {
-    final entry = item.entry;
-    final kind = parseJournalKind(entry.kind);
-    final color = switch (kind) {
-      JournalKind.income => FincoreColors.positive,
-      JournalKind.expense ||
-      JournalKind.creditExpense =>
-        FincoreColors.negative,
-      JournalKind.debtPayment || JournalKind.transfer => FincoreColors.accent,
-    };
-    final dateStr = DateFormat('d MMM y', 'es_MX').format(entry.occurredAt);
-
-    return BaseCard(
-      onTap: () => context.push('/entries/${entry.id}/edit'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(_kindIcon(kind), size: 16, color: color),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.description?.isNotEmpty == true
-                      ? entry.description!
-                      : kind.label,
-                  style: const TextStyle(
-                      color: FincoreColors.textPrimary,
-                      fontWeight: FontWeight.w500),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text('$dateStr · ${kind.label}',
-                        style: const TextStyle(
-                            color: FincoreColors.textSubtle, fontSize: 11)),
-                    if (item.category != null)
-                      cb.CategoryBadge(
-                        category: model.Category(
-                          id: item.category!.id,
-                          name: item.category!.name,
-                          appliesTo: item.category!.appliesTo,
-                          colorSlug: item.category!.colorSlug,
-                          iconSlug: item.category!.iconSlug,
-                          monthlyLimit: item.category!.monthlyLimit,
-                          deletedAt: item.category!.deletedAt,
-                        ),
-                        compact: true,
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(_signed(kind, entry.amount),
-              style: TextStyle(color: color, fontWeight: FontWeight.w700)),
-        ],
-      ),
-    );
-  }
-
-  IconData _kindIcon(JournalKind k) => switch (k) {
-        JournalKind.income => Icons.arrow_downward,
-        JournalKind.expense => Icons.arrow_upward,
-        JournalKind.creditExpense => Icons.credit_card_outlined,
-        JournalKind.debtPayment => Icons.payments_outlined,
-        JournalKind.transfer => Icons.swap_horiz,
-      };
-
-  String _signed(JournalKind k, double amount) => switch (k) {
-        JournalKind.income => formatAmount(amount, showSign: true),
-        JournalKind.expense ||
-        JournalKind.creditExpense =>
-          '-${formatAmount(amount)}',
-        JournalKind.debtPayment ||
-        JournalKind.transfer =>
-          formatAmount(amount),
-      };
-}

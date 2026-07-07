@@ -51,6 +51,59 @@ void main() {
       await harness.dispose();
     });
 
+    // Sprint UX de visibilidad de cuenta: la row de "Últimos movimientos"
+    // muestra el nombre de la cuenta relevante según el kind (destino en
+    // income; origen en expense; "origen → destino" en transfer/pago).
+    testWidgets(
+        'Últimos movimientos: la row muestra el nombre de la cuenta',
+        (tester) async {
+      final harness = await pumpFincoreApp(
+        tester,
+        seed: (db, deps) async {
+          final bolsa = (await deps.accountsDao.listAll())
+              .firstWhere((a) => a.type == 'cash');
+          final bbva = await deps.accountsDao.create(
+            name: 'BBVA_Row_Test',
+            type: 'debit',
+          );
+          // Expense desde BBVA → subtexto muestra "BBVA_Row_Test".
+          await deps.entriesDao.registerExpense(
+            accountOriginId: bbva,
+            amount: 300,
+            occurredAt: DateTime.utc(2026, 6, 22, 12),
+            description: 'GastoBBVA_Row',
+          );
+          // Transfer bolsa → BBVA → subtexto muestra "Bolsa → BBVA_Row_Test".
+          await deps.entriesDao.registerTransfer(
+            accountOriginId: bolsa.id,
+            accountDestinationId: bbva,
+            amount: 100,
+            occurredAt: DateTime.utc(2026, 6, 23, 12),
+            description: 'TransferRow_Test',
+          );
+        },
+      );
+
+      // La descripción del expense es visible.
+      expect(find.text('GastoBBVA_Row'), findsOneWidget);
+      // El nombre de la cuenta aparece dentro del subtexto (que también
+      // trae fecha y kind). Usamos textContaining porque el subtexto es
+      // "BBVA_Row_Test · 22 jun · Gasto".
+      expect(
+        find.textContaining('BBVA_Row_Test'),
+        findsWidgets,
+        reason: 'La row del expense muestra el nombre de la cuenta origen.',
+      );
+      // La transfer muestra "origen → destino" en el subtexto.
+      expect(
+        find.textContaining('Bolsa → BBVA_Row_Test'),
+        findsOneWidget,
+        reason: 'La row del transfer muestra "origen → destino".',
+      );
+
+      await harness.dispose();
+    });
+
     testWidgets(
         'AppBar tiene IconButton "Reportes" que navega a /reports (RF-017)',
         (tester) async {

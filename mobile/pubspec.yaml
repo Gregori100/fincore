@@ -197,7 +197,23 @@ publish_to: 'none'
 # usuario combina el token con kinds puramente income o subset de
 # gastos. Anticipa el comportamiento ampliado del DAO (RN-P01/P02).
 # Sin cambios de datos ni de rutas. +4 widget tests.
-version: 0.15.2+79
+# 0.15.3+80 — 2 mejoras UX detectadas usando la app real:
+# (a) la row de movimientos (Dashboard + /entries) muestra la cuenta
+#     relevante en el subtexto: destino en income, origen en gasto,
+#     "origen → destino" en transfer/pago de tarjeta. Helper
+#     `entryAccountLabel` en widgets/. +7 unit + 1 widget test.
+# (b) el form de movimiento preserva el focus del monto/descripción
+#     tras pausa (paused/inactive) y resume: al volver de otra app
+#     (banco, calculadora) el mismo field vuelve a tener focus y el
+#     teclado reaparece. WidgetsBindingObserver + 2 FocusNode. +1
+#     widget test.
+# 0.15.4+81 — refactor de la row de movimiento a 3 líneas +
+# `SystemChannels.textInput.invokeMethod('TextInput.show')` para que
+# el teclado reaparezca al volver de otra app (fix real del focus).
+# Nuevo widget `MovementRow` reemplaza `_EntryTile` y `_Row` (dashboard
+# + entries list). Layout: (1) descripción+monto; (2) cuenta·fecha·kind;
+# (3) badge de categoría en línea propia. Sin duplicación de helpers.
+version: 0.15.4+81
 
 environment:
   sdk: ^3.7.2

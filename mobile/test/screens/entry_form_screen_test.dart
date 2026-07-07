@@ -123,5 +123,71 @@ void main() {
 
       await harness.dispose();
     });
+
+    // Sprint UX de preservación de focus: el observer del lifecycle
+    // recuerda cuál field tenía focus antes de `paused`/`inactive` y lo
+    // restaura en `resumed`. Sin esto, salir a otra app (banco) y volver
+    // pierde el focus y el teclado.
+    testWidgets(
+        'Focus del monto se preserva tras app pausada/resumed',
+        (tester) async {
+      late String entryId;
+      final harness = await pumpFincoreApp(
+        tester,
+        seed: (db, deps) async {
+          final bolsa = (await deps.accountsDao.listAll())
+              .firstWhere((a) => a.type == 'cash');
+          entryId = await deps.entriesDao.registerExpense(
+            accountOriginId: bolsa.id,
+            amount: 150.0,
+            occurredAt: DateTime.utc(2026, 6, 22, 12),
+            description: 'FocusTest',
+          );
+        },
+      );
+      final ctx = tester.element(find.byType(Scaffold));
+      GoRouter.of(ctx).push('/entries/$entryId/edit');
+      await tester.pumpAndSettle();
+
+      // Dar focus al TextFormField del monto.
+      final amountField = find.widgetWithText(TextFormField, 'Monto');
+      expect(amountField, findsOneWidget);
+      await tester.tap(amountField);
+      await tester.pumpAndSettle();
+
+      // Sanity: el field tiene focus.
+      final amountState = tester.state<FormFieldState>(amountField);
+      // ignore: invalid_use_of_protected_member
+      expect(FocusScope.of(amountState.context).hasFocus, isTrue,
+          reason: 'El monto no obtuvo focus tras el tap.');
+
+      // Simular que la app pasa a background (usuario tabbea a otra app).
+      // El framework de Flutter valida transiciones válidas: la secuencia
+      // completa es resumed → inactive → hidden → paused (background) y
+      // paused → hidden → inactive → resumed (foreground).
+      tester.binding
+          .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding
+          .handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding
+          .handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pumpAndSettle();
+
+      // Volver a foreground (usuario regresa desde el banco).
+      tester.binding
+          .handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding
+          .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding
+          .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+
+      // El focus debe volver al monto (post-frame callback ya corrió).
+      // ignore: invalid_use_of_protected_member
+      expect(FocusScope.of(amountState.context).hasFocus, isTrue,
+          reason: 'El focus del monto no se restauró tras resumed.');
+
+      await harness.dispose();
+    });
   });
 }

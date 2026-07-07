@@ -25,10 +25,19 @@ class EntryFormScreen extends StatefulWidget {
   State<EntryFormScreen> createState() => _EntryFormScreenState();
 }
 
-class _EntryFormScreenState extends State<EntryFormScreen> {
+class _EntryFormScreenState extends State<EntryFormScreen>
+    with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final _amountCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
+  // Sprint UX de preservación de focus: cuando el usuario tabbea a otra
+  // app (banco, calculadora) mientras escribe monto o descripción, al
+  // volver debe reaparecer el focus + teclado en el mismo field. Sin
+  // esto, Flutter default suelta el focus en `paused` y hay que volver a
+  // tocar el field.
+  final _amountFocus = FocusNode();
+  final _descFocus = FocusNode();
+  FocusNode? _lastFocusedField;
 
   JournalKind? _kind;
   String? _originId;
@@ -64,6 +73,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
     // Listener para recalcular la sugerencia al tipear descripción. Se
     // agrega en `initState` porque el `TextEditingController` existe
@@ -75,11 +85,50 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _suggestionDebounce?.cancel();
     _descCtrl.removeListener(_onSuggestionInputChanged);
+    _amountFocus.dispose();
+    _descFocus.dispose();
     _amountCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
+  }
+
+  // Preservación de focus al volver de otra app (banco, calculadora).
+  // - En `paused`/`inactive`: recordamos cuál field tenía focus.
+  // - En `resumed`: si el recordado sigue existiendo (y el widget sigue
+  //   montado), le devolvemos el focus. El teclado reaparece porque
+  //   Flutter dispara `showKeyboard` al pedir focus sobre un TextField.
+  // Solo aplica a los 2 fields del form (monto + descripción).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      if (_amountFocus.hasFocus) {
+        _lastFocusedField = _amountFocus;
+      } else if (_descFocus.hasFocus) {
+        _lastFocusedField = _descFocus;
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      final target = _lastFocusedField;
+      if (target != null && mounted) {
+        // Post-frame porque el árbol puede estar aún reconstruyéndose
+        // tras el resume; sin esto el requestFocus se pierde.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          target.requestFocus();
+          // En Android, si el mismo FocusNode ya era el primary antes
+          // del pause, Flutter puede decidir que "no cambió el focus"
+          // y omitir la reapertura de la TextInputConnection. Forzamos
+          // el show explícito para que el teclado reaparezca sin que
+          // el usuario tenga que tocar el field.
+          SystemChannels.textInput.invokeMethod('TextInput.show');
+        });
+      }
+      _lastFocusedField = null;
+    }
   }
 
   /// Listener del `_descCtrl`. Programa el `_recalcSuggestion` con
@@ -572,6 +621,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
         ],
         TextFormField(
           controller: _amountCtrl,
+          focusNode: _amountFocus,
           decoration: const InputDecoration(
             labelText: 'Monto',
             prefixText: r'$ ',
@@ -604,6 +654,7 @@ class _EntryFormScreenState extends State<EntryFormScreen> {
         const SizedBox(height: 20),
         TextFormField(
           controller: _descCtrl,
+          focusNode: _descFocus,
           decoration: const InputDecoration(labelText: 'Descripción (opcional)'),
           textCapitalization: TextCapitalization.sentences,
           maxLines: 2,
