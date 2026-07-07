@@ -5,6 +5,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
@@ -69,6 +70,21 @@ class FincoreApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: fincoreDarkTheme(),
           routerConfig: router,
+          // Housekeeping A11Y (0.16.2+84): tooltips/semantics de
+          // widgets Material (chevrons de TableCalendar, IconButton,
+          // dialogs default, etc.) en español neutro. Sin esto los
+          // lectores de pantalla anuncian "Previous month", "Close",
+          // etc. inconsistente con el registro del resto de la app.
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('es', 'MX'),
+            Locale('en', 'US'),
+          ],
+          locale: const Locale('es', 'MX'),
         ),
       ),
     );

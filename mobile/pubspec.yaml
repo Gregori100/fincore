@@ -227,13 +227,26 @@ publish_to: 'none'
 # relativos al año. Selector de año con chevrons. Tap en día abre
 # /entries con filter custom + kinds=['expense','credit_expense'].
 # CustomPaint sin dep externa. +20 tests. Sin schema bump.
-version: 0.16.1+83
+# 0.16.2+84 — housekeeping A11Y: agrega flutter_localizations con
+# los 3 delegates globales (Material/Widgets/Cupertino) y locale
+# forzado a es_MX. Cierra deuda arrastrada de 3 sprints (drilldown,
+# calendar, heatmap). Los tooltips/semantics del TableCalendar,
+# IconButtons y dialogs default ahora aparecen en español.
+version: 0.16.2+84
 
 environment:
   sdk: ^3.7.2
 
 dependencies:
   flutter:
+    sdk: flutter
+
+  # Localizations globales (GlobalMaterialLocalizations, etc.). Sin
+  # esto los tooltips/semantics de widgets Material (chevrons del
+  # TableCalendar, botones de IconButton, dialogs default, etc.)
+  # aparecen en inglés — inconsistente con el resto de la app que
+  # está en español neutro. Sprint A11Y de housekeeping.
+  flutter_localizations:
     sdk: flutter
 
   cupertino_icons: ^1.0.8

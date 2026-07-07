@@ -6,6 +6,7 @@ import 'package:fincore/data/seed.dart';
 import 'package:fincore/router/app_router.dart';
 import 'package:fincore/theme/fincore_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart' show GoRouter;
 import 'package:intl/date_symbol_data_local.dart';
@@ -227,6 +228,18 @@ class FincoreApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: fincoreDarkTheme(),
           routerConfig: router,
+          // Espejar la config de localizations del main.dart para que
+          // los widget tests reproduzcan el mismo entorno de A11Y.
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('es', 'MX'),
+            Locale('en', 'US'),
+          ],
+          locale: const Locale('es', 'MX'),
         ),
       ),
     );
