@@ -100,6 +100,21 @@ class EntriesFilters {
     );
   }
 
+  /// Drill-down desde el tab "Calendario" (sprint
+  /// `flutter-reports-movements-calendar-v1`). Arma un filtro de rango
+  /// custom que cubre exactamente el día `day` (00:00:00 → 23:59:59.999).
+  /// Sin restricciones de kind, cuenta ni categoría — muestra todos los
+  /// movimientos del día. El usuario puede refinarlos desde el sheet.
+  factory EntriesFilters.forDay({required DateTime day}) {
+    final from = DateTime(day.year, day.month, day.day);
+    final to = DateTime(day.year, day.month, day.day, 23, 59, 59, 999);
+    return EntriesFilters(
+      datePreset: DateRangePreset.custom,
+      from: from,
+      to: to,
+    );
+  }
+
   /// Cuenta cuántas dimensiones tienen al menos un valor distinto del default.
   /// Usado para el badge numérico en el AppBar. Max 4.
   int get activeCount {

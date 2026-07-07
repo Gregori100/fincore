@@ -213,7 +213,14 @@ publish_to: 'none'
 # Nuevo widget `MovementRow` reemplaza `_EntryTile` y `_Row` (dashboard
 # + entries list). Layout: (1) descripción+monto; (2) cuenta·fecha·kind;
 # (3) badge de categoría en línea propia. Sin duplicación de helpers.
-version: 0.15.4+81
+# 0.16.0+82 — sprint flutter-reports-movements-calendar-v1: 9no tab
+# "Calendario" en /reports con `table_calendar 3.1.2` (pinned). Muestra
+# el mes en foco con hasta 3 marcadores por día según los tipos de
+# movimiento presentes (verde ingreso, rojo gasto, azul movimiento
+# interno). Tap en un día abre /entries con filter custom `from=to=día`.
+# Nuevo método `ReportsService.movementsByDay` + factory
+# `EntriesFilters.forDay`. Sin schema bump. +18 tests.
+version: 0.16.0+82
 
 environment:
   sdk: ^3.7.2
@@ -258,6 +265,12 @@ dependencies:
   # truncados grapheme-safe. Declararla acá evita el warning del lint
   # `depend_on_referenced_packages` y blinda contra cambios futuros en el SDK.
   characters: ^1.4.0
+
+  # Widget de calendario mensual con markers por día (sprint
+  # `flutter-reports-movements-calendar-v1`). Pinned a versión exacta
+  # (RF-018): cualquier minor bump podría romper el API de builders o
+  # el rendering de headers en español. Bumpear con changelog en mano.
+  table_calendar: 3.1.2
 
 dev_dependencies:
   flutter_test:

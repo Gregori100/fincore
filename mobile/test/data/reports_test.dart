@@ -2729,4 +2729,272 @@ void main() {
       }
     });
   });
+
+  // ===========================================================================
+  // movementsByDay — sprint `flutter-reports-movements-calendar-v1`
+  // ===========================================================================
+  group('movementsByDay (sprint movements-calendar)', () {
+    late FincoreDatabase db;
+    late AccountsDao accountsDao;
+    late CategoriesDao categoriesDao;
+    late EntriesDao entriesDao;
+    late ReportsService reports;
+    late String bolsa;
+    late String debit;
+    late String credit;
+    late String catIncome;
+    late String catExpense;
+    late DateTime anchor;
+
+    setUp(() async {
+      db = FincoreDatabase(NativeDatabase.memory());
+      accountsDao = AccountsDao(db);
+      categoriesDao = CategoriesDao(db);
+      entriesDao = EntriesDao(db);
+      reports = ReportsService(db);
+      await seedDefaults(
+        db: db,
+        accountsDao: accountsDao,
+        categoriesDao: categoriesDao,
+      );
+      bolsa = (await accountsDao.listAll())
+          .firstWhere((a) => a.type == 'cash')
+          .id;
+      debit = await accountsDao.create(name: 'BBVA_CAL', type: 'debit');
+      credit = await accountsDao.create(
+        name: 'Visa_CAL',
+        type: 'credit',
+        creditLimit: 50000,
+      );
+      catIncome = await categoriesDao.create(
+        name: 'Sueldo_CAL',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+      catExpense = await categoriesDao.create(
+        name: 'Comida_CAL',
+        appliesTo: 'expense',
+        colorSlug: 'red',
+        iconSlug: 'shopping-cart',
+      );
+      anchor = DateTime(2026, 6, 15); // Junio 2026 como mes en foco.
+    });
+
+    tearDown(() async {
+      await db.close();
+    });
+
+    test('UT-CAL01: BD sin entries → Map vacío', () async {
+      final map = await reports.movementsByDay(monthAnchor: anchor).first;
+      expect(map, isEmpty);
+    });
+
+    test('UT-CAL02: 1 income el día 5 → hasIncome true, otros false', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        categoryId: catIncome,
+        occurredAt: DateTime(2026, 6, 5),
+      );
+      final map = await reports.movementsByDay(monthAnchor: anchor).first;
+      final activity = map[DateTime(2026, 6, 5)];
+      expect(activity, isNotNull);
+      expect(activity!.hasIncome, isTrue);
+      expect(activity.hasSpending, isFalse);
+      expect(activity.hasInternal, isFalse);
+      expect(activity.totalCount, 1);
+    });
+
+    test('UT-CAL03: 1 expense el día 10 → hasSpending true', () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        categoryId: catExpense,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      final activity =
+          (await reports.movementsByDay(monthAnchor: anchor).first)[
+              DateTime(2026, 6, 10)];
+      expect(activity, isNotNull);
+      expect(activity!.hasSpending, isTrue);
+      expect(activity.hasIncome, isFalse);
+      expect(activity.hasInternal, isFalse);
+    });
+
+    test(
+        'UT-CAL04: 1 credit_expense el día 12 → hasSpending true (agrupado)',
+        () async {
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 800,
+        categoryId: catExpense,
+        occurredAt: DateTime(2026, 6, 12),
+      );
+      final activity =
+          (await reports.movementsByDay(monthAnchor: anchor).first)[
+              DateTime(2026, 6, 12)];
+      expect(activity, isNotNull);
+      expect(activity!.hasSpending, isTrue,
+          reason: 'RN-CAL01: credit_expense se agrupa con expense.');
+    });
+
+    test('UT-CAL05: 1 transfer el día 15 → hasInternal true', () async {
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      final activity =
+          (await reports.movementsByDay(monthAnchor: anchor).first)[
+              DateTime(2026, 6, 15)];
+      expect(activity, isNotNull);
+      expect(activity!.hasInternal, isTrue);
+    });
+
+    test('UT-CAL06: 1 debt_payment el día 20 → hasInternal true (agrupado)',
+        () async {
+      // Sembrar deuda primero para poder pagarla.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 800,
+        categoryId: catExpense,
+        occurredAt: DateTime(2026, 6, 1),
+      );
+      await entriesDao.registerDebtPayment(
+        accountOriginId: bolsa,
+        accountDestinationId: credit,
+        amount: 700,
+        occurredAt: DateTime(2026, 6, 20),
+      );
+      final activity =
+          (await reports.movementsByDay(monthAnchor: anchor).first)[
+              DateTime(2026, 6, 20)];
+      expect(activity, isNotNull);
+      expect(activity!.hasInternal, isTrue,
+          reason: 'RN-CAL01: debt_payment se agrupa con transfer.');
+    });
+
+    test(
+        'UT-CAL07: día con income + expense + transfer → 3 flags true, totalCount=3',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncome,
+        occurredAt: DateTime(2026, 6, 25, 8),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        categoryId: catExpense,
+        occurredAt: DateTime(2026, 6, 25, 12),
+      );
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 300,
+        occurredAt: DateTime(2026, 6, 25, 18),
+      );
+      final activity =
+          (await reports.movementsByDay(monthAnchor: anchor).first)[
+              DateTime(2026, 6, 25)];
+      expect(activity, isNotNull);
+      expect(activity!.hasIncome, isTrue);
+      expect(activity.hasSpending, isTrue);
+      expect(activity.hasInternal, isTrue);
+      expect(activity.totalCount, 3);
+    });
+
+    test(
+        'UT-CAL08: entries de mes anterior/siguiente NO cuentan',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncome,
+        occurredAt: DateTime(2026, 5, 20), // mes anterior
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        categoryId: catExpense,
+        occurredAt: DateTime(2026, 7, 5), // mes siguiente
+      );
+      final map = await reports.movementsByDay(monthAnchor: anchor).first;
+      expect(map, isEmpty);
+    });
+
+    test(
+        'UT-CAL09: entry cancelado → desaparece del Map (reactividad)',
+        () async {
+      final entryId = await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncome,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      // Snapshot pre-cancel: hay actividad el día 10.
+      var map = await reports.movementsByDay(monthAnchor: anchor).first;
+      expect(map[DateTime(2026, 6, 10)], isNotNull);
+      // Cancelar y re-consultar (RN-CAL02).
+      await entriesDao.cancel(entryId);
+      map = await reports.movementsByDay(monthAnchor: anchor).first;
+      expect(map[DateTime(2026, 6, 10)], isNull,
+          reason: 'Cancelado no cuenta.');
+    });
+
+    test('UT-CAL10: entry exacto en firstDayOfMonth 00:00:00 → cae en día 1',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 100,
+        categoryId: catIncome,
+        occurredAt: DateTime(2026, 6, 1),
+      );
+      final activity =
+          (await reports.movementsByDay(monthAnchor: anchor).first)[
+              DateTime(2026, 6, 1)];
+      expect(activity, isNotNull);
+      expect(activity!.hasIncome, isTrue);
+    });
+
+    test(
+        'UT-CAL11: entry en lastDayOfMonth 23:59:59.999 → cae en último día',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 50,
+        categoryId: catExpense,
+        occurredAt: DateTime(2026, 6, 30, 23, 59, 59, 999),
+      );
+      final activity =
+          (await reports.movementsByDay(monthAnchor: anchor).first)[
+              DateTime(2026, 6, 30)];
+      expect(activity, isNotNull);
+      expect(activity!.hasSpending, isTrue);
+    });
+
+    test('UT-CAL12: reactividad — registrar income re-emite con nueva entrada',
+        () async {
+      // Snapshot inicial: mes vacío.
+      final stream = reports.movementsByDay(monthAnchor: anchor);
+      final future = expectLater(
+        stream,
+        emitsThrough(
+          predicate<Map<DateTime, DayActivity>>(
+            (m) => m[DateTime(2026, 6, 15)]?.hasIncome == true,
+          ),
+        ),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        categoryId: catIncome,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      await future;
+    });
+  });
 }

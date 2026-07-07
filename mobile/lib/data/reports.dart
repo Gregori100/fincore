@@ -115,6 +115,38 @@ class SpendingBucket {
 /// tiebreak alfabético lo posiciona después de la "S".
 const String kUncategorizedBucketName = 'Sin categoría';
 
+/// Actividad diaria agregada para el calendario mensual (sprint
+/// `flutter-reports-movements-calendar-v1`). Compacto: solo 3 booleanos +
+/// conteo total del día. La clave del `Map` que lo contiene es la fecha
+/// normalizada a `DateTime(y, m, d)` con hora 0 (RN-CAL03).
+///
+/// Los booleanos representan **presencia** de al menos 1 movimiento del grupo:
+/// - `hasIncome`: hubo `kind='income'`.
+/// - `hasSpending`: hubo `kind ∈ {expense, credit_expense}` (RN-CAL01 agrupa).
+/// - `hasInternal`: hubo `kind ∈ {transfer, debt_payment}` (RN-CAL01 agrupa).
+///
+/// `totalCount` no distingue por kind; sirve para tooltips futuros o para
+/// decidir si el día es "activo" en el `markerBuilder`. El heatmap del
+/// próximo sprint puede extender este modelo con un `totalAmount` por kind
+/// sin romper compat.
+class DayActivity {
+  final bool hasIncome;
+  final bool hasSpending;
+  final bool hasInternal;
+  final int totalCount;
+
+  const DayActivity({
+    required this.hasIncome,
+    required this.hasSpending,
+    required this.hasInternal,
+    required this.totalCount,
+  });
+
+  /// True si al menos 1 marcador debe pintarse. Usado por el `markerBuilder`
+  /// del `TableCalendar` para short-circuit.
+  bool get hasAny => hasIncome || hasSpending || hasInternal;
+}
+
 /// Servicio de reportes agregados sobre `journal_entries` + `categories`.
 ///
 /// Independiente de `FinancialStateService` para no contaminar los streams BO/
@@ -1156,6 +1188,106 @@ class ReportsService {
       return progresses;
     });
   }
+
+  /// Actividad diaria del mes en foco para el calendario de movimientos
+  /// (sprint `flutter-reports-movements-calendar-v1`).
+  ///
+  /// - `monthAnchor` es cualquier `DateTime` del mes deseado; se normaliza a
+  ///   `firstDayOfMonth 00:00:00` y `lastDayOfMonth 23:59:59.999` internamente.
+  /// - Consulta `journal_entries` acotado al rango del mes (RN-CAL10).
+  /// - Excluye soft-deleted (RN-CAL02).
+  /// - Agrupa por día vía `strftime('%Y-%m-%d', occurred_at, 'localtime')`
+  ///   — fecha local del cel (RN-CAL03). Sin `'localtime'` entries cerca
+  ///   de medianoche caerían en el día equivocado (drift almacena UTC).
+  /// - Categoriza cada kind según RN-CAL01:
+  ///   income → `hasIncome`; expense + credit_expense → `hasSpending`;
+  ///   transfer + debt_payment → `hasInternal`.
+  ///
+  /// Reactividad: `readsFrom: {journalEntries}` — re-emite ante cualquier
+  /// cambio en la tabla (incluye cancelaciones y edits).
+  ///
+  /// Retorna un `Map<DateTime, DayActivity>` cuya clave es la fecha
+  /// normalizada a `DateTime(y, m, d)` con hora 0. Días sin actividad no
+  /// están en el `Map` (el caller usa `map[day] ?? null` en el
+  /// `markerBuilder`).
+  Stream<Map<DateTime, DayActivity>> movementsByDay({
+    required DateTime monthAnchor,
+  }) {
+    final from = DateTime(monthAnchor.year, monthAnchor.month, 1);
+    // Último día del mes: día 0 del mes siguiente = último del actual.
+    final lastDay = DateTime(monthAnchor.year, monthAnchor.month + 1, 0);
+    final to = DateTime(lastDay.year, lastDay.month, lastDay.day, 23, 59, 59, 999);
+    // `'localtime'` es CRÍTICO: drift persiste DateTime como TEXT UTC con
+    // sufijo Z (por `store_date_time_values_as_text: true` en build.yaml).
+    // Sin `'localtime'`, `date()` extrae YYYY-MM-DD del UTC, y un entry a
+    // las 23:00 local del día 30 (que en UTC son las 05:00 del 31) caería
+    // en el día 31 según el reporte. `'localtime'` convierte al huso
+    // horario del dispositivo, que es lo que el usuario espera ver.
+    const sql = '''
+      SELECT strftime('%Y-%m-%d', occurred_at, 'localtime') AS day,
+             kind,
+             COUNT(*) AS count
+      FROM journal_entries
+      WHERE deleted_at IS NULL
+        AND occurred_at >= ?
+        AND occurred_at <= ?
+      GROUP BY day, kind
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(from),
+            Variable.withDateTime(to),
+          ],
+          readsFrom: {_db.journalEntries},
+        )
+        .watch()
+        .map((rows) => _buildDayActivityMap(rows));
+  }
+
+  Map<DateTime, DayActivity> _buildDayActivityMap(List<QueryRow> rows) {
+    // Estructura intermedia por día: agregamos flags según kind y sumamos count.
+    final buckets = <String, _DayBucket>{};
+    for (final row in rows) {
+      final dayStr = row.read<String>('day');
+      final kind = row.read<String>('kind');
+      final count = row.read<int>('count');
+      final bucket = buckets.putIfAbsent(dayStr, _DayBucket.new);
+      bucket.totalCount += count;
+      switch (kind) {
+        case 'income':
+          bucket.hasIncome = true;
+        case 'expense':
+        case 'credit_expense':
+          bucket.hasSpending = true;
+        case 'transfer':
+        case 'debt_payment':
+          bucket.hasInternal = true;
+      }
+    }
+    final result = <DateTime, DayActivity>{};
+    for (final entry in buckets.entries) {
+      final parts = entry.key.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+      result[DateTime(year, month, day)] = DayActivity(
+        hasIncome: entry.value.hasIncome,
+        hasSpending: entry.value.hasSpending,
+        hasInternal: entry.value.hasInternal,
+        totalCount: entry.value.totalCount,
+      );
+    }
+    return result;
+  }
+}
+
+class _DayBucket {
+  bool hasIncome = false;
+  bool hasSpending = false;
+  bool hasInternal = false;
+  int totalCount = 0;
 }
 
 /// Reporte de cashflow mensual del sprint `flutter-reports-cashflow-v1`.

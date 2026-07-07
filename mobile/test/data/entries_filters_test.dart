@@ -273,4 +273,38 @@ void main() {
       expect(f.categoryIds.first, isNotEmpty);
     });
   });
+
+  // Sprint flutter-reports-movements-calendar-v1 (RF-006).
+  group('forDay (sprint movements-calendar)', () {
+    test(
+        'UT-CAL13: forDay arma rango custom de 1 día sin restricciones extra',
+        () {
+      final f = EntriesFilters.forDay(day: DateTime(2026, 6, 15));
+      expect(f.datePreset, DateRangePreset.custom);
+      expect(f.from, DateTime(2026, 6, 15, 0, 0, 0));
+      expect(f.to, DateTime(2026, 6, 15, 23, 59, 59, 999));
+      expect(f.kinds, isEmpty,
+          reason: 'Sin filtro de kind: muestra todos los movimientos del día.');
+      expect(f.accountIds, isEmpty);
+      expect(f.categoryIds, isEmpty);
+      expect(f.minAmount, isNull);
+      expect(f.maxAmount, isNull);
+    });
+
+    test(
+        'UT-CAL14: forDay → toDeepLink → parse roundtrip preserva el rango',
+        () {
+      final f = EntriesFilters.forDay(day: DateTime(2026, 3, 8));
+      final link = f.toDeepLink();
+      // El deep link es /entries?datePreset=custom&from=...&to=...
+      // Parseamos con EntriesFilters.parse (mismo path que usa el router).
+      final uri = Uri.parse(link);
+      final parsed = EntriesFilters.parse(uri.queryParameters);
+      expect(parsed.datePreset, DateRangePreset.custom);
+      expect(parsed.from, DateTime(2026, 3, 8, 0, 0, 0));
+      expect(parsed.to, DateTime(2026, 3, 8, 23, 59, 59, 999));
+      expect(parsed.kinds, isEmpty);
+      expect(parsed.categoryIds, isEmpty);
+    });
+  });
 }
