@@ -232,7 +232,12 @@ publish_to: 'none'
 # forzado a es_MX. Cierra deuda arrastrada de 3 sprints (drilldown,
 # calendar, heatmap). Los tooltips/semantics del TableCalendar,
 # IconButtons y dialogs default ahora aparecen en español.
-version: 0.16.2+84
+# 0.16.3+85 — pulido UX del heatmap: (a) ícono open_in_full sutil al
+# lado del nombre del mes en cada _MonthMini como affordance de que
+# el mini se puede tapear/expandir (hint de descubribilidad del
+# sheet); (b) en año vacío se oculta la leyenda de gradientes para
+# evitar redundancia con el empty banner "Sin gastos registrados".
+version: 0.16.3+85
 
 environment:
   sdk: ^3.7.2

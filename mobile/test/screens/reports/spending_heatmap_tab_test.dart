@@ -35,9 +35,13 @@ void main() {
     // El grid usa CustomPaint; hay al menos uno (puede haber más de
     // widgets internos del framework).
     expect(find.byType(CustomPaint), findsWidgets);
-    // La leyenda menciona "Menos" y "Más".
-    expect(find.text('Menos'), findsOneWidget);
-    expect(find.text('Más'), findsOneWidget);
+    // BD vacía → el fix "consolidar en año vacío" oculta la leyenda y
+    // muestra solo el empty banner. La leyenda aparece en WT-HM02
+    // cuando hay al menos 1 gasto sembrado.
+    expect(
+      find.textContaining('Sin gastos registrados en este año'),
+      findsOneWidget,
+    );
 
     await harness.dispose();
   });
@@ -70,6 +74,10 @@ void main() {
 
     // El subtexto muestra "Total: $250 · 1 día con gasto".
     expect(find.textContaining('1 día con gasto'), findsOneWidget);
+    // Con al menos 1 gasto, la leyenda sí se muestra (fix consolidar
+    // en año vacío: leyenda oculta solo cuando daysWithSpending == 0).
+    expect(find.text('Menos'), findsOneWidget);
+    expect(find.text('Más'), findsOneWidget);
 
     await harness.dispose();
   });

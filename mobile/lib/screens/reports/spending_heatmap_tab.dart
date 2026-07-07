@@ -143,11 +143,14 @@ class _SpendingHeatmapTabState extends State<SpendingHeatmapTab> {
                 onMonthTap: _onMonthTap,
               ),
               const SizedBox(height: 12),
-              _Legend(heatmap: heatmap),
-              if (heatmap.daysWithSpending == 0) ...[
-                const SizedBox(height: 12),
-                const _EmptyBanner(),
-              ],
+              // Cuando el año está vacío, el empty banner ya comunica
+              // "sin gastos"; la leyenda de gradientes + subtexto
+              // "Total: $0.00 · 0 días con gasto" es ruido redundante.
+              // Mostramos uno o el otro, no ambos.
+              if (heatmap.daysWithSpending == 0)
+                const _EmptyBanner()
+              else
+                _Legend(heatmap: heatmap),
             ],
           ),
         );
@@ -511,14 +514,29 @@ class _MonthLabel extends StatelessWidget {
     final label = DateFormat('MMM', 'es_MX').format(DateTime(year, month, 1));
     // Capitalizar (DateFormat viene en minúsculas para es_MX: "ene", "feb").
     final capitalized = label[0].toUpperCase() + label.substring(1);
-    return Text(
-      capitalized,
-      textAlign: TextAlign.center,
-      style: const TextStyle(
-        color: FincoreColors.textSubtle,
-        fontSize: 11,
-        fontWeight: FontWeight.w600,
-      ),
+    // Ícono `open_in_full` sutil al lado del nombre del mes: afordance
+    // visual de que el mini es tapeable y abre el detalle expandido.
+    // Discretion vs discoverability: 10 px con textSubtle es lo bastante
+    // suave para no ensuciar la vista año, pero suficiente para que el
+    // usuario primerizo entienda que el mini se puede ampliar.
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          capitalized,
+          style: const TextStyle(
+            color: FincoreColors.textSubtle,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 3),
+        const Icon(
+          Icons.open_in_full,
+          size: 10,
+          color: FincoreColors.textSubtle,
+        ),
+      ],
     );
   }
 }
