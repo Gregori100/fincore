@@ -201,6 +201,49 @@ class SpendingHeatmap {
   }
 }
 
+/// Reporte del heatmap anual de ingresos (sprint
+/// `flutter-reports-income-heatmap-v1`). Simétrico a [SpendingHeatmap]
+/// pero para `kind='income'`. Contiene el mapa día→total de ingresos
+/// del año, cuartiles precalculados y agregados para la leyenda.
+///
+/// - `dayIncome`: solo días con ingreso > 0. Claves normalizadas a
+///   `DateTime(y, m, d)` con hora 0 (RN-IHM02).
+/// - `total`: suma anual de todos los ingresos.
+/// - `daysWithIncome`: número de días con ingreso > 0.
+/// - `p25`/`p50`/`p75`: cuartiles calculados sobre los valores de
+///   `dayIncome`. Con `daysWithIncome < 4` se aplica el fallback
+///   RN-IHM05 (cuartiles = 0), lo que pinta todos los días con
+///   ingreso como `veryHigh`.
+///
+/// Reusa el enum [IntensityLevel] (5 niveles) del heatmap gastos.
+class IncomeHeatmap {
+  final Map<DateTime, double> dayIncome;
+  final double total;
+  final int daysWithIncome;
+  final double p25;
+  final double p50;
+  final double p75;
+
+  const IncomeHeatmap({
+    required this.dayIncome,
+    required this.total,
+    required this.daysWithIncome,
+    required this.p25,
+    required this.p50,
+    required this.p75,
+  });
+
+  IntensityLevel intensityFor(DateTime day) {
+    final normalized = DateTime(day.year, day.month, day.day);
+    final value = dayIncome[normalized];
+    if (value == null || value <= 0) return IntensityLevel.none;
+    if (value <= p25) return IntensityLevel.low;
+    if (value <= p50) return IntensityLevel.medium;
+    if (value <= p75) return IntensityLevel.high;
+    return IntensityLevel.veryHigh;
+  }
+}
+
 /// Interpolación estándar de cuartiles sobre una lista ordenada asc.
 /// Con `sortedValues.length < 4` retorna `(max, max, max)` como fallback
 /// (RN-HM05): con tan pocos datos los cuartiles no son estadísticamente
@@ -1429,6 +1472,79 @@ class ReportsService {
       daySpending: daySpending,
       total: total,
       daysWithSpending: daySpending.length,
+      p25: p25,
+      p50: p50,
+      p75: p75,
+    );
+  }
+
+  /// Heatmap anual de ingresos (sprint
+  /// `flutter-reports-income-heatmap-v1`). Simétrico a [spendingHeatmap]
+  /// pero con `kind = 'income'`.
+  ///
+  /// - `year` es el año calendario a consultar.
+  /// - Consulta `journal_entries` con `kind = 'income'` (RN-IHM01).
+  ///   Excluye `expense`, `credit_expense`, `transfer`, `debt_payment`.
+  /// - Excluye soft-deleted (RN-IHM03).
+  /// - Rango: `firstDayOfYear 00:00:00` a `lastDayOfYear 23:59:59.999`
+  ///   (RN-IHM08).
+  /// - Agrupa por día vía `strftime('%Y-%m-%d', occurred_at, 'localtime')`
+  ///   (RN-IHM02, fecha local del cel).
+  ///
+  /// Reactividad: `readsFrom: {journalEntries}` — re-emite ante cualquier
+  /// cambio en la tabla. No lee `categories`, así que archivar/
+  /// desarchivar categorías no dispara re-emit (RN-IHM12).
+  ///
+  /// Retorna un [IncomeHeatmap] con `dayIncome` (solo días con ingreso
+  /// > 0), `total`, `daysWithIncome` y cuartiles precalculados
+  /// (RN-IHM04/IHM05).
+  Stream<IncomeHeatmap> incomeHeatmap({required int year}) {
+    final from = DateTime(year, 1, 1);
+    final to = DateTime(year, 12, 31, 23, 59, 59, 999);
+    const sql = '''
+      SELECT strftime('%Y-%m-%d', occurred_at, 'localtime') AS day,
+             SUM(amount) AS total
+      FROM journal_entries
+      WHERE kind = 'income'
+        AND deleted_at IS NULL
+        AND occurred_at >= ?
+        AND occurred_at <= ?
+      GROUP BY day
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(from),
+            Variable.withDateTime(to),
+          ],
+          readsFrom: {_db.journalEntries},
+        )
+        .watch()
+        .map(_buildIncomeHeatmap);
+  }
+
+  IncomeHeatmap _buildIncomeHeatmap(List<QueryRow> rows) {
+    final dayIncome = <DateTime, double>{};
+    var total = 0.0;
+    for (final row in rows) {
+      final dayStr = row.read<String>('day');
+      final dayTotal = row.read<double>('total');
+      // Un día con SUM=0 (edge legacy con amount=0) NO entra al Map.
+      if (dayTotal <= 0) continue;
+      final parts = dayStr.split('-');
+      final y = int.parse(parts[0]);
+      final m = int.parse(parts[1]);
+      final d = int.parse(parts[2]);
+      dayIncome[DateTime(y, m, d)] = dayTotal;
+      total += dayTotal;
+    }
+    final sortedValues = dayIncome.values.toList()..sort();
+    final (p25, p50, p75) = _computeQuartiles(sortedValues);
+    return IncomeHeatmap(
+      dayIncome: dayIncome,
+      total: total,
+      daysWithIncome: dayIncome.length,
       p25: p25,
       p50: p50,
       p75: p75,

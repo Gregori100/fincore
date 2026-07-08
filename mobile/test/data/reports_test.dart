@@ -3334,4 +3334,313 @@ void main() {
       );
     });
   });
+
+  // ===========================================================================
+  // incomeHeatmap — sprint `flutter-reports-income-heatmap-v1`
+  // ===========================================================================
+  group('incomeHeatmap (sprint income-heatmap)', () {
+    late FincoreDatabase db;
+    late AccountsDao accountsDao;
+    late CategoriesDao categoriesDao;
+    late EntriesDao entriesDao;
+    late ReportsService reports;
+    late String bolsa;
+    late String debit;
+    late String credit;
+    late String catSueldo;
+    late String catComida;
+
+    setUp(() async {
+      db = FincoreDatabase(NativeDatabase.memory());
+      accountsDao = AccountsDao(db);
+      categoriesDao = CategoriesDao(db);
+      entriesDao = EntriesDao(db);
+      reports = ReportsService(db);
+      await seedDefaults(
+        db: db,
+        accountsDao: accountsDao,
+        categoriesDao: categoriesDao,
+      );
+      bolsa = (await accountsDao.listAll())
+          .firstWhere((a) => a.type == 'cash')
+          .id;
+      debit = await accountsDao.create(name: 'BBVA_IHM', type: 'debit');
+      credit = await accountsDao.create(
+        name: 'Visa_IHM',
+        type: 'credit',
+        creditLimit: 50000,
+      );
+      catSueldo = await categoriesDao.create(
+        name: 'Sueldo_IHM',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+      catComida = await categoriesDao.create(
+        name: 'Comida_IHM',
+        appliesTo: 'expense',
+        colorSlug: 'red',
+        iconSlug: 'shopping-cart',
+      );
+    });
+
+    tearDown(() async {
+      await db.close();
+    });
+
+    test('UT-IHM01: año sin ingresos → dayIncome vacío, cuartiles=0',
+        () async {
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome, isEmpty);
+      expect(hm.total, 0);
+      expect(hm.daysWithIncome, 0);
+      expect(hm.p25, 0);
+      expect(hm.p50, 0);
+      expect(hm.p75, 0);
+    });
+
+    test(
+        'UT-IHM02: 1 income de \$5000 → fallback n<4, cuartiles=0, día veryHigh',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        categoryId: catSueldo,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.daysWithIncome, 1);
+      expect(hm.total, 5000);
+      expect(hm.p25, 0);
+      expect(hm.p75, 0);
+      expect(
+        hm.intensityFor(DateTime(2026, 6, 15)),
+        IntensityLevel.veryHigh,
+        reason: 'Fallback RN-IHM05: con <4 días todos van a veryHigh.',
+      );
+    });
+
+    test('UT-IHM03: 4 incomes 1000/2000/3000/4000 → cuartiles calculados',
+        () async {
+      final montos = [1000.0, 2000.0, 3000.0, 4000.0];
+      for (var i = 0; i < montos.length; i++) {
+        await entriesDao.registerIncome(
+          accountDestinationId: bolsa,
+          amount: montos[i],
+          categoryId: catSueldo,
+          occurredAt: DateTime(2026, 6, 5 + i * 5),
+        );
+      }
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.daysWithIncome, 4);
+      expect(hm.total, 10000);
+      // 1000 → low, 2000 → medium, 3000 → high, 4000 → veryHigh.
+      expect(hm.intensityFor(DateTime(2026, 6, 5)), IntensityLevel.low);
+      expect(hm.intensityFor(DateTime(2026, 6, 10)), IntensityLevel.medium);
+      expect(hm.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.high);
+      expect(hm.intensityFor(DateTime(2026, 6, 20)), IntensityLevel.veryHigh);
+    });
+
+    test('UT-IHM04: expense NO cuenta como ingreso', () async {
+      await entriesDao.registerExpense(
+        accountOriginId: debit,
+        amount: 200,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 3, 10),
+      );
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome, isEmpty);
+      expect(hm.total, 0);
+    });
+
+    test('UT-IHM05: credit_expense NO cuenta como ingreso', () async {
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 800,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 3, 10),
+      );
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome, isEmpty);
+    });
+
+    test('UT-IHM06: transfer NO cuenta como ingreso', () async {
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 500,
+        occurredAt: DateTime(2026, 3, 10),
+      );
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome, isEmpty);
+    });
+
+    test('UT-IHM07: debt_payment NO cuenta como ingreso', () async {
+      // Sembrar deuda primero.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 1000,
+        categoryId: catComida,
+        occurredAt: DateTime(2026, 3, 1),
+      );
+      await entriesDao.registerDebtPayment(
+        accountOriginId: bolsa,
+        accountDestinationId: credit,
+        amount: 500,
+        occurredAt: DateTime(2026, 3, 15),
+      );
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome, isEmpty);
+    });
+
+    test('UT-IHM08: income soft-deleted no cuenta', () async {
+      final entryId = await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 3000,
+        categoryId: catSueldo,
+        occurredAt: DateTime(2026, 6, 10),
+      );
+      await entriesDao.cancel(entryId);
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome, isEmpty);
+    });
+
+    test('UT-IHM09: día con 3 incomes → 1 entrada con total = SUM',
+        () async {
+      for (var i = 0; i < 3; i++) {
+        await entriesDao.registerIncome(
+          accountDestinationId: bolsa,
+          amount: 1000.0 + i * 500,
+          categoryId: catSueldo,
+          occurredAt: DateTime(2026, 6, 10, 8 + i * 4),
+        );
+      }
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.daysWithIncome, 1);
+      expect(hm.dayIncome[DateTime(2026, 6, 10)], 1000 + 1500 + 2000);
+    });
+
+    test(
+        'UT-IHM10: income en borde 31/12 23:59:59.999 → cae en 31/12',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        categoryId: catSueldo,
+        occurredAt: DateTime(2026, 12, 31, 23, 59, 59, 999),
+      );
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome[DateTime(2026, 12, 31)], 500,
+          reason: "'localtime' preserva el día local.");
+    });
+
+    test('UT-IHM11: entries de otros años NO cuentan', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 3000,
+        categoryId: catSueldo,
+        occurredAt: DateTime(2025, 12, 15),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 4000,
+        categoryId: catSueldo,
+        occurredAt: DateTime(2027, 1, 10),
+      );
+      final hm = await reports.incomeHeatmap(year: 2026).first;
+      expect(hm.dayIncome, isEmpty);
+    });
+
+    test('UT-IHM12: reactividad — registrar income re-emite', () async {
+      final stream = reports.incomeHeatmap(year: 2026);
+      final future = expectLater(
+        stream,
+        emitsThrough(
+          predicate<IncomeHeatmap>(
+            (hm) => hm.dayIncome[DateTime(2026, 6, 15)] == 2000,
+          ),
+        ),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 2000,
+        categoryId: catSueldo,
+        occurredAt: DateTime(2026, 6, 15),
+      );
+      await future;
+    });
+  });
+
+  // ===========================================================================
+  // IncomeHeatmap.intensityFor — unit tests del modelo
+  // ===========================================================================
+  group('IncomeHeatmap.intensityFor (unit tests del modelo)', () {
+    IncomeHeatmap hm({
+      Map<DateTime, double> dayIncome = const {},
+      double p25 = 1000,
+      double p50 = 2000,
+      double p75 = 3000,
+    }) {
+      final total = dayIncome.values.fold<double>(0, (a, b) => a + b);
+      return IncomeHeatmap(
+        dayIncome: dayIncome,
+        total: total,
+        daysWithIncome: dayIncome.length,
+        p25: p25,
+        p50: p50,
+        p75: p75,
+      );
+    }
+
+    test('UT-IHM13: día ausente del Map → none', () {
+      final report = hm();
+      expect(report.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.none);
+    });
+
+    test('UT-IHM14: día con total 0 → none (defensivo)', () {
+      final report = hm(dayIncome: {DateTime(2026, 6, 15): 0});
+      expect(report.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.none);
+    });
+
+    test('UT-IHM15: 0 < total ≤ p25 → low', () {
+      final report = hm(dayIncome: {DateTime(2026, 6, 15): 1000});
+      expect(report.intensityFor(DateTime(2026, 6, 15)), IntensityLevel.low);
+    });
+
+    test('UT-IHM16: los 3 niveles medio/alto/muy alto', () {
+      final report = hm(
+        dayIncome: {
+          DateTime(2026, 6, 1): 1500, // p25<x≤p50 → medium
+          DateTime(2026, 6, 2): 2500, // p50<x≤p75 → high
+          DateTime(2026, 6, 3): 4000, // >p75 → veryHigh
+        },
+      );
+      expect(report.intensityFor(DateTime(2026, 6, 1)), IntensityLevel.medium);
+      expect(report.intensityFor(DateTime(2026, 6, 2)), IntensityLevel.high);
+      expect(
+        report.intensityFor(DateTime(2026, 6, 3)),
+        IntensityLevel.veryHigh,
+      );
+    });
+
+    test('UT-IHM17: fallback p25=p50=p75=0 → todos veryHigh (RN-IHM05)', () {
+      final report = hm(
+        dayIncome: {
+          DateTime(2026, 6, 1): 500,
+          DateTime(2026, 6, 2): 1000,
+        },
+        p25: 0,
+        p50: 0,
+        p75: 0,
+      );
+      expect(
+        report.intensityFor(DateTime(2026, 6, 1)),
+        IntensityLevel.veryHigh,
+      );
+      expect(
+        report.intensityFor(DateTime(2026, 6, 2)),
+        IntensityLevel.veryHigh,
+      );
+    });
+  });
 }

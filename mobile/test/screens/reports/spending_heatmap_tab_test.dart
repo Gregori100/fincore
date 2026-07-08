@@ -14,12 +14,12 @@ void main() {
     await tester.pumpAndSettle();
     // El tab es el 10mo y último; el TabBar es scrollable.
     await tester.dragUntilVisible(
-      find.widgetWithText(Tab, 'Heatmap'),
+      find.widgetWithText(Tab, 'Heatmap gastos'),
       find.byType(TabBar),
       const Offset(-100, 0),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(Tab, 'Heatmap'));
+    await tester.tap(find.widgetWithText(Tab, 'Heatmap gastos'));
     await tester.pumpAndSettle();
   }
 

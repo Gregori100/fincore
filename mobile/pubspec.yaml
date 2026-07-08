@@ -237,7 +237,14 @@ publish_to: 'none'
 # el mini se puede tapear/expandir (hint de descubribilidad del
 # sheet); (b) en año vacío se oculta la leyenda de gradientes para
 # evitar redundancia con el empty banner "Sin gastos registrados".
-version: 0.16.3+85
+# 0.16.4+86 — sprint flutter-reports-income-heatmap-v1: 11º tab
+# "Heatmap ingresos" simétrico al de gastos pero con kind='income'
+# y paleta verde (positive). Nuevo modelo IncomeHeatmap + método
+# ReportsService.incomeHeatmap({year}) + widget IncomeHeatmapTab
+# con mismo layout 3×4 mini-heatmaps + bottom sheet expandido. Reusa
+# heatmapDayForMonthPosition del spending. Sin schema bump, sin dep
+# externa. +21 tests.
+version: 0.16.4+86
 
 environment:
   sdk: ^3.7.2

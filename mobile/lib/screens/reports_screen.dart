@@ -5,6 +5,7 @@ import 'package:fincore/screens/reports/credit_cards_tab.dart';
 import 'package:fincore/screens/reports/income_by_category_tab.dart';
 import 'package:fincore/screens/reports/monthly_average_tab.dart';
 import 'package:fincore/screens/reports/movements_calendar_tab.dart';
+import 'package:fincore/screens/reports/income_heatmap_tab.dart';
 import 'package:fincore/screens/reports/spending_heatmap_tab.dart';
 import 'package:fincore/screens/reports/spending_by_category_tab.dart';
 import 'package:fincore/screens/reports/top_movements_tab.dart';
@@ -20,6 +21,9 @@ import 'package:flutter/material.dart';
 /// 6. "Tarjetas" (sprint `flutter-reports-credit-cards-v1`).
 /// 7. "Presupuestos" (sprint `flutter-budgets-v1`).
 /// 8. "Ingreso por categoría" (sprint `flutter-reports-income-by-category-v1`).
+/// 9. "Calendario" (sprint `flutter-reports-movements-calendar-v1`).
+/// 10. "Heatmap gastos" (sprint `flutter-reports-spending-heatmap-v1`).
+/// 11. "Heatmap ingresos" (sprint `flutter-reports-income-heatmap-v1`).
 ///
 /// `initialIndex` default = 0 para mantener hábito y para no romper tests
 /// del primer sprint.
@@ -29,7 +33,7 @@ class ReportsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 10,
+      length: 11,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Reportes'),
@@ -48,7 +52,8 @@ class ReportsScreen extends StatelessWidget {
               Tab(text: 'Presupuestos'),
               Tab(text: 'Ingreso por categoría'),
               Tab(text: 'Calendario'),
-              Tab(text: 'Heatmap'),
+              Tab(text: 'Heatmap gastos'),
+              Tab(text: 'Heatmap ingresos'),
             ],
           ),
         ),
@@ -64,6 +69,7 @@ class ReportsScreen extends StatelessWidget {
             IncomeByCategoryTab(),
             MovementsCalendarTab(),
             SpendingHeatmapTab(),
+            IncomeHeatmapTab(),
           ],
         ),
       ),
