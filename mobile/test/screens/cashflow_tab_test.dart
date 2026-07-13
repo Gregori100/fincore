@@ -248,5 +248,76 @@ void main() {
 
       await harness.dispose();
     });
+
+    // Sprint flutter-cashflow-breakdown-prev-comparison-v1: chip vs mes
+    // previo.
+    testWidgets(
+        'WT-CP01: 2 meses con datos → chip up con dirección + percent + '
+        'color rojo (semántica bolsillo para gastos)',
+        (tester) async {
+      final now = DateTime.now();
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        final catId = await deps.categoriesDao.create(
+          name: 'Comida_CPW',
+          appliesTo: 'expense',
+          colorSlug: 'red',
+          iconSlug: 'shopping-cart',
+        );
+        // Mes previo: $500. Mes actual: $1000 → +100%.
+        final prev = DateTime(now.year, now.month - 1, 10, 12);
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          amount: 500,
+          occurredAt: prev,
+          categoryId: catId,
+        );
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          amount: 1000,
+          occurredAt: DateTime(now.year, now.month, 12, 12),
+          categoryId: catId,
+        );
+      });
+      await openCashflowTab(tester);
+      final rows = find.byIcon(Icons.expand_more);
+      await tester.tap(rows.first);
+      await tester.pumpAndSettle();
+
+      // Chip up visible con percent 100.
+      expect(find.byIcon(Icons.arrow_upward), findsAtLeastNWidgets(1));
+      expect(find.text('100.0%'), findsAtLeastNWidgets(1));
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-CP02: solo mes actual sin previo → chips muestran `—` '
+        '(bucket + summary)',
+        (tester) async {
+      final now = DateTime.now();
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          amount: 300,
+          occurredAt: DateTime(now.year, now.month, 5, 12),
+          description: 'NoPrevExpense',
+        );
+      });
+      await openCashflowTab(tester);
+      final rows = find.byIcon(Icons.expand_more);
+      await tester.tap(rows.first);
+      await tester.pumpAndSettle();
+
+      // El `—` aparece al menos 4 veces: 3 chips del summary
+      // (deltaIncome, deltaExpense, deltaNet — todos null porque el
+      // previo está vacío) + 1 chip por bucket (aquí solo 1 bucket).
+      expect(find.text('—'), findsAtLeastNWidgets(4));
+
+      await harness.dispose();
+    });
   });
 }

@@ -1262,6 +1262,263 @@ void main() {
   });
 
   // ===========================================================================
+  // cashflowMonthBreakdown — comparación vs mes previo
+  // Sprint `flutter-cashflow-breakdown-prev-comparison-v1`.
+  // Cubre RN-CP01..CP12 + CB-01..15 + CB-P01..P03 del test-plan.
+  // ===========================================================================
+
+  group('cashflowMonthBreakdown — comparación vs mes previo', () {
+    final anchor = DateTime(2024, 6, 15);
+    final anchorPrev = DateTime(2024, 5, 15);
+
+    test(
+        'UT-CP01: mismo bucket \$2000 actual vs \$1000 previo → up +100%',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 1000,
+        occurredAt: anchorPrev,
+        categoryId: catComida,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 2000,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(r.expenseBuckets, hasLength(1));
+      final b = r.expenseBuckets.first;
+      expect(b.delta, isNotNull);
+      expect(b.delta!.direction, DeltaDirection.up);
+      expect(b.delta!.percent, closeTo(100, 0.01));
+    });
+
+    test('UT-CP02: bucket \$500 actual vs \$1000 previo → down -50%',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 1000,
+        occurredAt: anchorPrev,
+        categoryId: catComida,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 500,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      final b = r.expenseBuckets.first;
+      expect(b.delta!.direction, DeltaDirection.down);
+      expect(b.delta!.percent, closeTo(50, 0.01));
+    });
+
+    test('UT-CP03: bucket idéntico \$1000 en ambos meses → flat', () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 1000,
+        occurredAt: anchorPrev,
+        categoryId: catComida,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 1000,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      final b = r.expenseBuckets.first;
+      expect(b.delta!.direction, DeltaDirection.flat);
+      expect(b.delta!.percent, closeTo(0, 0.01));
+    });
+
+    test(
+        'UT-CP04: bucket presente solo en actual (previo 0) → delta null',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 500,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      final b = r.expenseBuckets.first;
+      expect(b.delta, isNull, reason: 'previo 0 → null (RN-CP09)');
+    });
+
+    test(
+        'UT-CP05: bucket "Sin categoría" (categoryId=null) matcheado en '
+        'ambos meses',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 200,
+        occurredAt: anchorPrev,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 300,
+        occurredAt: anchor,
+      );
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      final b = r.expenseBuckets.firstWhere((f) => f.categoryId == null);
+      expect(b.delta, isNotNull);
+      expect(b.delta!.direction, DeltaDirection.up);
+      // 300 vs 200 = +50%
+      expect(b.delta!.percent, closeTo(50, 0.01));
+    });
+
+    test(
+        'UT-CP06: bucket solo en mes previo → NO aparece en la lista del '
+        'mes actual (RN-CP06)',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 400,
+        occurredAt: anchorPrev,
+        categoryId: catTransporte,
+      );
+      // Nada en el mes actual → lista vacía.
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(r.expenseBuckets, isEmpty);
+    });
+
+    test(
+        'UT-CP07: rollover enero → diciembre año anterior. anchor=2026-01 '
+        '→ previo=2025-12',
+        () async {
+      final anchor2026 = DateTime(2026, 1, 15);
+      final anchor2025Dec = DateTime(2025, 12, 15);
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 800,
+        occurredAt: anchor2025Dec,
+        categoryId: catComida,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 1600,
+        occurredAt: anchor2026,
+        categoryId: catComida,
+      );
+      final r = await reports
+          .cashflowMonthBreakdown(monthAnchor: anchor2026)
+          .first;
+      final b = r.expenseBuckets.first;
+      expect(b.delta!.direction, DeltaDirection.up);
+      expect(b.delta!.percent, closeTo(100, 0.01));
+    });
+
+    test(
+        'UT-CP08: reactividad — registrar movimiento en mes previo re-emite '
+        'con delta actualizado',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 500,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      final stream = reports.cashflowMonthBreakdown(monthAnchor: anchor);
+      final expectation = expectLater(
+        stream,
+        emitsThrough(
+          predicate<MonthBreakdown>((mb) {
+            if (mb.expenseBuckets.isEmpty) return false;
+            final b = mb.expenseBuckets.first;
+            // Antes del registro previo, delta era null. Post-registro
+            // debería estar computado.
+            return b.delta != null && b.delta!.direction == DeltaDirection.up;
+          }),
+        ),
+      );
+      // Registrar en el mes previo: $250 → delta 500/250 = +100%.
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 250,
+        occurredAt: anchorPrev,
+        categoryId: catComida,
+      );
+      await expectation;
+    });
+
+    test(
+        'UT-CP09: deltaNet cuando el previo tiene neto positivo y el '
+        'actual negativo → down con percent sobre magnitud',
+        () async {
+      // Mes previo: solo ingreso $500 → net = +500.
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        occurredAt: anchorPrev,
+      );
+      // Mes actual: solo gasto $300 → net = -300.
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 300,
+        occurredAt: anchor,
+      );
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      // net actual = -300, net previo = +500. diff = -800. |diff|/|500|
+      // = 160%.
+      expect(r.deltaNet, isNotNull);
+      expect(r.deltaNet!.direction, DeltaDirection.down);
+      expect(r.deltaNet!.percent, closeTo(160, 0.01));
+    });
+
+    test(
+        'UT-CP10: categoría archivada entre meses (activa en previo, '
+        'archivada durante el mes actual) → bucket actual colapsa a '
+        '"Sin categoría", bucket previo mantiene la categoría real → '
+        'ambos van sin match (delta null) (CB-14)',
+        () async {
+      // Crear categoría dedicada + registrar en previo y en actual.
+      final catTemp = await categoriesDao.create(
+        name: 'CatTemp_CP10',
+        appliesTo: 'expense',
+        colorSlug: 'purple',
+        iconSlug: 'gift',
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 400,
+        occurredAt: anchorPrev,
+        categoryId: catTemp,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 700,
+        occurredAt: anchor,
+        categoryId: catTemp,
+      );
+      // Archivar la categoría AHORA — afecta el LEFT JOIN de ambos meses
+      // (ambos rows quedan con `c.applies_to = null`).
+      await categoriesDao.archive(catTemp);
+      final r =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      // Ambos buckets colapsan al "Sin categoría" y matchean entre sí
+      // (categoryId=null en ambos). Delta = (700-400)/400 = 75% up.
+      expect(r.expenseBuckets, hasLength(1));
+      final b = r.expenseBuckets.first;
+      expect(b.categoryId, isNull);
+      expect(b.label, 'Sin categoría');
+      expect(b.delta, isNotNull,
+          reason: 'Ambos meses colapsan a "Sin categoría" (categoryId=null) '
+              '→ matchean por null.');
+      expect(b.delta!.direction, DeltaDirection.up);
+      expect(b.delta!.percent, closeTo(75, 0.01));
+    });
+  });
+
+  // ===========================================================================
   // topMovements — sprint `flutter-reports-top-movements-v1`
   // Cubre RN-T01..T08 + casos borde CB-T01..T16 del test-plan.
   // ===========================================================================

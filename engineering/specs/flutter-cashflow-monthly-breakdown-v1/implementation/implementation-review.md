@@ -31,10 +31,55 @@ de schema.
 Tests:
 
 - `mobile/test/data/reports_test.dart`: grupo nuevo
-  `cashflowMonthBreakdown` con UT-CB01..13.
+  `cashflowMonthBreakdown` con UT-CB01..13 + UT-CB16 (FK huérfana,
+  agregado en A6 post branch-quality-review).
 - `mobile/test/data/entries_filters_test.dart`: grupo nuevo `forMonth`
   con UT-CB14..15.
-- `mobile/test/screens/cashflow_tab_test.dart`: WT-CB01..04.
+- `mobile/test/screens/cashflow_tab_test.dart`: WT-CB01..05 (WT-CB05
+  agregado en A5 post branch-quality-review para blindar el fallback
+  del sheet con fila mes-cero real).
+
+## Fixes aplicados post branch-quality-review
+
+Los 3 agentes (Data + Frontend + Tests) generaron 1 bloqueante + 2
+Media + 2 Baja + 1 Alta + 1 Media, aplicados en 7 fixes A1..A7:
+
+- **A1 (BLOQUEANTE)**: drill-down usaba `router.push('/entries',
+  extra: EntriesFilters.forMonth(...))` pero `EntriesListScreen` NO
+  lee `state.extra` — solo parsea query params. Feature principal
+  estaba rota; WT-CB04 pasaba por casualidad porque `monthAnchor`
+  cae en el mes actual = `thisMonth()` default. Cambiado a
+  `router.push(filter.toDeepLink())` (patrón oficial: calendar +
+  heatmap tabs).
+- **A2 (Media)**: montos del `_BreakdownSummary` con `maxLines: 1
+  + overflow: TextOverflow.ellipsis` para blindar contra desborde en
+  cels angostos con 7+ dígitos.
+- **A3 (Media)**: `Icons.chevron_right` → `Icons.expand_more` en el
+  `_BreakdownRow`. El chevron en Material y en el resto del proyecto
+  está reservado a navegación push; el tap abre un sheet. Tests
+  widget WT-CB01/02/04 ajustados a `find.byIcon(Icons.expand_more)`.
+- **A4 (Baja)**: `useSafeArea: true` en `showModalBottomSheet` para
+  proteger contra notch/status bar cuando el sheet crece a full
+  screen.
+- **A5 (Alta)**: WT-CB03 renombrado como blindaje regresivo del
+  empty state del tab (BD vacía → sin filas tap-ables). Agregado
+  WT-CB05 nuevo con preset "Año" + 1 movimiento en el mes actual →
+  los 11 meses vacíos aparecen como filas tap-ables con ceros
+  (RN-C06) → tap → sheet muestra fallback "Sin movimientos en este
+  mes." El escenario original del test-plan quedó blindado.
+- **A6 (Media)**: UT-CB16 nuevo blinda CB-P02 (FK huérfana con
+  backup legacy). Usa `PRAGMA foreign_keys=OFF` temporal + `UPDATE
+  journal_entries SET category_id = <ghost_uuid>` para simular la
+  condición. El sentinel `applies_to == null` del helper detecta el
+  LEFT JOIN vacío y colapsa a "Sin categoría".
+- **A7 (Nota)**: 2 comentarios explicativos en `reports.dart`
+  documentando dependencias del helper: (1) el sentinel `applies_to
+  == null` depende de que `Categories.appliesTo` esté declarado NOT
+  NULL en el schema; (2) el colapso a "Sin categoría" preserva la
+  metadata del primer insert al bucket compartido.
+
+Reporte completo en
+`engineering/quality-review/flutter-cashflow-monthly-breakdown-v1/2026-07-13-branch-quality-review.md`.
 
 ## Tareas completadas
 
@@ -42,13 +87,16 @@ Tests:
   (`forMonth`), T006-T009 (widget del tab + sheet + subwidgets +
   drill-down), T010 (FAQ), T011 (UT-CB01..13), T012 (UT-CB14..15),
   T013 (WT-CB01..04), T014 (suite verde + analyze limpio), T015
-  (bump + APK verificado).
+  (bump + APK verificado). **T017 branch-quality-review + A1..A7
+  aplicados**. **T018 commit final** (`a424345`).
 
 ## Tareas pendientes
 
-- **T016 (smokes SM-01..07 con Diego)** — pendiente.
-- **T017 (branch-quality-review)** — pendiente.
-- **T018 (commit final)** — pendiente.
+- **T016 (smokes SM-01..07 con Diego)** — pendiente en cel real;
+  registrado en memoria del proyecto para hacer batch cuando Diego
+  pueda instalar. Especialmente SM-03 (drill-down con subsegundo),
+  SM-04 (registrar con sheet abierto) y SM-05 (rename con sheet
+  abierto).
 
 ## Riesgos residuales
 

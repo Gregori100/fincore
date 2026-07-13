@@ -467,9 +467,16 @@ class ReportsService {
   Stream<MonthBreakdown> cashflowMonthBreakdown({
     required DateTime monthAnchor,
   }) {
-    final key =
-        '${monthAnchor.year.toString().padLeft(4, '0')}-${monthAnchor.month.toString().padLeft(2, '0')}';
+    String monthKey(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}';
     final firstDay = DateTime(monthAnchor.year, monthAnchor.month, 1);
+    // Sprint flutter-cashflow-breakdown-prev-comparison-v1: la query
+    // incluye también el mes calendario anterior para calcular el delta
+    // en un solo `customSelect.watch()`. `DateTime(y, m-1, 1)` normaliza
+    // enero → diciembre año anterior (RN-CP01 + CB-10).
+    final previousDay = DateTime(monthAnchor.year, monthAnchor.month - 1, 1);
+    final currentKey = monthKey(firstDay);
+    final previousKey = monthKey(previousDay);
     const sql = '''
       SELECT
         j.kind AS kind,
@@ -478,34 +485,47 @@ class ReportsService {
         c.color_slug AS color_slug,
         c.icon_slug AS icon_slug,
         c.applies_to AS applies_to,
-        SUM(j.amount) AS total
+        SUM(j.amount) AS total,
+        strftime('%Y-%m', j.occurred_at, 'localtime') AS month_key
       FROM journal_entries j
       LEFT JOIN categories c
         ON c.id = j.category_id AND c.deleted_at IS NULL
       WHERE j.deleted_at IS NULL
         AND j.kind IN ('income', 'expense', 'credit_expense')
-        AND strftime('%Y-%m', j.occurred_at, 'localtime') = ?
-      GROUP BY j.kind, j.category_id, c.name, c.color_slug, c.icon_slug, c.applies_to
+        AND strftime('%Y-%m', j.occurred_at, 'localtime') IN (?, ?)
+      GROUP BY j.kind, j.category_id, c.name, c.color_slug, c.icon_slug,
+               c.applies_to, month_key
     ''';
     return _db
         .customSelect(
           sql,
-          variables: [Variable.withString(key)],
+          variables: [
+            Variable.withString(currentKey),
+            Variable.withString(previousKey),
+          ],
           readsFrom: {_db.journalEntries, _db.categories},
         )
         .watch()
-        .map((rows) => _buildMonthBreakdown(rows, firstDay: firstDay));
+        .map((rows) => _buildMonthBreakdown(
+              rows,
+              firstDay: firstDay,
+              currentKey: currentKey,
+              previousKey: previousKey,
+            ));
   }
 
   MonthBreakdown _buildMonthBreakdown(
     List<QueryRow> rows, {
     required DateTime firstDay,
+    required String currentKey,
+    required String previousKey,
   }) {
-    // Estructuras temporales: monto acumulado por (categoryId?, metadata).
-    // Se usan Map por lado para que la simetría RN-CB03/CB04 pueda colapsar
-    // categorías incompatibles al bucket "Sin categoría" (categoryId=null).
-    final incomeAcc = <String?, _BreakdownAccumulator>{};
-    final expenseAcc = <String?, _BreakdownAccumulator>{};
+    // Sprint flutter-cashflow-breakdown-prev-comparison-v1: 4 acumuladores
+    // (2 lados × 2 meses) para computar la comparación bucket-por-bucket.
+    final currentIncome = <String?, _BreakdownAccumulator>{};
+    final currentExpense = <String?, _BreakdownAccumulator>{};
+    final previousIncome = <String?, _BreakdownAccumulator>{};
+    final previousExpense = <String?, _BreakdownAccumulator>{};
 
     for (final row in rows) {
       final total = row.read<double>('total');
@@ -518,6 +538,7 @@ class ReportsService {
       final colorSlug = row.readNullable<String>('color_slug');
       final iconSlug = row.readNullable<String>('icon_slug');
       final appliesTo = row.readNullable<String>('applies_to');
+      final monthKey = row.read<String>('month_key');
 
       // Determinar el lado según kind.
       final isIncomeSide = kind == 'income';
@@ -545,7 +566,18 @@ class ReportsService {
       final effectiveColor = collapseToUncategorized ? null : colorSlug;
       final effectiveIcon = collapseToUncategorized ? null : iconSlug;
 
-      final target = isIncomeSide ? incomeAcc : expenseAcc;
+      // Seleccionar acumulador según (mes, lado).
+      final Map<String?, _BreakdownAccumulator> target;
+      if (monthKey == currentKey) {
+        target = isIncomeSide ? currentIncome : currentExpense;
+      } else if (monthKey == previousKey) {
+        target = isIncomeSide ? previousIncome : previousExpense;
+      } else {
+        // Defensivo: solo deberían venir filas de estos 2 meses por el
+        // WHERE. Skip silencioso.
+        continue;
+      }
+
       final existing = target[effectiveCategoryId];
       if (existing == null) {
         target[effectiveCategoryId] = _BreakdownAccumulator(
@@ -560,24 +592,33 @@ class ReportsService {
       }
     }
 
-    final totalIncome = incomeAcc.values.fold<double>(0, (a, b) => a + b.amount);
+    final totalIncome =
+        currentIncome.values.fold<double>(0, (a, b) => a + b.amount);
     final totalExpense =
-        expenseAcc.values.fold<double>(0, (a, b) => a + b.amount);
+        currentExpense.values.fold<double>(0, (a, b) => a + b.amount);
+    final previousTotalIncome =
+        previousIncome.values.fold<double>(0, (a, b) => a + b.amount);
+    final previousTotalExpense =
+        previousExpense.values.fold<double>(0, (a, b) => a + b.amount);
 
     List<CategoryFlow> flowsFrom(
-      Map<String?, _BreakdownAccumulator> acc,
+      Map<String?, _BreakdownAccumulator> current,
+      Map<String?, _BreakdownAccumulator> previous,
       double total,
     ) {
-      final list = acc.values
-          .map((a) => CategoryFlow(
-                categoryId: a.categoryId,
-                label: a.label,
-                colorSlug: a.colorSlug,
-                iconSlug: a.iconSlug,
-                amount: a.amount,
-                percent: total > 0 ? (a.amount / total) * 100 : 0.0,
-              ))
-          .toList()
+      final list = current.values.map((a) {
+        final prev = previous[a.categoryId];
+        final delta = _computeDelta(a.amount, prev?.amount ?? 0);
+        return CategoryFlow(
+          categoryId: a.categoryId,
+          label: a.label,
+          colorSlug: a.colorSlug,
+          iconSlug: a.iconSlug,
+          amount: a.amount,
+          percent: total > 0 ? (a.amount / total) * 100 : 0.0,
+          delta: delta,
+        );
+      }).toList()
         ..sort((a, b) => b.amount.compareTo(a.amount));
       return list;
     }
@@ -587,8 +628,43 @@ class ReportsService {
       totalIncome: totalIncome,
       totalExpense: totalExpense,
       net: totalIncome - totalExpense,
-      incomeBuckets: flowsFrom(incomeAcc, totalIncome),
-      expenseBuckets: flowsFrom(expenseAcc, totalExpense),
+      incomeBuckets: flowsFrom(currentIncome, previousIncome, totalIncome),
+      expenseBuckets:
+          flowsFrom(currentExpense, previousExpense, totalExpense),
+      // Delta de totales: usa magnitudes (RN-CP08). Neto que salta signo
+      // se maneja como cualquier cambio numérico — el delta refleja
+      // magnitud del cambio con dirección según `current > previous`.
+      deltaIncome: _computeDelta(totalIncome, previousTotalIncome),
+      deltaExpense: _computeDelta(totalExpense, previousTotalExpense),
+      deltaNet: _computeDelta(
+        totalIncome - totalExpense,
+        previousTotalIncome - previousTotalExpense,
+      ),
+    );
+  }
+
+  /// Comparación % entre `current` y `previous` (RN-CP03..CP04, CP09).
+  ///
+  /// - `previous <= 0` → `null` (RN-CP09 evita `+∞%`/`+100%` engañoso).
+  /// - `abs(diff) < 0.01` → `flat` con `percent = 0` (RN-CP04, blindaje
+  ///   contra floating-point drift).
+  /// - `current > previous` → `up`, `percent = |(c-p)/|p|| × 100`.
+  /// - `current < previous` → `down`, percent con misma fórmula.
+  ///
+  /// Nota (RN-CP08): para el neto que puede saltar signo, `previous`
+  /// negativo también dispara la guard `previous <= 0` → `null`. Esa es
+  /// la decisión conservadora — no interpretar "empeoré de +100 a -50"
+  /// como "-150% del previo" porque el usuario podría confundirse.
+  DeltaPercent? _computeDelta(double current, double previous) {
+    if (previous <= 0) return null;
+    final diff = current - previous;
+    if (diff.abs() < 0.01) {
+      return const DeltaPercent(percent: 0, direction: DeltaDirection.flat);
+    }
+    final magnitude = diff.abs() / previous.abs() * 100;
+    return DeltaPercent(
+      percent: magnitude,
+      direction: diff > 0 ? DeltaDirection.up : DeltaDirection.down,
     );
   }
 
@@ -1796,6 +1872,13 @@ class MonthBreakdown {
   final double net;
   final List<CategoryFlow> incomeBuckets;
   final List<CategoryFlow> expenseBuckets;
+  /// Sprint flutter-cashflow-breakdown-prev-comparison-v1: delta % del
+  /// total de ingresos vs el mismo total del mes calendario anterior.
+  /// `null` cuando el mes previo tuvo `totalIncome == 0` (RN-CP09) o
+  /// cuando no hay dato previo (mes anterior fuera del rango de la BD).
+  final DeltaPercent? deltaIncome;
+  final DeltaPercent? deltaExpense;
+  final DeltaPercent? deltaNet;
 
   const MonthBreakdown({
     required this.firstDay,
@@ -1804,6 +1887,9 @@ class MonthBreakdown {
     required this.net,
     required this.incomeBuckets,
     required this.expenseBuckets,
+    this.deltaIncome,
+    this.deltaExpense,
+    this.deltaNet,
   });
 }
 
@@ -1818,6 +1904,12 @@ class CategoryFlow {
   final String? iconSlug;
   final double amount;
   final double percent;
+  /// Sprint flutter-cashflow-breakdown-prev-comparison-v1: comparación vs
+  /// el mismo bucket (mismo `categoryId`, incluso null para "Sin
+  /// categoría") del mes calendario inmediato anterior. `null` cuando no
+  /// hay bucket previo con esa categoría (categoría nueva o mes previo
+  /// vacío) — la UI muestra `—` en textMuted (RN-CP05).
+  final DeltaPercent? delta;
 
   const CategoryFlow({
     required this.categoryId,
@@ -1826,6 +1918,27 @@ class CategoryFlow {
     required this.iconSlug,
     required this.amount,
     required this.percent,
+    this.delta,
+  });
+}
+
+/// Dirección del cambio vs el mes anterior. Sprint
+/// `flutter-cashflow-breakdown-prev-comparison-v1`. `flat` cuando el
+/// monto es idéntico dentro de una tolerancia de 0.01 (RN-CP04) para
+/// blindar contra drift de floating-point.
+enum DeltaDirection { up, down, flat }
+
+/// Comparación % entre el mes actual y el mes calendario inmediato
+/// anterior. `percent` es siempre no negativo (magnitud); el signo se
+/// representa por `direction`. Sprint
+/// `flutter-cashflow-breakdown-prev-comparison-v1`.
+class DeltaPercent {
+  final double percent;
+  final DeltaDirection direction;
+
+  const DeltaPercent({
+    required this.percent,
+    required this.direction,
   });
 }
 

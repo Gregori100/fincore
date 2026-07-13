@@ -18,8 +18,10 @@ Decisiones tomadas antes de spec (via AskUserQuestion):
 
 ## Relación con `plan/plan.md` y `plan/tasks.md`
 
-Se ejecutaron **T001-T015 completas** en el orden del plan. **T016-T018
-(smokes, quality-review, commit final)** pendientes.
+Se ejecutaron **T001-T015 + T017 + T018 completas** en el orden del
+plan. **T016 (smokes SM-01..07)** pendiente en cel real (registrado
+en memoria para batch cuando Diego pueda instalar). El commit final
+`a424345` en `main` incluye los fixes A1..A7 del quality-review.
 
 Todos los RF de la spec quedan cubiertos por código + tests:
 
@@ -124,9 +126,21 @@ verificadas con UT + WT.
 - **D5 — Widget test WT-CB03 no puede tapear fila vacía**: cuando el
   tab base tiene BD vacía renderea empty state sin breakdown → no hay
   fila para tapear. El test se ajustó para blindar que NO existe el
-  `chevron_right` cuando la BD está vacía. El fallback del sheet
-  "Sin movimientos en este mes." queda cubierto por UT-CB01 del
-  servicio + smoke SM-07.
+  icono cuando la BD está vacía. El fallback del sheet
+  "Sin movimientos en este mes." queda cubierto por WT-CB05 (agregado
+  en A5 post-QR) que fuerza el escenario con preset "Año" + 1 solo
+  movimiento en el mes actual.
+- **D6 — Fixes post branch-quality-review (A1..A7)**: el review de la
+  rama detectó 1 bloqueante + 2 Media + 2 Baja + 1 Alta + 1 Media
+  aplicados como A1..A7. El más crítico (**A1**) fue el drill-down:
+  el patrón original usaba `router.push('/entries', extra: filter)`
+  pero `EntriesListScreen` NO lee `state.extra` — solo query params.
+  Feature principal del sprint estaba rota y WT-CB04 pasaba solo por
+  casualidad porque `monthAnchor == mes actual == thisMonth() default`.
+  Cambiado a `router.push(filter.toDeepLink())`. Ver
+  `implementation-review.md` y
+  `engineering/quality-review/flutter-cashflow-monthly-breakdown-v1/`
+  para el detalle completo de A2..A7.
 
 ## Pruebas realizadas y recomendadas
 
@@ -134,11 +148,12 @@ verificadas con UT + WT.
 
 - `flutter analyze` limpio (solo hints info pre-existentes en
   skeleton/entry_form tolerados).
-- `flutter test` 558/558 verdes:
-  - UT-CB01..13 servicio (todos los edge cases + reactividad).
+- `flutter test` 560/560 verdes:
+  - UT-CB01..13 + UT-CB16 servicio (14 tests: todos los edge cases +
+    reactividad + FK huérfana).
   - UT-CB14..15 filtro `forMonth` (mes normal + bisiesto).
-  - WT-CB01..04 widget (sheet abre, ambas secciones, empty sin fila,
-    drill-down navega).
+  - WT-CB01..05 widget (5 tests: sheet abre, ambas secciones, empty
+    sin fila, drill-down navega, mes vacío con fallback).
 - APK release + `verify-apk.sh` OK (versionCode 2088 / versionName
   0.17.0).
 

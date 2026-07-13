@@ -753,14 +753,14 @@ class _MonthBreakdownSheetState extends State<_MonthBreakdownSheet> {
                       const _SectionHeader(label: 'Ingresos por categoría'),
                       const SizedBox(height: 8),
                       for (final b in data.incomeBuckets)
-                        _CategoryFlowRow(flow: b),
+                        _CategoryFlowRow(flow: b, isExpenseSide: false),
                     ],
                     if (hasIncome && hasExpense) const SizedBox(height: 16),
                     if (hasExpense) ...[
                       const _SectionHeader(label: 'Gastos por categoría'),
                       const SizedBox(height: 8),
                       for (final b in data.expenseBuckets)
-                        _CategoryFlowRow(flow: b),
+                        _CategoryFlowRow(flow: b, isExpenseSide: true),
                     ],
                     const SizedBox(height: 16),
                     TextButton.icon(
@@ -820,6 +820,11 @@ class _BreakdownSummary extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                const SizedBox(height: 2),
+                _DeltaChip(
+                  delta: breakdown.deltaIncome,
+                  isExpenseSide: false,
+                ),
               ],
             ),
           ),
@@ -845,6 +850,11 @@ class _BreakdownSummary extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+                const SizedBox(height: 2),
+                _DeltaChip(
+                  delta: breakdown.deltaExpense,
+                  isExpenseSide: true,
+                ),
               ],
             ),
           ),
@@ -869,6 +879,13 @@ class _BreakdownSummary extends StatelessWidget {
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
+                ),
+                const SizedBox(height: 2),
+                _DeltaChip(
+                  // Neto sube = mejor (más plata queda) → coincide con
+                  // el lado ingresos (isExpenseSide=false).
+                  delta: breakdown.deltaNet,
+                  isExpenseSide: false,
                 ),
               ],
             ),
@@ -903,7 +920,8 @@ class _SectionHeader extends StatelessWidget {
 /// gris con `Icons.label_off_outlined` (fallback estándar del proyecto).
 class _CategoryFlowRow extends StatelessWidget {
   final CategoryFlow flow;
-  const _CategoryFlowRow({required this.flow});
+  final bool isExpenseSide;
+  const _CategoryFlowRow({required this.flow, required this.isExpenseSide});
 
   @override
   Widget build(BuildContext context) {
@@ -951,9 +969,9 @@ class _CategoryFlowRow extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           SizedBox(
-            width: 44,
+            width: 38,
             child: Text(
               '${flow.percent.toStringAsFixed(1)}%',
               textAlign: TextAlign.right,
@@ -963,8 +981,92 @@ class _CategoryFlowRow extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 58,
+            child: _DeltaChip(
+              delta: flow.delta,
+              isExpenseSide: isExpenseSide,
+            ),
+          ),
         ],
       ),
+    );
+  }
+}
+
+/// Color del chip delta según la semántica "impacto en bolsillo"
+/// (RN-CP07). Sprint `flutter-cashflow-breakdown-prev-comparison-v1`.
+///
+/// - Ingresos (`isExpenseSide=false`): `up → positive`, `down → negative`.
+/// - Gastos (`isExpenseSide=true`): `up → negative`, `down → positive`.
+/// - `flat` → siempre `textMuted`.
+Color _deltaColor(DeltaDirection direction, {required bool isExpenseSide}) {
+  switch (direction) {
+    case DeltaDirection.flat:
+      return FincoreColors.textMuted;
+    case DeltaDirection.up:
+      return isExpenseSide ? FincoreColors.negative : FincoreColors.positive;
+    case DeltaDirection.down:
+      return isExpenseSide ? FincoreColors.positive : FincoreColors.negative;
+  }
+}
+
+/// Chip visual de delta % vs mes anterior. Sprint
+/// `flutter-cashflow-breakdown-prev-comparison-v1`. `delta == null`
+/// (bucket sin mes previo, o total previo == 0) renderea `—` en
+/// `textMuted` sin ícono (RN-CP05).
+class _DeltaChip extends StatelessWidget {
+  final DeltaPercent? delta;
+  final bool isExpenseSide;
+  const _DeltaChip({required this.delta, required this.isExpenseSide});
+
+  @override
+  Widget build(BuildContext context) {
+    final d = delta;
+    if (d == null) {
+      return const Text(
+        '—',
+        textAlign: TextAlign.right,
+        style: TextStyle(color: FincoreColors.textMuted, fontSize: 11),
+      );
+    }
+    final color = _deltaColor(d.direction, isExpenseSide: isExpenseSide);
+    final IconData icon;
+    switch (d.direction) {
+      case DeltaDirection.up:
+        icon = Icons.arrow_upward;
+        break;
+      case DeltaDirection.down:
+        icon = Icons.arrow_downward;
+        break;
+      case DeltaDirection.flat:
+        // `drag_handle` (== visual) diferencia del em-dash `—` que muestra
+        // el bucket sin data previa (RN-CP05). `remove` era muy similar.
+        icon = Icons.drag_handle;
+        break;
+    }
+    // Cap visual para percents extremos (ej. previo $10 → actual $10k =
+    // +99900%). La dirección ya la comunica el ícono; magnitud sobre
+    // 999% no aporta valor accionable y rompe el layout del chip.
+    final displayText = d.percent > 999
+        ? '>999%'
+        : '${d.percent.toStringAsFixed(1)}%';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 2),
+        Flexible(
+          child: Text(
+            displayText,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontSize: 11),
+          ),
+        ),
+      ],
     );
   }
 }

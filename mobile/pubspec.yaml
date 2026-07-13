@@ -244,7 +244,7 @@ publish_to: 'none'
 # con mismo layout 3×4 mini-heatmaps + bottom sheet expandido. Reusa
 # heatmapDayForMonthPosition del spending. Sin schema bump, sin dep
 # externa. +21 tests.
-version: 0.17.1+89
+version: 0.18.0+90
 
 environment:
   sdk: ^3.7.2
