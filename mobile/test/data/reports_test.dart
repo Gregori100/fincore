@@ -1869,7 +1869,6 @@ void main() {
       expect(s.nextPaymentDate, isNull);
       expect(s.daysToClosing, isNull);
       expect(s.daysToPayment, isNull);
-      expect(s.minimumPayment, isNull);
     });
 
     test('UT-07: solo cuentas credit activas aparecen (soft delete filtrado)',
@@ -2032,7 +2031,7 @@ void main() {
       await sub.cancel();
     });
 
-    test('CB-D18: debt=0 con minimumPaymentPct → isDebtFree, minimumPayment=null',
+    test('CB-D18: debt=0 con minimumPaymentPct → isDebtFree',
         () async {
       await accountsDao.archive(credit);
       final id = await accountsDao.create(
@@ -2046,29 +2045,8 @@ void main() {
       final list = await reports.watchCreditCards(now: refDate).first;
       final s = list.firstWhere((c) => c.accountId == id);
       expect(s.isDebtFree, true);
-      expect(s.minimumPayment, isNull);
     });
 
-    test('minimumPayment = debt × minimumPaymentPct (formato decimal 0-1)',
-        () async {
-      await accountsDao.archive(credit);
-      final id = await accountsDao.create(
-        name: 'ConMinimo',
-        type: 'credit',
-        creditLimit: 10000,
-        closingDay: 15,
-        paymentDay: 5,
-        minimumPaymentPct: 0.05,
-      );
-      await entriesDao.registerCreditExpense(
-        accountOriginId: id,
-        amount: 2000,
-        occurredAt: DateTime(2024, 6, 1),
-      );
-      final list = await reports.watchCreditCards(now: refDate).first;
-      final s = list.firstWhere((c) => c.accountId == id);
-      expect(s.minimumPayment, closeTo(100, 0.001)); // 2000 × 0.05
-    });
   });
 
   // Sprint flutter-budgets-v1

@@ -24,8 +24,6 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
   final _creditLimitCtrl = TextEditingController();
   final _closingDayCtrl = TextEditingController();
   final _paymentDayCtrl = TextEditingController();
-  final _interestRateCtrl = TextEditingController();
-  final _minPaymentPctCtrl = TextEditingController();
 
   AccountType _type = AccountType.debit;
   bool _saving = false;
@@ -51,8 +49,6 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     _creditLimitCtrl.dispose();
     _closingDayCtrl.dispose();
     _paymentDayCtrl.dispose();
-    _interestRateCtrl.dispose();
-    _minPaymentPctCtrl.dispose();
     super.dispose();
   }
 
@@ -74,15 +70,6 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           _creditLimitCtrl.text = account.creditLimit.toStringAsFixed(2);
           _closingDayCtrl.text = account.closingDay?.toString() ?? '';
           _paymentDayCtrl.text = account.paymentDay?.toString() ?? '';
-          // Sprint flutter-reports-credit-cards-v1: `interestRate` y
-          // `minimumPaymentPct` se guardan como decimal 0-1 (compat con
-          // backup legacy) pero se editan como porcentaje 0-100 en la UI.
-          _interestRateCtrl.text = account.interestRate != null
-              ? (account.interestRate! * 100).toStringAsFixed(2)
-              : '';
-          _minPaymentPctCtrl.text = account.minimumPaymentPct != null
-              ? (account.minimumPaymentPct! * 100).toStringAsFixed(2)
-              : '';
         }
       });
     } on AccountsDaoError catch (e) {
@@ -114,14 +101,6 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           paymentDay: _type == AccountType.credit
               ? int.tryParse(_paymentDayCtrl.text)
               : null,
-          // El usuario escribe porcentaje humano (ej: 45); la BD guarda
-          // decimal (0.45). Compat con backup legacy `[0, 1]`.
-          interestRate: _type == AccountType.credit && _interestRateCtrl.text.isNotEmpty
-              ? _parsePercentInput(_interestRateCtrl.text)
-              : null,
-          minimumPaymentPct: _type == AccountType.credit && _minPaymentPctCtrl.text.isNotEmpty
-              ? _parsePercentInput(_minPaymentPctCtrl.text)
-              : null,
         );
       } else {
         await deps.accountsDao.create(
@@ -137,14 +116,6 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
           paymentDay: _type == AccountType.credit
               ? int.tryParse(_paymentDayCtrl.text)
               : null,
-          // El usuario escribe porcentaje humano (ej: 45); la BD guarda
-          // decimal (0.45). Compat con backup legacy `[0, 1]`.
-          interestRate: _type == AccountType.credit && _interestRateCtrl.text.isNotEmpty
-              ? _parsePercentInput(_interestRateCtrl.text)
-              : null,
-          minimumPaymentPct: _type == AccountType.credit && _minPaymentPctCtrl.text.isNotEmpty
-              ? _parsePercentInput(_minPaymentPctCtrl.text)
-              : null,
         );
       }
       if (mounted) {
@@ -158,16 +129,6 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  /// Parsea porcentaje humano (0-100) del text field y lo convierte a decimal
-  /// (0-1) para persistir. Retorna null si el texto no es un número válido.
-  /// Normaliza coma → punto (algunos teclados numéricos Android en es_MX
-  /// renderean coma como separador decimal).
-  double? _parsePercentInput(String text) {
-    final n = _parseDecimalInput(text);
-    if (n == null) return null;
-    return n / 100;
   }
 
   /// Parsea un decimal aceptando `,` o `.` como separador. Normaliza a `.`
@@ -387,53 +348,6 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                       ),
                     ),
                   ],
-                ),
-                // Sprint flutter-reports-credit-cards-v1: inputs para
-                // `minimumPaymentPct` e `interestRate` que estaban declarados
-                // pero no conectados a la UI desde el pivote. El usuario
-                // escribe porcentaje humano (0-100); la BD guarda decimal
-                // (0-1) para compat con backup legacy.
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _minPaymentPctCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Pago mínimo (% del saldo)',
-                    suffixText: '%',
-                    helperText: 'Opcional. Ej: 5 = 5% del saldo pendiente.',
-                  ),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return null;
-                    final n = _parseDecimalInput(v);
-                    if (n == null) return 'Debe ser numérico.';
-                    if (n < 0 || n > 100) return '0 a 100.';
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _interestRateCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Tasa de interés anual',
-                    suffixText: '% anual',
-                    helperText: 'Opcional. Se usará en futuros reportes.',
-                  ),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-                  ],
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return null;
-                    final n = _parseDecimalInput(v);
-                    if (n == null) return 'Debe ser numérico.';
-                    if (n < 0 || n > 100) return '0 a 100.';
-                    return null;
-                  },
                 ),
               ],
               const SizedBox(height: 32),

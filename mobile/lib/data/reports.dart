@@ -1195,8 +1195,6 @@ class ReportsService {
         a.credit_limit AS credit_limit,
         a.closing_day AS closing_day,
         a.payment_day AS payment_day,
-        a.interest_rate AS interest_rate,
-        a.minimum_payment_pct AS minimum_payment_pct,
         COALESCE(SUM(CASE WHEN j.account_origin_id = a.id THEN j.amount ELSE 0 END), 0)
           - COALESCE(SUM(CASE WHEN j.account_destination_id = a.id THEN j.amount ELSE 0 END), 0)
           AS debt
@@ -1207,8 +1205,7 @@ class ReportsService {
       WHERE a.deleted_at IS NULL
         AND a.type = 'credit'
       GROUP BY a.id, a.name, a.description, a.credit_limit,
-               a.closing_day, a.payment_day, a.interest_rate,
-               a.minimum_payment_pct
+               a.closing_day, a.payment_day
     ''';
     return _db
         .customSelect(
@@ -1227,8 +1224,6 @@ class ReportsService {
           debt: row.read<double>('debt'),
           closingDay: row.readNullable<int>('closing_day'),
           paymentDay: row.readNullable<int>('payment_day'),
-          interestRate: row.readNullable<double>('interest_rate'),
-          minimumPaymentPct: row.readNullable<double>('minimum_payment_pct'),
           today: referenceDate,
         );
       }).toList();
@@ -1863,9 +1858,6 @@ class _RawBucket {
 /// - `availableCredit`: `max(creditLimit - debt, 0)`; nunca negativo.
 /// - `nextClosingDate` / `nextPaymentDate`: siguiente ocurrencia del día
 ///   objetivo con clamp al último día del mes (helper `nextOccurrenceOfDay`).
-/// - `minimumPayment`: `debt * minimumPaymentPct` (donde `minimumPaymentPct`
-///   está en decimal 0-1, ej: 0.05 = 5%); `null` si el `%` es null o la
-///   deuda es 0.
 /// - `isOverdue`: `debt > creditLimit && creditLimit > 0`. Cuando el límite es
 ///   0 (tarjeta sin cupo formal o límite indefinido), NO marcamos overdue —
 ///   la card muestra "—" en el ring y disponible=0 sin badge de warning.
@@ -1885,8 +1877,6 @@ class CreditCardStatus {
   final DateTime? nextPaymentDate;
   final int? daysToClosing;
   final int? daysToPayment;
-  final double? minimumPayment;
-  final double? interestRate;
   final bool isOverdue;
   final bool isDebtFree;
 
@@ -1904,8 +1894,6 @@ class CreditCardStatus {
     required this.nextPaymentDate,
     required this.daysToClosing,
     required this.daysToPayment,
-    required this.minimumPayment,
-    required this.interestRate,
     required this.isOverdue,
     required this.isDebtFree,
   });
@@ -1918,8 +1906,6 @@ class CreditCardStatus {
     required double debt,
     required int? closingDay,
     required int? paymentDay,
-    required double? interestRate,
-    required double? minimumPaymentPct,
     required DateTime today,
   }) {
     final normalizedDebt = debt < 0 ? 0.0 : debt;
@@ -1949,13 +1935,6 @@ class CreditCardStatus {
       daysToPayment = nextPayment.difference(todayMidnight).inDays;
     }
 
-    // `minimumPaymentPct` está guardado como decimal 0-1 (compat con backup
-    // legacy que valida el rango en el import). Ej: 0.05 = 5% del saldo.
-    double? minimumPayment;
-    if (minimumPaymentPct != null && normalizedDebt > 0) {
-      minimumPayment = normalizedDebt * minimumPaymentPct;
-    }
-
     return CreditCardStatus(
       accountId: accountId,
       name: name,
@@ -1970,8 +1949,6 @@ class CreditCardStatus {
       nextPaymentDate: nextPayment,
       daysToClosing: daysToClosing,
       daysToPayment: daysToPayment,
-      minimumPayment: minimumPayment,
-      interestRate: interestRate,
       isOverdue: isOverdue,
       isDebtFree: isDebtFree,
     );

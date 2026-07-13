@@ -15,7 +15,7 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('WT-H01: renderea 6 ExpansionTile', (tester) async {
+    testWidgets('WT-H01: renderea 7 ExpansionTile', (tester) async {
       final harness = await pumpFincoreApp(tester);
       await openHelp(tester);
       expect(find.byType(HelpScreen), findsOneWidget);

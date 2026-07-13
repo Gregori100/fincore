@@ -218,15 +218,6 @@ class _CreditCardTile extends StatelessWidget {
             date: status.nextPaymentDate,
             daysTo: status.daysToPayment,
           ),
-          if (status.minimumPayment != null) ...[
-            const SizedBox(height: 8),
-            _MoneyRow(
-              label: 'Pago mínimo estimado',
-              amount: status.minimumPayment!,
-              amountColor: FincoreColors.warning,
-              labelColor: FincoreColors.textSubtle,
-            ),
-          ],
         ],
       ),
     );
@@ -335,12 +326,10 @@ class _MoneyRow extends StatelessWidget {
   final String label;
   final double amount;
   final Color amountColor;
-  final Color? labelColor;
   const _MoneyRow({
     required this.label,
     required this.amount,
     required this.amountColor,
-    this.labelColor,
   });
 
   @override
@@ -350,8 +339,8 @@ class _MoneyRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style: TextStyle(
-            color: labelColor ?? FincoreColors.textMuted,
+          style: const TextStyle(
+            color: FincoreColors.textMuted,
             fontSize: 13,
           ),
         ),
@@ -511,3 +500,4 @@ class _OverdueBadge extends StatelessWidget {
     );
   }
 }
+

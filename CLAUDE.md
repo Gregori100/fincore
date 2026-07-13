@@ -52,7 +52,7 @@ dart run flutter_launcher_icons
 
 ### Modelo: Cuentas + Categorías + Journal Entries
 
-- **Account** (`lib/data/database.dart` tabla `accounts`): UUID v7 PK. `type ∈ { cash, debit, credit }`. La **Bolsa** es singleton: `type=cash`, `is_protected=true`, creada por `seedDefaults` al "Arrancar limpio". Los credit guardan `credit_limit` (NOT NULL DEFAULT 0 desde schema v5), `closing_day`, `payment_day`, `interest_rate`, `minimum_payment_pct`. Las tasas se guardan como decimal 0-1 (compat backup legacy: `0.05` = 5%); la UI acepta porcentaje humano (0-100) y convierte. Acepta `description` (texto libre, máx 200).
+- **Account** (`lib/data/database.dart` tabla `accounts`): UUID v7 PK. `type ∈ { cash, debit, credit }`. La **Bolsa** es singleton: `type=cash`, `is_protected=true`, creada por `seedDefaults` al "Arrancar limpio". Los credit guardan `credit_limit` (NOT NULL DEFAULT 0 desde schema v5), `closing_day`, `payment_day`, `interest_rate`, `minimum_payment_pct`. Las tasas se guardan como decimal 0-1 (compat backup legacy: `0.05` = 5%); `interest_rate` y `minimum_payment_pct` quedan en schema por compat backup pero la UI ya no los expone. Acepta `description` (texto libre, máx 200).
 - **Category** (tabla `categories`): UUID v7 PK. `name`, `applies_to ∈ { income, expense, both }`, `color_slug` (1 de 10 colores curados), `icon_slug` (1 de ~30 iconos curados). Slugs en `lib/constants/category_catalog.dart`. SoftDelete: archived es terminal sin reactivación.
 - **JournalEntry** (tabla `journal_entries`): UUID v7 PK. `kind ∈ { income, expense, credit_expense, debt_payment, transfer }`. `account_origin_id` y `account_destination_id` opcionales según kind. Soft delete para cancelación.
 

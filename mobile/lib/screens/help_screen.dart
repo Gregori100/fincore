@@ -74,7 +74,7 @@ class HelpScreen extends StatelessWidget {
                   'de los últimos N meses, comparado con el mes en curso.\n'
                 '• Estado de tarjetas: estado actual de cada tarjeta de '
                   'crédito activa — deuda, % usado del límite, disponible, '
-                  'próximo corte, próximo pago, pago mínimo estimado.\n'
+                  'próximo corte y próximo pago.\n'
                 '• Presupuestos: progreso del mes en curso por categoría '
                   'con presupuesto definido — gastado, % usado, disponible, '
                   'y estado OK/Warning/Excedido.\n'

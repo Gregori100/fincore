@@ -234,19 +234,24 @@ void main() {
 
       // Sección de tarjeta visible.
       expect(find.text('Metadata de la tarjeta'), findsOneWidget);
-      // 7 TextFormFields = Nombre + Descripción + 5 credit-only (Límite,
-      // Día corte, Día pago, Pago mínimo %, Tasa).
-      expect(find.byType(TextFormField), findsNWidgets(7));
+      // 5 TextFormFields = Nombre + Descripción + 3 credit-only (Límite,
+      // Día corte, Día pago). Los campos de tasa, minPct% y los parámetros
+      // del pago mínimo se removieron cuando se eliminó "Pago mínimo
+      // estimado" del reporte de tarjetas.
+      expect(find.byType(TextFormField), findsNWidgets(5));
 
       await harness.dispose();
     });
 
     testWidgets(
-        'WT-11: editar credit con minPct=0.03 preseteado → se muestra "3.00" en input',
+        'WT-11: editar credit con interestRate y minimumPaymentPct en BD → '
+        'los valores se preservan pero NO se exponen en UI (rollback de '
+        'flutter-credit-cards-minimum-payment-formula-v1)',
         (tester) async {
-      // Verifica el round-trip de conversión BD (decimal 0-1) → UI
-      // (porcentaje 0-100). Sembramos con `minimumPaymentPct=0.03` y
-      // esperamos que el field muestre "3.00" (× 100).
+      // Blindaje regresión: cuando se eliminó el "Pago mínimo estimado"
+      // del reporte, también se retiraron los inputs de tasa y % del
+      // pago mínimo del form. Las columnas del schema se preservan por
+      // compat backup pero la UI ya no las muestra.
       late String amexId;
       final harness = await pumpFincoreApp(
         tester,
@@ -267,18 +272,21 @@ void main() {
       GoRouter.of(ctx).push('/accounts/$amexId/edit');
       await tester.pumpAndSettle();
 
-      // Los TextField internos del TextFormField exponen su controller;
-      // buscamos por el `initialValue` renderizado en el field. El campo
-      // 5 (Pago mínimo) debe tener "3.00" (0.03 × 100).
-      final textFieldsWithController = find.byWidgetPredicate((w) =>
-          w is TextField && w.controller?.text == '3.00');
-      expect(textFieldsWithController, findsOneWidget,
-          reason: '0.03 en BD debería mostrarse como "3.00" en el UI');
+      // Ningún TextField debe traer los valores de tasa/pct: no se
+      // renderean.
+      final legacyPctField = find.byWidgetPredicate(
+        (w) => w is TextField && w.controller?.text == '3.00',
+        skipOffstage: false,
+      );
+      expect(legacyPctField, findsNothing,
+          reason: '"Pago mínimo (% del saldo)" fue removido del form.');
 
-      final interestField = find.byWidgetPredicate((w) =>
-          w is TextField && w.controller?.text == '42.00');
-      expect(interestField, findsOneWidget,
-          reason: '0.42 en BD debería mostrarse como "42.00" en el UI');
+      final interestField = find.byWidgetPredicate(
+        (w) => w is TextField && w.controller?.text == '42.00',
+        skipOffstage: false,
+      );
+      expect(interestField, findsNothing,
+          reason: '"Tasa de interés anual" fue removida del form.');
 
       await harness.dispose();
     });
