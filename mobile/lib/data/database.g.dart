@@ -118,6 +118,31 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         type: DriftSqlType.double,
         requiredDuringInsert: false,
       );
+  static const VerificationMeta _minimumCapitalPctMeta = const VerificationMeta(
+    'minimumCapitalPct',
+  );
+  @override
+  late final GeneratedColumn<double> minimumCapitalPct =
+      GeneratedColumn<double>(
+        'minimum_capital_pct',
+        aliasedName,
+        false,
+        type: DriftSqlType.double,
+        requiredDuringInsert: false,
+        defaultValue: const Constant(0.015),
+      );
+  static const VerificationMeta _minimumFloorMeta = const VerificationMeta(
+    'minimumFloor',
+  );
+  @override
+  late final GeneratedColumn<double> minimumFloor = GeneratedColumn<double>(
+    'minimum_floor',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(150),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -163,6 +188,8 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     paymentDay,
     interestRate,
     minimumPaymentPct,
+    minimumCapitalPct,
+    minimumFloor,
     createdAt,
     updatedAt,
     deletedAt,
@@ -257,6 +284,24 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         ),
       );
     }
+    if (data.containsKey('minimum_capital_pct')) {
+      context.handle(
+        _minimumCapitalPctMeta,
+        minimumCapitalPct.isAcceptableOrUnknown(
+          data['minimum_capital_pct']!,
+          _minimumCapitalPctMeta,
+        ),
+      );
+    }
+    if (data.containsKey('minimum_floor')) {
+      context.handle(
+        _minimumFloorMeta,
+        minimumFloor.isAcceptableOrUnknown(
+          data['minimum_floor']!,
+          _minimumFloorMeta,
+        ),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -333,6 +378,16 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         DriftSqlType.double,
         data['${effectivePrefix}minimum_payment_pct'],
       ),
+      minimumCapitalPct:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}minimum_capital_pct'],
+          )!,
+      minimumFloor:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}minimum_floor'],
+          )!,
       createdAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -367,6 +422,8 @@ class Account extends DataClass implements Insertable<Account> {
   final int? paymentDay;
   final double? interestRate;
   final double? minimumPaymentPct;
+  final double minimumCapitalPct;
+  final double minimumFloor;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -381,6 +438,8 @@ class Account extends DataClass implements Insertable<Account> {
     this.paymentDay,
     this.interestRate,
     this.minimumPaymentPct,
+    required this.minimumCapitalPct,
+    required this.minimumFloor,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
@@ -408,6 +467,8 @@ class Account extends DataClass implements Insertable<Account> {
     if (!nullToAbsent || minimumPaymentPct != null) {
       map['minimum_payment_pct'] = Variable<double>(minimumPaymentPct);
     }
+    map['minimum_capital_pct'] = Variable<double>(minimumCapitalPct);
+    map['minimum_floor'] = Variable<double>(minimumFloor);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
@@ -443,6 +504,8 @@ class Account extends DataClass implements Insertable<Account> {
           minimumPaymentPct == null && nullToAbsent
               ? const Value.absent()
               : Value(minimumPaymentPct),
+      minimumCapitalPct: Value(minimumCapitalPct),
+      minimumFloor: Value(minimumFloor),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
       deletedAt:
@@ -470,6 +533,8 @@ class Account extends DataClass implements Insertable<Account> {
       minimumPaymentPct: serializer.fromJson<double?>(
         json['minimumPaymentPct'],
       ),
+      minimumCapitalPct: serializer.fromJson<double>(json['minimumCapitalPct']),
+      minimumFloor: serializer.fromJson<double>(json['minimumFloor']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -489,6 +554,8 @@ class Account extends DataClass implements Insertable<Account> {
       'paymentDay': serializer.toJson<int?>(paymentDay),
       'interestRate': serializer.toJson<double?>(interestRate),
       'minimumPaymentPct': serializer.toJson<double?>(minimumPaymentPct),
+      'minimumCapitalPct': serializer.toJson<double>(minimumCapitalPct),
+      'minimumFloor': serializer.toJson<double>(minimumFloor),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -506,6 +573,8 @@ class Account extends DataClass implements Insertable<Account> {
     Value<int?> paymentDay = const Value.absent(),
     Value<double?> interestRate = const Value.absent(),
     Value<double?> minimumPaymentPct = const Value.absent(),
+    double? minimumCapitalPct,
+    double? minimumFloor,
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
@@ -523,6 +592,8 @@ class Account extends DataClass implements Insertable<Account> {
         minimumPaymentPct.present
             ? minimumPaymentPct.value
             : this.minimumPaymentPct,
+    minimumCapitalPct: minimumCapitalPct ?? this.minimumCapitalPct,
+    minimumFloor: minimumFloor ?? this.minimumFloor,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
@@ -550,6 +621,14 @@ class Account extends DataClass implements Insertable<Account> {
           data.minimumPaymentPct.present
               ? data.minimumPaymentPct.value
               : this.minimumPaymentPct,
+      minimumCapitalPct:
+          data.minimumCapitalPct.present
+              ? data.minimumCapitalPct.value
+              : this.minimumCapitalPct,
+      minimumFloor:
+          data.minimumFloor.present
+              ? data.minimumFloor.value
+              : this.minimumFloor,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
@@ -569,6 +648,8 @@ class Account extends DataClass implements Insertable<Account> {
           ..write('paymentDay: $paymentDay, ')
           ..write('interestRate: $interestRate, ')
           ..write('minimumPaymentPct: $minimumPaymentPct, ')
+          ..write('minimumCapitalPct: $minimumCapitalPct, ')
+          ..write('minimumFloor: $minimumFloor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt')
@@ -588,6 +669,8 @@ class Account extends DataClass implements Insertable<Account> {
     paymentDay,
     interestRate,
     minimumPaymentPct,
+    minimumCapitalPct,
+    minimumFloor,
     createdAt,
     updatedAt,
     deletedAt,
@@ -606,6 +689,8 @@ class Account extends DataClass implements Insertable<Account> {
           other.paymentDay == this.paymentDay &&
           other.interestRate == this.interestRate &&
           other.minimumPaymentPct == this.minimumPaymentPct &&
+          other.minimumCapitalPct == this.minimumCapitalPct &&
+          other.minimumFloor == this.minimumFloor &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
           other.deletedAt == this.deletedAt);
@@ -622,6 +707,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<int?> paymentDay;
   final Value<double?> interestRate;
   final Value<double?> minimumPaymentPct;
+  final Value<double> minimumCapitalPct;
+  final Value<double> minimumFloor;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
@@ -637,6 +724,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     this.paymentDay = const Value.absent(),
     this.interestRate = const Value.absent(),
     this.minimumPaymentPct = const Value.absent(),
+    this.minimumCapitalPct = const Value.absent(),
+    this.minimumFloor = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
@@ -653,6 +742,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     this.paymentDay = const Value.absent(),
     this.interestRate = const Value.absent(),
     this.minimumPaymentPct = const Value.absent(),
+    this.minimumCapitalPct = const Value.absent(),
+    this.minimumFloor = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.deletedAt = const Value.absent(),
@@ -673,6 +764,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Expression<int>? paymentDay,
     Expression<double>? interestRate,
     Expression<double>? minimumPaymentPct,
+    Expression<double>? minimumCapitalPct,
+    Expression<double>? minimumFloor,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
@@ -689,6 +782,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       if (paymentDay != null) 'payment_day': paymentDay,
       if (interestRate != null) 'interest_rate': interestRate,
       if (minimumPaymentPct != null) 'minimum_payment_pct': minimumPaymentPct,
+      if (minimumCapitalPct != null) 'minimum_capital_pct': minimumCapitalPct,
+      if (minimumFloor != null) 'minimum_floor': minimumFloor,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
@@ -707,6 +802,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<int?>? paymentDay,
     Value<double?>? interestRate,
     Value<double?>? minimumPaymentPct,
+    Value<double>? minimumCapitalPct,
+    Value<double>? minimumFloor,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
@@ -723,6 +820,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       paymentDay: paymentDay ?? this.paymentDay,
       interestRate: interestRate ?? this.interestRate,
       minimumPaymentPct: minimumPaymentPct ?? this.minimumPaymentPct,
+      minimumCapitalPct: minimumCapitalPct ?? this.minimumCapitalPct,
+      minimumFloor: minimumFloor ?? this.minimumFloor,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
@@ -763,6 +862,12 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     if (minimumPaymentPct.present) {
       map['minimum_payment_pct'] = Variable<double>(minimumPaymentPct.value);
     }
+    if (minimumCapitalPct.present) {
+      map['minimum_capital_pct'] = Variable<double>(minimumCapitalPct.value);
+    }
+    if (minimumFloor.present) {
+      map['minimum_floor'] = Variable<double>(minimumFloor.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -791,6 +896,8 @@ class AccountsCompanion extends UpdateCompanion<Account> {
           ..write('paymentDay: $paymentDay, ')
           ..write('interestRate: $interestRate, ')
           ..write('minimumPaymentPct: $minimumPaymentPct, ')
+          ..write('minimumCapitalPct: $minimumCapitalPct, ')
+          ..write('minimumFloor: $minimumFloor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
@@ -2653,6 +2760,8 @@ typedef $$AccountsTableCreateCompanionBuilder =
       Value<int?> paymentDay,
       Value<double?> interestRate,
       Value<double?> minimumPaymentPct,
+      Value<double> minimumCapitalPct,
+      Value<double> minimumFloor,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
@@ -2670,6 +2779,8 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<int?> paymentDay,
       Value<double?> interestRate,
       Value<double?> minimumPaymentPct,
+      Value<double> minimumCapitalPct,
+      Value<double> minimumFloor,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
@@ -2732,6 +2843,16 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<double> get minimumPaymentPct => $composableBuilder(
     column: $table.minimumPaymentPct,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get minimumCapitalPct => $composableBuilder(
+    column: $table.minimumCapitalPct,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get minimumFloor => $composableBuilder(
+    column: $table.minimumFloor,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -2810,6 +2931,16 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<double> get minimumCapitalPct => $composableBuilder(
+    column: $table.minimumCapitalPct,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get minimumFloor => $composableBuilder(
+    column: $table.minimumFloor,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -2879,6 +3010,16 @@ class $$AccountsTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<double> get minimumCapitalPct => $composableBuilder(
+    column: $table.minimumCapitalPct,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get minimumFloor => $composableBuilder(
+    column: $table.minimumFloor,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -2927,6 +3068,8 @@ class $$AccountsTableTableManager
                 Value<int?> paymentDay = const Value.absent(),
                 Value<double?> interestRate = const Value.absent(),
                 Value<double?> minimumPaymentPct = const Value.absent(),
+                Value<double> minimumCapitalPct = const Value.absent(),
+                Value<double> minimumFloor = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -2942,6 +3085,8 @@ class $$AccountsTableTableManager
                 paymentDay: paymentDay,
                 interestRate: interestRate,
                 minimumPaymentPct: minimumPaymentPct,
+                minimumCapitalPct: minimumCapitalPct,
+                minimumFloor: minimumFloor,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
@@ -2959,6 +3104,8 @@ class $$AccountsTableTableManager
                 Value<int?> paymentDay = const Value.absent(),
                 Value<double?> interestRate = const Value.absent(),
                 Value<double?> minimumPaymentPct = const Value.absent(),
+                Value<double> minimumCapitalPct = const Value.absent(),
+                Value<double> minimumFloor = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -2974,6 +3121,8 @@ class $$AccountsTableTableManager
                 paymentDay: paymentDay,
                 interestRate: interestRate,
                 minimumPaymentPct: minimumPaymentPct,
+                minimumCapitalPct: minimumCapitalPct,
+                minimumFloor: minimumFloor,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,

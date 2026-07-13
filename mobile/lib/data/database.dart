@@ -33,6 +33,19 @@ class Accounts extends Table {
   IntColumn get paymentDay => integer().nullable()();
   RealColumn get interestRate => real().nullable()();
   RealColumn get minimumPaymentPct => real().nullable()();
+  // Sprint flutter-schema-v6-forward-compat-v1: columnas "dead" preservadas
+  // en schema por compatibilidad. Fueron agregadas en schemaVersion 6 del
+  // sprint `flutter-credit-cards-minimum-payment-formula-v1` para la
+  // fórmula compuesta del pago mínimo, que después fue completamente
+  // retirada del reporte y del form. Los testers (Diego) instalaron esa
+  // versión y su BD quedó en v6 con estas columnas. Al no dropearlas del
+  // schema evitamos el downgrade v6→v5 que trababa la app al abrir
+  // (guardrail RN-H02). Ni el DAO, ni el form, ni los reports las leen;
+  // el backup las preserva silenciosamente (mismo patrón que
+  // `minimumPaymentPct`).
+  RealColumn get minimumCapitalPct =>
+      real().withDefault(const Constant(0.015))();
+  RealColumn get minimumFloor => real().withDefault(const Constant(150))();
   // Timestamps + soft delete.
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -178,7 +191,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -346,6 +359,26 @@ class FincoreDatabase extends _$FincoreDatabase {
             await customStatement(
               'CREATE INDEX IF NOT EXISTS idx_accounts_deleted '
               'ON accounts(deleted_at)',
+            );
+            return;
+          }
+          // Migración 5 → 6 (sprint flutter-schema-v6-forward-compat-v1):
+          // agrega las columnas `minimum_capital_pct` y `minimum_floor` que
+          // vivían en un sprint retirado. Se re-introducen en el schema
+          // solo por forward-compat: usuarios que instalaron ese sprint
+          // tienen BD v6 y sin esta rama al abrir la app con schemaVersion
+          // 5 disparaban `UnimplementedError` (guardrail RN-H02). Las
+          // columnas quedan "dead" — ni el DAO, ni el form, ni los
+          // reports las leen. Aditiva, sin pérdida de datos.
+          //
+          // Nota SQLite: `ALTER TABLE ADD COLUMN` con `NOT NULL DEFAULT`
+          // aplica el default a las filas existentes.
+          if (from == 5 && to == 6) {
+            await customStatement(
+              'ALTER TABLE accounts ADD COLUMN minimum_capital_pct REAL NOT NULL DEFAULT 0.015',
+            );
+            await customStatement(
+              'ALTER TABLE accounts ADD COLUMN minimum_floor REAL NOT NULL DEFAULT 150',
             );
             return;
           }

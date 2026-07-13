@@ -16,6 +16,8 @@ void main() {
         paymentDay: null,
         interestRate: null,
         minimumPaymentPct: null,
+        minimumCapitalPct: 0.015,
+        minimumFloor: 150,
         description: null,
         deletedAt: null,
         createdAt: DateTime(2026, 1, 1),
