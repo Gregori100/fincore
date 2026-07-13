@@ -488,7 +488,10 @@ class _Slide3 extends StatelessWidget {
               label: 'Heatmap gastos',
             ),
             _KindRow(
-              icon: Icons.grid_view,
+              // `grid_on` (grid rellena) diferencia visualmente del
+              // heatmap gastos aunque un usuario con daltonismo
+              // rojo-verde no distinga los colores negative/positive.
+              icon: Icons.grid_on,
               color: FincoreColors.positive,
               label: 'Heatmap ingresos',
             ),
