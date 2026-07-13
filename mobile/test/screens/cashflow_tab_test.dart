@@ -287,7 +287,9 @@ void main() {
 
       // Chip up visible con percent 100.
       expect(find.byIcon(Icons.arrow_upward), findsAtLeastNWidgets(1));
-      expect(find.text('100.0%'), findsAtLeastNWidgets(1));
+      // Sprint polish 0.18.2+92: percent >= 100 se muestra como
+      // multiplicador (`×2` para +100%).
+      expect(find.text('×2.0'), findsAtLeastNWidgets(1));
 
       await harness.dispose();
     });

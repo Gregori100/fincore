@@ -931,65 +931,104 @@ class _CategoryFlowRow extends StatelessWidget {
     final icon = flow.iconSlug != null
         ? iconBySlug(flow.iconSlug)
         : Icons.label_off_outlined;
+    // Sprint polish 0.18.2+92: reemplazar el porcentaje gris del share
+    // por una barra de progreso fina debajo del row. Elimina la
+    // ambigüedad de "dos números lado a lado" (share del mes vs delta
+    // vs mes previo), aprovecha que el ojo lee proporciones más rápido
+    // que dígitos, y deja el chip de delta como único número numérico
+    // de la fila.
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: color.withValues(alpha: 0.4),
-                width: 1,
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.4),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(icon, size: 15, color: color),
               ),
-            ),
-            child: Icon(icon, size: 15, color: color),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              flow.label,
-              style: const TextStyle(
-                color: FincoreColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  flow.label,
+                  style: const TextStyle(
+                    color: FincoreColors.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            formatAmount(flow.amount),
-            style: const TextStyle(
-              color: FincoreColors.textPrimary,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 6),
-          SizedBox(
-            width: 38,
-            child: Text(
-              '${flow.percent.toStringAsFixed(1)}%',
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: FincoreColors.textMuted,
-                fontSize: 12,
+              const SizedBox(width: 8),
+              Text(
+                formatAmount(flow.amount),
+                style: const TextStyle(
+                  color: FincoreColors.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 66,
+                child: _DeltaChip(
+                  delta: flow.delta,
+                  isExpenseSide: isExpenseSide,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 4),
-          SizedBox(
-            width: 58,
-            child: _DeltaChip(
-              delta: flow.delta,
-              isExpenseSide: isExpenseSide,
-            ),
+          const SizedBox(height: 4),
+          // Barra de progreso alineada con el label (28 chip + 10 gap
+          // = 38 px de padding izquierdo).
+          Padding(
+            padding: const EdgeInsets.only(left: 38, right: 4),
+            child: _ShareBar(percent: flow.percent, color: color),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Barra horizontal fina que representa el share del bucket dentro del
+/// mes. Reemplaza el porcentaje gris textual (sprint polish 0.18.2+92)
+/// para eliminar la ambigüedad visual con el chip de delta.
+class _ShareBar extends StatelessWidget {
+  final double percent;
+  final Color color;
+  const _ShareBar({required this.percent, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = (percent / 100).clamp(0.0, 1.0);
+    return Container(
+      height: 3,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: FractionallySizedBox(
+          widthFactor: clamped,
+          child: Container(
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1009,6 +1048,39 @@ Color _deltaColor(DeltaDirection direction, {required bool isExpenseSide}) {
       return isExpenseSide ? FincoreColors.negative : FincoreColors.positive;
     case DeltaDirection.down:
       return isExpenseSide ? FincoreColors.positive : FincoreColors.negative;
+  }
+}
+
+/// Formato mezcla del delta (sprint polish 0.18.2+92).
+///
+/// - `flat` → `= 0%`.
+/// - `down` → `-N.N%` (siempre porcentaje; un down grande significa "cayó
+///   mucho" y el % es intuitivo).
+/// - `up` con `percent < 100` → `+N.N%`.
+/// - `up` con `percent ∈ [100, 900)` → `×M.M` donde `M = 1 + percent/100`.
+///   Ej: `percent=100 → ×2`, `percent=340 → ×4.4`.
+/// - `up` con `percent >= 900` → `>×10` (más de 10× es "muchísimo"; el
+///   número exacto no aporta valor).
+String _formatDelta(DeltaPercent d) {
+  switch (d.direction) {
+    case DeltaDirection.flat:
+      return '0%';
+    case DeltaDirection.down:
+      // Cap del down a `-100%` es lo máximo lógico (baja a 0). Cualquier
+      // valor superior sería un artefacto de floating-point o de un edge
+      // legacy; se muestra igual como `-N%` con cap a 100.
+      final p = d.percent > 100 ? 100.0 : d.percent;
+      return '-${p.toStringAsFixed(1)}%';
+    case DeltaDirection.up:
+      if (d.percent < 100) {
+        return '+${d.percent.toStringAsFixed(1)}%';
+      }
+      if (d.percent >= 900) {
+        return '>×10';
+      }
+      // Multiplicador = 1 + percent/100. Ejemplo: percent=340 → 4.4×.
+      final multiplier = 1 + d.percent / 100;
+      return '×${multiplier.toStringAsFixed(1)}';
   }
 }
 
@@ -1046,12 +1118,12 @@ class _DeltaChip extends StatelessWidget {
         icon = Icons.drag_handle;
         break;
     }
-    // Cap visual para percents extremos (ej. previo $10 → actual $10k =
-    // +99900%). La dirección ya la comunica el ícono; magnitud sobre
-    // 999% no aporta valor accionable y rompe el layout del chip.
-    final displayText = d.percent > 999
-        ? '>999%'
-        : '${d.percent.toStringAsFixed(1)}%';
+    // Formato mezcla (sprint polish 0.18.2+92): hasta 100% mostrar como
+    // porcentaje clásico (`+45%`). Sobre 100% cambiar a multiplicador
+    // (`×2.4`) que es cognitivamente más rápido de leer que `+240%`.
+    // Solo aplica para `up` — un `down` con `-100%` significa "cayó a
+    // cero", no tiene sentido convertir a `×`.
+    final displayText = _formatDelta(d);
     return Row(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.end,
