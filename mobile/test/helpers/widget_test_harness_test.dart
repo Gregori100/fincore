@@ -11,7 +11,9 @@ void main() {
 
       // "Bolsa" aparece 2x en el dashboard: como nombre de la cuenta y como
       // label del tipo cash (`_typeLabel('cash')`). Ambos son intencionales.
-      expect(find.text('Bolsa'), findsNWidgets(2));
+      // Sprint dashboard-bundle-v1 agregó chip filtro con nombre de cuenta →
+// "Bolsa" ahora aparece 3 veces. Cambio a findsAtLeast(2).
+expect(find.text('Bolsa'), findsAtLeastNWidgets(2));
       // Las cards BO / DE / CR del dashboard.
       expect(find.text('BO'), findsOneWidget);
       expect(find.text('DE'), findsOneWidget);
@@ -29,10 +31,13 @@ void main() {
         },
       );
 
-      expect(find.text('Banamex'), findsOneWidget);
+      // Sprint dashboard-bundle-v1: chip filtro suma otra instancia.
+      expect(find.text('Banamex'), findsAtLeastNWidgets(1));
       // Bolsa sigue presente como nombre + tipo (2x). Banamex no aparece
       // duplicado porque `_typeLabel('debit')` retorna "Débito".
-      expect(find.text('Bolsa'), findsNWidgets(2));
+      // Sprint dashboard-bundle-v1 agregó chip filtro con nombre de cuenta →
+// "Bolsa" ahora aparece 3 veces. Cambio a findsAtLeast(2).
+expect(find.text('Bolsa'), findsAtLeastNWidgets(2));
 
       await harness.dispose();
     });

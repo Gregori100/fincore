@@ -668,6 +668,279 @@ class ReportsService {
     );
   }
 
+  /// Resumen del día calendario local para la card "Hoy" del dashboard.
+  /// Sprint `flutter-dashboard-bundle-v1`.
+  ///
+  /// Filtros:
+  /// - `strftime('%Y-%m-%d', occurred_at, 'localtime') = ?` con el día
+  ///   local del `now` (RN-DB02, timezone-safe).
+  /// - `kind IN ('income', 'expense', 'credit_expense')` (RN-DB01);
+  ///   `transfer` y `debt_payment` excluidos.
+  /// - `deleted_at IS NULL` (RN-DB03).
+  ///
+  /// Reactivo sobre `journal_entries`.
+  Stream<TodaySummary> watchTodaySummary({DateTime? now}) {
+    final reference = now ?? DateTime.now();
+    final day = DateTime(reference.year, reference.month, reference.day);
+    final key =
+        '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+    // Sprint quality-review: bracket `occurred_at` para que SQLite pueda
+    // usar el índice `idx_entries_occurred_active` en vez de recomputar
+    // `strftime` sobre toda la tabla. El bracket UTC es un superset
+    // seguro (día local completo cabe dentro de ±1 día UTC); el
+    // `strftime('localtime')` sigue como red de seguridad para el borde
+    // DST y para el día calendario exacto local. Patrón heredado de
+    // `movementsByDay`.
+    final dayStartUtc = day.toUtc();
+    final dayEndUtc = day.add(const Duration(days: 1)).toUtc();
+    const sql = '''
+      SELECT
+        COALESCE(SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END), 0) AS income,
+        COALESCE(SUM(CASE WHEN kind IN ('expense', 'credit_expense') THEN amount ELSE 0 END), 0) AS expense
+      FROM journal_entries
+      WHERE deleted_at IS NULL
+        AND kind IN ('income', 'expense', 'credit_expense')
+        AND occurred_at >= ?
+        AND occurred_at < ?
+        AND strftime('%Y-%m-%d', occurred_at, 'localtime') = ?
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [
+            Variable.withDateTime(dayStartUtc),
+            Variable.withDateTime(dayEndUtc),
+            Variable.withString(key),
+          ],
+          readsFrom: {_db.journalEntries},
+        )
+        .watch()
+        .map((rows) {
+      final row = rows.isEmpty ? null : rows.first;
+      final income = row?.read<double>('income') ?? 0.0;
+      final expense = row?.read<double>('expense') ?? 0.0;
+      return TodaySummary(
+        day: day,
+        totalIncome: income,
+        totalExpense: expense,
+        net: income - expense,
+      );
+    });
+  }
+
+  /// Serie de saldo diario para el sparkline de cada `_TotalCard`.
+  /// Sprint `flutter-dashboard-bundle-v1`.
+  ///
+  /// `kind ∈ {'bo', 'de', 'cr'}` determina el agregado:
+  /// - `bo` = suma de balances (cash + debit).
+  /// - `de` = suma de deudas de credit (invertido: origin - destination).
+  /// - `cr` = suma de `(credit_limit - deuda)` de credit.
+  ///
+  /// Retorna exactamente 30 puntos (RN-DB05), del día `hoy - 29` al `hoy`
+  /// (inclusive), con backfill del saldo del día previo cuando no hay
+  /// movimientos ese día.
+  ///
+  /// Reactivo sobre `journal_entries` y `accounts` (para reflejar
+  /// cambios de límite, archivado y nuevas cuentas).
+  ///
+  /// Nota RN-DB01: la exclusión de `transfer` y `debt_payment` que aplica
+  /// a `watchTodaySummary` (flujo del día) NO aplica acá. Este método
+  /// computa BALANCES agregados; `transfer` y `debt_payment` son
+  /// movimientos internos que se autocancelan matemáticamente entre
+  /// origen y destino dentro del mismo agregado (ej. un transfer
+  /// Bolsa→Débito suma 0 al agregado `bo`). Excluirlos rompería el
+  /// saldo derivado.
+  Stream<List<DailyBalance>> watchDailyBalance30d({
+    required String kind,
+    DateTime? now,
+  }) {
+    // Sprint quality-review: assert defensivo contra `kind` inválido.
+    // Sin este chequeo, un typo (`'BO'`, `'balance'`, string vacío)
+    // produce silenciosamente 30 puntos con balance 0 — sparkline plano
+    // indistinguible de "sin actividad". El error grita en QA.
+    assert(kind == 'bo' || kind == 'de' || kind == 'cr',
+        'kind inválido: "$kind". Debe ser uno de {bo, de, cr}.');
+    final reference = now ?? DateTime.now();
+    final today = DateTime(reference.year, reference.month, reference.day);
+    final rangeStart = today.subtract(const Duration(days: 29));
+    // El SQL trae los movimientos del rango con `month_key` de día y su
+    // desglose por cuenta. La query intencional es "amplia": trae 1 fila
+    // por (day, account_id) del rango + una fila con el saldo inicial de
+    // cada cuenta antes del rango. Se procesa todo en Dart.
+    //
+    // `readsFrom: {journalEntries, accounts}` para reactividad completa.
+    final rangeStartIso = rangeStart.toUtc().toIso8601String();
+    const sqlChanges = '''
+      SELECT
+        a.id AS account_id,
+        a.type AS account_type,
+        a.credit_limit AS credit_limit,
+        strftime('%Y-%m-%d', j.occurred_at, 'localtime') AS day_key,
+        COALESCE(SUM(CASE WHEN j.account_destination_id = a.id THEN j.amount ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN j.account_origin_id = a.id THEN j.amount ELSE 0 END), 0)
+          AS delta
+      FROM accounts a
+      LEFT JOIN journal_entries j
+        ON (j.account_origin_id = a.id OR j.account_destination_id = a.id)
+        AND j.deleted_at IS NULL
+        AND j.occurred_at >= ?
+      WHERE a.deleted_at IS NULL
+      GROUP BY a.id, a.type, a.credit_limit,
+               strftime('%Y-%m-%d', j.occurred_at, 'localtime')
+    ''';
+    const sqlInitial = '''
+      SELECT
+        a.id AS account_id,
+        a.type AS account_type,
+        a.credit_limit AS credit_limit,
+        COALESCE(SUM(CASE WHEN j.account_destination_id = a.id THEN j.amount ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN j.account_origin_id = a.id THEN j.amount ELSE 0 END), 0)
+          AS initial_balance
+      FROM accounts a
+      LEFT JOIN journal_entries j
+        ON (j.account_origin_id = a.id OR j.account_destination_id = a.id)
+        AND j.deleted_at IS NULL
+        AND j.occurred_at < ?
+      WHERE a.deleted_at IS NULL
+      GROUP BY a.id, a.type, a.credit_limit
+    ''';
+    // 2 streams paralelos combinados via rxdart... pero el proyecto no
+    // usa rxdart. Simplificamos usando `Stream.multi` no; mejor: 1 sola
+    // query "big" que trae ambas cosas concatenadas. Voto por 2 queries
+    // separadas con readsFrom sobre el mismo par y combinar en el .map
+    // usando el patrón `customSelect(sql, readsFrom).watch()` para uno
+    // y `.get()` para el otro dentro del map. El .get() se reevalúa
+    // cada re-emit del principal — coincide semánticamente porque
+    // ambos dependen de {journalEntries, accounts}.
+    return _db
+        .customSelect(
+          sqlChanges,
+          variables: [Variable.withString(rangeStartIso)],
+          readsFrom: {_db.journalEntries, _db.accounts},
+        )
+        .watch()
+        .asyncMap((changeRows) async {
+      // `readsFrom` NO se pasa aquí: `.get()` es one-shot y no participa
+      // del sistema reactivo de drift; el parámetro sería dead code y
+      // podría confundir en refactors futuros. La reactividad del stream
+      // vive en el driver principal (`sqlChanges.watch()`).
+      //
+      // TD conocido: cada re-emit dispara este `.get()` de nuevo. Con 3
+      // sparklines suscritos (bo/de/cr), cualquier cambio dispara 6
+      // queries (3 changes + 3 initials). Aceptable en single-user
+      // <20k entries. Optimización futura: fusionar ambos SQL en un
+      // solo `UNION ALL` con sentinel `day_key = 'initial'` para lograr
+      // 3 queries por cambio en vez de 6.
+      final initialRows = await _db
+          .customSelect(
+            sqlInitial,
+            variables: [Variable.withString(rangeStartIso)],
+          )
+          .get();
+      return _buildDailyBalance30d(
+        kind: kind,
+        today: today,
+        initialRows: initialRows,
+        changeRows: changeRows,
+      );
+    });
+  }
+
+  /// Helper puro que arma los 30 puntos del sparkline.
+  List<DailyBalance> _buildDailyBalance30d({
+    required String kind,
+    required DateTime today,
+    required List<QueryRow> initialRows,
+    required List<QueryRow> changeRows,
+  }) {
+    // Balance inicial por cuenta (al cierre del día `rangeStart - 1`).
+    final initialByAccount = <String, _AccountBalanceMeta>{};
+    for (final row in initialRows) {
+      final id = row.read<String>('account_id');
+      initialByAccount[id] = _AccountBalanceMeta(
+        type: row.read<String>('account_type'),
+        creditLimit: row.read<double>('credit_limit'),
+        balance: row.read<double>('initial_balance'),
+      );
+    }
+
+    // Deltas por (accountId, day_key). day_key puede ser null si la
+    // cuenta no tiene movimientos en el rango (LEFT JOIN).
+    final deltasByAccount = <String, Map<String, double>>{};
+    for (final row in changeRows) {
+      final id = row.read<String>('account_id');
+      final dayKey = row.readNullable<String>('day_key');
+      if (dayKey == null) continue; // fila vacía del LEFT JOIN.
+      final delta = row.read<double>('delta');
+      deltasByAccount.putIfAbsent(id, () => <String, double>{})[dayKey] = delta;
+
+      // Asegurar que la cuenta esté en initial (por si no tuvo mov
+      // pre-rango; el sqlInitial la trajo con balance 0).
+      initialByAccount.putIfAbsent(
+        id,
+        () => _AccountBalanceMeta(
+          type: row.read<String>('account_type'),
+          creditLimit: row.read<double>('credit_limit'),
+          balance: 0,
+        ),
+      );
+    }
+
+    // Backfill día a día por cuenta y agregar al total según kind.
+    final result = <DailyBalance>[];
+    // Balance actual por cuenta (arranca en initial).
+    final runningBalance = <String, double>{};
+    for (final entry in initialByAccount.entries) {
+      runningBalance[entry.key] = entry.value.balance;
+    }
+
+    for (var i = 0; i < 30; i++) {
+      final day = today.subtract(Duration(days: 29 - i));
+      final dayKey =
+          '${day.year.toString().padLeft(4, '0')}-${day.month.toString().padLeft(2, '0')}-${day.day.toString().padLeft(2, '0')}';
+
+      // Aplicar deltas del día a cada cuenta.
+      for (final acctId in runningBalance.keys) {
+        final delta = deltasByAccount[acctId]?[dayKey] ?? 0.0;
+        runningBalance[acctId] = runningBalance[acctId]! + delta;
+      }
+
+      // Colapsar al agregado según kind.
+      double aggregated = 0.0;
+      for (final entry in runningBalance.entries) {
+        final meta = initialByAccount[entry.key]!;
+        final rawBalance = entry.value;
+        switch (kind) {
+          case 'bo':
+            if (meta.type == 'cash' || meta.type == 'debit') {
+              aggregated += rawBalance;
+            }
+            break;
+          case 'de':
+            if (meta.type == 'credit') {
+              // Deuda: invertida vs cash/debit. rawBalance actual usa la
+              // convención cash (dest - origin). Para credit debemos
+              // invertir el signo — deuda positiva sube con `origin`
+              // (cargos).
+              aggregated += -rawBalance;
+            }
+            break;
+          case 'cr':
+            if (meta.type == 'credit') {
+              // Disponible = creditLimit - deuda. deuda = -rawBalance.
+              final debt = -rawBalance;
+              aggregated += meta.creditLimit - debt;
+            }
+            break;
+        }
+      }
+
+      result.add(DailyBalance(day: day, balance: aggregated));
+    }
+
+    return result;
+  }
+
   SpendingReport _buildReport(
     List<QueryRow> rows, {
     required DateTime from,
@@ -1777,6 +2050,19 @@ class ReportsService {
 /// colapso siempre nulifica la metadata. Si algún día se cambia el colapso
 /// para preservar la metadata original (ej. mostrar nombre en gris), hay
 /// que replantear la clave del acumulador o hacer merge explícito.
+/// Metadata + saldo por cuenta del helper `_buildDailyBalance30d`.
+/// Sprint `flutter-dashboard-bundle-v1`.
+class _AccountBalanceMeta {
+  final String type;
+  final double creditLimit;
+  final double balance;
+  const _AccountBalanceMeta({
+    required this.type,
+    required this.creditLimit,
+    required this.balance,
+  });
+}
+
 class _BreakdownAccumulator {
   final String? categoryId;
   final String label;
@@ -1940,6 +2226,33 @@ class DeltaPercent {
     required this.percent,
     required this.direction,
   });
+}
+
+/// Resumen del día actual para la card "Hoy" del dashboard. Sprint
+/// `flutter-dashboard-bundle-v1` (RN-DB01..DB04). Excluye `transfer`
+/// y `debt_payment` (movimientos internos).
+class TodaySummary {
+  final DateTime day;
+  final double totalIncome;
+  final double totalExpense;
+  final double net;
+
+  const TodaySummary({
+    required this.day,
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.net,
+  });
+}
+
+/// Punto en el sparkline de saldo diario. Sprint
+/// `flutter-dashboard-bundle-v1`. `day` es normalizado a 00:00 local
+/// (fecha calendario); `balance` es el saldo agregado al fin de ese día.
+class DailyBalance {
+  final DateTime day;
+  final double balance;
+
+  const DailyBalance({required this.day, required this.balance});
 }
 
 /// Reporte de top N movimientos del sprint `flutter-reports-top-movements-v1`.

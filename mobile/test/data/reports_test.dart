@@ -1519,6 +1519,301 @@ void main() {
   });
 
   // ===========================================================================
+  // watchTodaySummary — sprint `flutter-dashboard-bundle-v1`
+  // Cubre RN-DB01..DB04 + CB-01, CB-07, CB-08, CB-17 del test-plan.
+  // ===========================================================================
+
+  group('watchTodaySummary (sprint dashboard-bundle)', () {
+    final anchor = DateTime(2024, 6, 15, 12);
+
+    test('UT-TD01: día sin movimientos → income=0, expense=0, net=0',
+        () async {
+      final s = await reports.watchTodaySummary(now: anchor).first;
+      expect(s.totalIncome, 0);
+      expect(s.totalExpense, 0);
+      expect(s.net, 0);
+    });
+
+    test('UT-TD02: income + expense del día → agregación + net correcto',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1200,
+        occurredAt: anchor,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 300,
+        occurredAt: anchor,
+      );
+      final s = await reports.watchTodaySummary(now: anchor).first;
+      expect(s.totalIncome, 1200);
+      expect(s.totalExpense, 300);
+      expect(s.net, 900);
+    });
+
+    test('UT-TD03: credit_expense cuenta en totalExpense (RN-DB01)',
+        () async {
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 700,
+        occurredAt: anchor,
+      );
+      final s = await reports.watchTodaySummary(now: anchor).first;
+      expect(s.totalIncome, 0);
+      expect(s.totalExpense, 700);
+      expect(s.net, -700);
+    });
+
+    test('UT-TD04: transfer y debt_payment NO cuentan (RN-DB01)',
+        () async {
+      // Cargo previo para permitir debt_payment.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 400,
+        occurredAt: anchor,
+      );
+      // Movimientos que NO deberían aparecer en la vista Hoy.
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 500,
+        occurredAt: anchor,
+      );
+      await entriesDao.registerDebtPayment(
+        accountOriginId: bolsa,
+        accountDestinationId: credit,
+        amount: 200,
+        occurredAt: anchor,
+      );
+      final s = await reports.watchTodaySummary(now: anchor).first;
+      // Solo el credit_expense (400) cuenta como gasto.
+      expect(s.totalIncome, 0);
+      expect(s.totalExpense, 400);
+    });
+
+    test('UT-TD05: movimiento cancelado NO cuenta (RN-DB03)', () async {
+      final id = await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        occurredAt: anchor,
+      );
+      await entriesDao.cancel(id);
+      final s = await reports.watchTodaySummary(now: anchor).first;
+      expect(s.totalIncome, 0);
+    });
+
+    // Sprint quality-review — fix A9: borderline de días adyacentes.
+    // Registramos 3 movimientos a mediodía local de 14/jun, 15/jun y
+    // 16/jun. Solo el del día calendario local del 15/jun cuenta.
+    // Prueba el filtro combinado del bracket `occurred_at` (agrega del
+    // fix A2, para índice) + `strftime('localtime')` (día calendario
+    // exacto). Evitamos medianoches exactas porque su semántica UTC↔local
+    // depende del TZ del runner y agregaría flakiness sin cubrir bug real.
+    test('UT-TD06: filtro por día calendario local excluye día previo '
+        'y día siguiente', () async {
+      final prevDayMidday = DateTime(2024, 6, 14, 12);
+      final todayMidday = DateTime(2024, 6, 15, 12);
+      final nextDayMidday = DateTime(2024, 6, 16, 12);
+
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 100,
+        occurredAt: prevDayMidday,
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 200,
+        occurredAt: todayMidday,
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 400,
+        occurredAt: nextDayMidday,
+      );
+
+      final s = await reports.watchTodaySummary(now: anchor).first;
+      expect(s.totalIncome, 200,
+          reason: 'Solo el income del 15/jun mediodía cuenta; los de 14 '
+              'y 16 quedan fuera del rango. Blinda el bracket '
+              'occurred_at + strftime localtime.');
+    });
+
+    test(
+        'UT-TD07: reactividad — registrar income con stream abierto → '
+        'emitsThrough',
+        () async {
+      final stream = reports.watchTodaySummary(now: anchor);
+      final expectation = expectLater(
+        stream,
+        emitsThrough(
+          predicate<TodaySummary>((s) => s.totalIncome == 800),
+        ),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 800,
+        occurredAt: anchor,
+      );
+      await expectation;
+    });
+  });
+
+  // ===========================================================================
+  // watchDailyBalance30d — sprint `flutter-dashboard-bundle-v1`
+  // Cubre RN-DB05..DB07 + CB-02, CB-03, CB-06 del test-plan.
+  // ===========================================================================
+
+  group('watchDailyBalance30d (sprint dashboard-bundle)', () {
+    // Anchor sin componente de hora para evitar edge de zona horaria en
+    // los cálculos de `DateTime(y, m, d)` vs `strftime('localtime')` de
+    // SQLite. Usamos anchor puntual y sembramos con `anchor` mismo.
+    final anchor = DateTime(2024, 6, 15);
+
+    test('UT-SP01: BD vacía → 30 puntos con balance 0 para "bo"',
+        () async {
+      final points = await reports
+          .watchDailyBalance30d(kind: 'bo', now: anchor)
+          .first;
+      expect(points, hasLength(30));
+      expect(points.every((p) => p.balance == 0), isTrue);
+    });
+
+    test(
+        'UT-SP02: 1 income de \$1000 el día `hoy-15d` → primeros ~15 días '
+        'con balance 0, restantes con \$1000 (backfill)',
+        () async {
+      // "hoy" = 2024-06-15. hoy-15d = 2024-05-31.
+      final incomeDay = DateTime(2024, 5, 31, 12);
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1000,
+        occurredAt: incomeDay,
+      );
+      final points = await reports
+          .watchDailyBalance30d(kind: 'bo', now: anchor)
+          .first;
+      expect(points, hasLength(30));
+      // Buscar el índice del día 31/mayo en el rango [hoy-29, hoy].
+      final idxIncomeDay = points.indexWhere(
+        (p) =>
+            p.day.year == incomeDay.year &&
+            p.day.month == incomeDay.month &&
+            p.day.day == incomeDay.day,
+      );
+      expect(idxIncomeDay, greaterThanOrEqualTo(0));
+      // Días anteriores al income → balance 0.
+      for (var i = 0; i < idxIncomeDay; i++) {
+        expect(points[i].balance, 0, reason: 'día antes del income → 0');
+      }
+      // Días del income en adelante → balance 1000.
+      for (var i = idxIncomeDay; i < points.length; i++) {
+        expect(points[i].balance, 1000,
+            reason: 'día del income o posterior → 1000');
+      }
+    });
+
+    test(
+        'UT-SP03: kind="bo" con 2 cuentas cash+debit → sparkline suma '
+        'ambos balances',
+        () async {
+      // Bolsa (cash) + Banamex (debit): 2 incomes de \$500 el mismo día.
+      final incomeDay = DateTime(2024, 5, 31, 12);
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 500,
+        occurredAt: incomeDay,
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: debit,
+        amount: 500,
+        occurredAt: incomeDay,
+      );
+      final points = await reports
+          .watchDailyBalance30d(kind: 'bo', now: anchor)
+          .first;
+      // Último punto (hoy) → balance = 500 + 500 = 1000.
+      expect(points.last.balance, 1000);
+    });
+
+    test(
+        'UT-SP04: kind="de" con 1 credit → sparkline muestra deuda '
+        '(positiva, invertida vs cash)',
+        () async {
+      // Cargo de \$800 el día `hoy-10d`.
+      final chargeDay = DateTime(2024, 6, 5, 12);
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 800,
+        occurredAt: chargeDay,
+      );
+      final points = await reports
+          .watchDailyBalance30d(kind: 'de', now: anchor)
+          .first;
+      // Último punto: deuda de 800.
+      expect(points.last.balance, 800);
+    });
+
+    test(
+        'UT-SP05: kind="cr" con credit_limit=50000 y deuda 800 → '
+        'disponible = 49200',
+        () async {
+      // Cargo de \$800 el día `hoy-10d`.
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 800,
+        occurredAt: DateTime(2024, 6, 5, 12),
+      );
+      final points = await reports
+          .watchDailyBalance30d(kind: 'cr', now: anchor)
+          .first;
+      // Disponible = 50000 - 800 = 49200.
+      expect(points.last.balance, 49200);
+    });
+
+    test('UT-SP06: cuenta archivada NO cuenta en el agregado',
+        () async {
+      // Crear cuenta debit adicional, registrar income, archivar.
+      final tempDebit = await accountsDao.create(
+        name: 'TempDebit_SP06',
+        type: 'debit',
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: tempDebit,
+        amount: 1000,
+        occurredAt: DateTime(2024, 6, 1, 12),
+      );
+      await accountsDao.archive(tempDebit);
+      final points = await reports
+          .watchDailyBalance30d(kind: 'bo', now: anchor)
+          .first;
+      // Como la cuenta se archivó, el income tampoco cuenta (archive
+      // cancela los entries en cascada). Balance final = 0.
+      expect(points.last.balance, 0);
+    });
+
+    test(
+        'UT-SP07: reactividad — registrar movimiento nuevo con stream '
+        'abierto → emitsThrough',
+        () async {
+      final stream = reports.watchDailyBalance30d(kind: 'bo', now: anchor);
+      final expectation = expectLater(
+        stream,
+        emitsThrough(
+          predicate<List<DailyBalance>>(
+              (points) => points.last.balance == 250),
+        ),
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 250,
+        occurredAt: DateTime(2024, 6, 10, 12),
+      );
+      await expectation;
+    });
+  });
+
+  // ===========================================================================
   // topMovements — sprint `flutter-reports-top-movements-v1`
   // Cubre RN-T01..T08 + casos borde CB-T01..T16 del test-plan.
   // ===========================================================================

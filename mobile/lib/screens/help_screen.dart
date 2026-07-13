@@ -56,7 +56,13 @@ class HelpScreen extends StatelessWidget {
                 '• CR (Crédito disponible): saldo libre en las tarjetas '
                   '(límite − deuda).\n\n'
                 'Se calculan automáticamente a partir de los movimientos. '
-                'No requieren actualización manual.',
+                'No requieren actualización manual.\n\n'
+                'Adicionalmente, el Dashboard muestra:\n'
+                '• Hoy: resumen de ingresos, gastos y neto del día actual.\n'
+                '• Sparklines: mini-gráfico debajo de BO/DE/CR con la '
+                  'evolución del saldo agregado en los últimos 30 días.\n'
+                '• Filtro por cuenta: chips arriba de "Últimos movimientos" '
+                  'para filtrar rápidamente la lista.',
           ),
           const _FaqTile(
             title: '¿Cómo se calculan los reportes?',
