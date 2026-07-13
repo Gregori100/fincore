@@ -115,6 +115,20 @@ class EntriesFilters {
     );
   }
 
+  /// Rango del mes calendario que contiene [firstDay]. Sprint
+  /// `flutter-cashflow-monthly-breakdown-v1`. Usa `month+1, day=0` que
+  /// devuelve el último día del mes de `firstDay` con overflow controlado
+  /// (patrón standard de Dart), con subsegundo para inclusión estricta.
+  factory EntriesFilters.forMonth({required DateTime firstDay}) {
+    final from = DateTime(firstDay.year, firstDay.month, 1);
+    final to = DateTime(firstDay.year, firstDay.month + 1, 0, 23, 59, 59, 999);
+    return EntriesFilters(
+      datePreset: DateRangePreset.custom,
+      from: from,
+      to: to,
+    );
+  }
+
   /// Cuenta cuántas dimensiones tienen al menos un valor distinto del default.
   /// Usado para el badge numérico en el AppBar. Max 4.
   int get activeCount {

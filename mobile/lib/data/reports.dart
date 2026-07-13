@@ -448,6 +448,150 @@ class ReportsService {
     );
   }
 
+  /// Desglose por categoría del mes específico `monthAnchor`. Sprint
+  /// `flutter-cashflow-monthly-breakdown-v1`.
+  ///
+  /// Filtros:
+  /// - `strftime('%Y-%m', occurred_at, 'localtime') = 'YYYY-MM'` para respetar
+  ///   la zona horaria local (patrón calendar/heatmap). Difiere del cashflow
+  ///   base que agrupa por UTC — divergencia aceptada (R6 del plan).
+  /// - `kind IN ('income', 'expense', 'credit_expense')` (RN-CB02);
+  ///   `transfer` y `debt_payment` excluidos (movimientos internos).
+  /// - `journal_entries.deleted_at IS NULL` (RN-CB10).
+  ///
+  /// El `LEFT JOIN categories` filtra `deleted_at IS NULL` — categorías
+  /// archivadas caen al bucket "Sin categoría" (RN-CB11).
+  ///
+  /// Reactivo sobre `journal_entries` + `categories` para reflejar rename
+  /// o archive en tiempo real.
+  Stream<MonthBreakdown> cashflowMonthBreakdown({
+    required DateTime monthAnchor,
+  }) {
+    final key =
+        '${monthAnchor.year.toString().padLeft(4, '0')}-${monthAnchor.month.toString().padLeft(2, '0')}';
+    final firstDay = DateTime(monthAnchor.year, monthAnchor.month, 1);
+    const sql = '''
+      SELECT
+        j.kind AS kind,
+        j.category_id AS category_id,
+        c.name AS category_name,
+        c.color_slug AS color_slug,
+        c.icon_slug AS icon_slug,
+        c.applies_to AS applies_to,
+        SUM(j.amount) AS total
+      FROM journal_entries j
+      LEFT JOIN categories c
+        ON c.id = j.category_id AND c.deleted_at IS NULL
+      WHERE j.deleted_at IS NULL
+        AND j.kind IN ('income', 'expense', 'credit_expense')
+        AND strftime('%Y-%m', j.occurred_at, 'localtime') = ?
+      GROUP BY j.kind, j.category_id, c.name, c.color_slug, c.icon_slug, c.applies_to
+    ''';
+    return _db
+        .customSelect(
+          sql,
+          variables: [Variable.withString(key)],
+          readsFrom: {_db.journalEntries, _db.categories},
+        )
+        .watch()
+        .map((rows) => _buildMonthBreakdown(rows, firstDay: firstDay));
+  }
+
+  MonthBreakdown _buildMonthBreakdown(
+    List<QueryRow> rows, {
+    required DateTime firstDay,
+  }) {
+    // Estructuras temporales: monto acumulado por (categoryId?, metadata).
+    // Se usan Map por lado para que la simetría RN-CB03/CB04 pueda colapsar
+    // categorías incompatibles al bucket "Sin categoría" (categoryId=null).
+    final incomeAcc = <String?, _BreakdownAccumulator>{};
+    final expenseAcc = <String?, _BreakdownAccumulator>{};
+
+    for (final row in rows) {
+      final total = row.read<double>('total');
+      // CB-P03/CB-P04: filtrar buckets con amount <= 0 (edge legacy).
+      if (total <= 0) continue;
+
+      final kind = row.read<String>('kind');
+      final rawCategoryId = row.readNullable<String>('category_id');
+      final categoryName = row.readNullable<String>('category_name');
+      final colorSlug = row.readNullable<String>('color_slug');
+      final iconSlug = row.readNullable<String>('icon_slug');
+      final appliesTo = row.readNullable<String>('applies_to');
+
+      // Determinar el lado según kind.
+      final isIncomeSide = kind == 'income';
+
+      // Categoría archivada o FK huérfana: el LEFT JOIN filtró por
+      // `c.deleted_at IS NULL`, así que si `applies_to` es null aquí es
+      // porque no hay categoría activa asociada. Colapsar todo el bucket a
+      // "Sin categoría" (RN-CB11 + CB-P02).
+      //
+      // Dependencia con schema: `Categories.appliesTo` está declarado NOT
+      // NULL (`database.dart`). Si algún día se vuelve nullable, esta
+      // sentinela deja de ser confiable y hay que sustituirla por un
+      // chequeo explícito sobre otra columna del JOIN (ej. `c.name`).
+      final isJoinEmpty = appliesTo == null;
+
+      // Aplicar simetría RN-CB03/CB04: categoría con applies_to incompatible
+      // se colapsa a "Sin categoría".
+      final incompatibleSide =
+          (isIncomeSide && appliesTo == 'expense') ||
+              (!isIncomeSide && appliesTo == 'income');
+      final collapseToUncategorized = isJoinEmpty || incompatibleSide;
+      final effectiveCategoryId =
+          collapseToUncategorized ? null : rawCategoryId;
+      final effectiveName = collapseToUncategorized ? null : categoryName;
+      final effectiveColor = collapseToUncategorized ? null : colorSlug;
+      final effectiveIcon = collapseToUncategorized ? null : iconSlug;
+
+      final target = isIncomeSide ? incomeAcc : expenseAcc;
+      final existing = target[effectiveCategoryId];
+      if (existing == null) {
+        target[effectiveCategoryId] = _BreakdownAccumulator(
+          categoryId: effectiveCategoryId,
+          label: effectiveName ?? 'Sin categoría',
+          colorSlug: effectiveColor,
+          iconSlug: effectiveIcon,
+          amount: total,
+        );
+      } else {
+        target[effectiveCategoryId] = existing.plus(total);
+      }
+    }
+
+    final totalIncome = incomeAcc.values.fold<double>(0, (a, b) => a + b.amount);
+    final totalExpense =
+        expenseAcc.values.fold<double>(0, (a, b) => a + b.amount);
+
+    List<CategoryFlow> flowsFrom(
+      Map<String?, _BreakdownAccumulator> acc,
+      double total,
+    ) {
+      final list = acc.values
+          .map((a) => CategoryFlow(
+                categoryId: a.categoryId,
+                label: a.label,
+                colorSlug: a.colorSlug,
+                iconSlug: a.iconSlug,
+                amount: a.amount,
+                percent: total > 0 ? (a.amount / total) * 100 : 0.0,
+              ))
+          .toList()
+        ..sort((a, b) => b.amount.compareTo(a.amount));
+      return list;
+    }
+
+    return MonthBreakdown(
+      firstDay: firstDay,
+      totalIncome: totalIncome,
+      totalExpense: totalExpense,
+      net: totalIncome - totalExpense,
+      incomeBuckets: flowsFrom(incomeAcc, totalIncome),
+      expenseBuckets: flowsFrom(expenseAcc, totalExpense),
+    );
+  }
+
   SpendingReport _buildReport(
     List<QueryRow> rows, {
     required DateTime from,
@@ -1547,6 +1691,40 @@ class ReportsService {
   }
 }
 
+/// Acumulador interno de `_buildMonthBreakdown`. Sprint
+/// `flutter-cashflow-monthly-breakdown-v1`.
+///
+/// Cuando varias filas caen al mismo bucket `categoryId=null` (archivada +
+/// FK huérfana + `applies_to` incompatible + `NULL` explícito), el primer
+/// insert setea la metadata (`label='Sin categoría'`, slugs=null) y las
+/// siguientes solo suman via `plus`. El resultado es estable porque el
+/// colapso siempre nulifica la metadata. Si algún día se cambia el colapso
+/// para preservar la metadata original (ej. mostrar nombre en gris), hay
+/// que replantear la clave del acumulador o hacer merge explícito.
+class _BreakdownAccumulator {
+  final String? categoryId;
+  final String label;
+  final String? colorSlug;
+  final String? iconSlug;
+  final double amount;
+
+  const _BreakdownAccumulator({
+    required this.categoryId,
+    required this.label,
+    required this.colorSlug,
+    required this.iconSlug,
+    required this.amount,
+  });
+
+  _BreakdownAccumulator plus(double delta) => _BreakdownAccumulator(
+        categoryId: categoryId,
+        label: label,
+        colorSlug: colorSlug,
+        iconSlug: iconSlug,
+        amount: amount + delta,
+      );
+}
+
 class _DayBucket {
   bool hasIncome = false;
   bool hasSpending = false;
@@ -1602,6 +1780,52 @@ class MonthCashflow {
     required this.income,
     required this.expense,
     required this.net,
+  });
+}
+
+/// Desglose por categoría de un mes específico. Sprint
+/// `flutter-cashflow-monthly-breakdown-v1`.
+///
+/// Construido por [ReportsService.cashflowMonthBreakdown]. Separa las
+/// categorías por lado (ingresos vs gastos). Cada lado puede estar vacío
+/// (RN-CB07). Los totales se calculan sobre los buckets efectivos.
+class MonthBreakdown {
+  final DateTime firstDay;
+  final double totalIncome;
+  final double totalExpense;
+  final double net;
+  final List<CategoryFlow> incomeBuckets;
+  final List<CategoryFlow> expenseBuckets;
+
+  const MonthBreakdown({
+    required this.firstDay,
+    required this.totalIncome,
+    required this.totalExpense,
+    required this.net,
+    required this.incomeBuckets,
+    required this.expenseBuckets,
+  });
+}
+
+/// Bucket individual dentro de [MonthBreakdown]. `categoryId == null` +
+/// `label == 'Sin categoría'` para el bucket residual que agrupa
+/// movimientos sin categoría, con categoría archivada, o con
+/// `applies_to` incompatible (RN-CB03/CB04 — simetría con drilldown-parity).
+class CategoryFlow {
+  final String? categoryId;
+  final String label;
+  final String? colorSlug;
+  final String? iconSlug;
+  final double amount;
+  final double percent;
+
+  const CategoryFlow({
+    required this.categoryId,
+    required this.label,
+    required this.colorSlug,
+    required this.iconSlug,
+    required this.amount,
+    required this.percent,
   });
 }
 

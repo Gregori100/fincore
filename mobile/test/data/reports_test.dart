@@ -928,6 +928,340 @@ void main() {
   });
 
   // ===========================================================================
+  // cashflowMonthBreakdown — sprint `flutter-cashflow-monthly-breakdown-v1`
+  // Cubre RN-CB01..CB12 + CB-01..CB17 + CB-P01..CB-P05 del test-plan.
+  // ===========================================================================
+
+  group('cashflowMonthBreakdown (sprint monthly-breakdown)', () {
+    final anchor = DateTime(2024, 6, 15);
+    final firstDay = DateTime(2024, 6, 1);
+
+    test('UT-CB01: mes sin movimientos → ambos buckets vacíos, totales 0',
+        () async {
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.firstDay, firstDay);
+      expect(result.totalIncome, 0);
+      expect(result.totalExpense, 0);
+      expect(result.net, 0);
+      expect(result.incomeBuckets, isEmpty);
+      expect(result.expenseBuckets, isEmpty);
+    });
+
+    test('UT-CB02: mes con solo ingresos → expenseBuckets vacía', () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 5000,
+        occurredAt: anchor,
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.totalIncome, 5000);
+      expect(result.totalExpense, 0);
+      expect(result.expenseBuckets, isEmpty);
+      expect(result.incomeBuckets, hasLength(1));
+      expect(result.incomeBuckets.first.categoryId, isNull);
+      expect(result.incomeBuckets.first.label, 'Sin categoría');
+      expect(result.incomeBuckets.first.percent, closeTo(100, 0.001));
+    });
+
+    test('UT-CB03: mes con solo gastos → incomeBuckets vacía', () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 1200,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.totalIncome, 0);
+      expect(result.totalExpense, 1200);
+      expect(result.incomeBuckets, isEmpty);
+      expect(result.expenseBuckets, hasLength(1));
+      expect(result.expenseBuckets.first.label, 'Comida_Test');
+    });
+
+    test(
+        'UT-CB04: 3 categorías con distintos montos → orden desc + percent 100',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 3000,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 5000,
+        occurredAt: anchor,
+        categoryId: catTransporte,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 2000,
+        occurredAt: anchor,
+        categoryId: catSalud,
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.expenseBuckets, hasLength(3));
+      expect(result.expenseBuckets[0].label, 'Transporte_Test');
+      expect(result.expenseBuckets[0].amount, 5000);
+      expect(result.expenseBuckets[1].label, 'Comida_Test');
+      expect(result.expenseBuckets[2].label, 'Salud_Test');
+      final sumPercent =
+          result.expenseBuckets.fold<double>(0, (a, b) => a + b.percent);
+      expect(sumPercent, closeTo(100, 0.01));
+    });
+
+    test('UT-CB05: category_id null → bucket "Sin categoría" con 100%',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 800,
+        occurredAt: anchor,
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.expenseBuckets, hasLength(1));
+      expect(result.expenseBuckets.first.categoryId, isNull);
+      expect(result.expenseBuckets.first.label, 'Sin categoría');
+      expect(result.expenseBuckets.first.percent, closeTo(100, 0.001));
+    });
+
+    test('UT-CB06: categoría archivada con gastos → migra a "Sin categoría"',
+        () async {
+      final catTemp = await categoriesDao.create(
+        name: 'Temp_Archivada',
+        appliesTo: 'expense',
+        colorSlug: 'red',
+        iconSlug: 'shopping-cart',
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 400,
+        occurredAt: anchor,
+        categoryId: catTemp,
+      );
+      await categoriesDao.archive(catTemp);
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.expenseBuckets, hasLength(1));
+      expect(result.expenseBuckets.first.categoryId, isNull);
+      expect(result.expenseBuckets.first.label, 'Sin categoría');
+    });
+
+    test(
+        'UT-CB07: categoría applies_to=income con credit_expense → '
+        '"Sin categoría" en gastos (edge legacy simulado con updateCategory)',
+        () async {
+      final catFlex = await categoriesDao.create(
+        name: 'FlexToIncome',
+        appliesTo: 'both',
+        colorSlug: 'green',
+        iconSlug: 'briefcase',
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 900,
+        occurredAt: anchor,
+        categoryId: catFlex,
+      );
+      // Post-facto: alguien edita la categoría a income-only pero el
+      // credit_expense queda con esa categoryId. Cae al bucket "Sin
+      // categoría" del lado gastos por la simetría RN-CB03.
+      await categoriesDao.updateCategory(
+        id: catFlex,
+        appliesTo: 'income',
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.expenseBuckets, hasLength(1));
+      expect(result.expenseBuckets.first.categoryId, isNull);
+      expect(result.expenseBuckets.first.label, 'Sin categoría');
+    });
+
+    test(
+        'UT-CB08: categoría applies_to=expense con income → '
+        '"Sin categoría" en ingresos (edge legacy simulado con updateCategory)',
+        () async {
+      final catFlex = await categoriesDao.create(
+        name: 'FlexToExpense',
+        appliesTo: 'both',
+        colorSlug: 'blue',
+        iconSlug: 'briefcase',
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 300,
+        occurredAt: anchor,
+        categoryId: catFlex,
+      );
+      await categoriesDao.updateCategory(
+        id: catFlex,
+        appliesTo: 'expense',
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.incomeBuckets, hasLength(1));
+      expect(result.incomeBuckets.first.categoryId, isNull);
+      expect(result.incomeBuckets.first.label, 'Sin categoría');
+    });
+
+    test(
+        'UT-CB09: categoría applies_to=both con income + expense mismo mes → '
+        'aparece 2 veces, una en cada sección',
+        () async {
+      final catBoth = await categoriesDao.create(
+        name: 'Both_Test',
+        appliesTo: 'both',
+        colorSlug: 'purple',
+        iconSlug: 'gift',
+      );
+      await entriesDao.registerIncome(
+        accountDestinationId: bolsa,
+        amount: 1500,
+        occurredAt: anchor,
+        categoryId: catBoth,
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 700,
+        occurredAt: anchor,
+        categoryId: catBoth,
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.incomeBuckets, hasLength(1));
+      expect(result.incomeBuckets.first.label, 'Both_Test');
+      expect(result.incomeBuckets.first.amount, 1500);
+      expect(result.expenseBuckets, hasLength(1));
+      expect(result.expenseBuckets.first.label, 'Both_Test');
+      expect(result.expenseBuckets.first.amount, 700);
+    });
+
+    test('UT-CB10: movimiento cancelado no cuenta', () async {
+      final id = await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 700,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      await entriesDao.cancel(id);
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.expenseBuckets, isEmpty);
+      expect(result.totalExpense, 0);
+    });
+
+    test('UT-CB11: transfer y debt_payment excluidos (RN-CB02)',
+        () async {
+      // Registrar cargo primero para poder pagarlo (invariante RN-011).
+      await entriesDao.registerCreditExpense(
+        accountOriginId: credit,
+        amount: 400,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      await entriesDao.registerTransfer(
+        accountOriginId: bolsa,
+        accountDestinationId: debit,
+        amount: 500,
+        occurredAt: anchor,
+      );
+      await entriesDao.registerDebtPayment(
+        accountOriginId: bolsa,
+        accountDestinationId: credit,
+        amount: 200,
+        occurredAt: anchor,
+      );
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      // Solo el credit_expense cuenta como gasto. El transfer y debt_payment
+      // se excluyen (RN-CB02).
+      expect(result.incomeBuckets, isEmpty);
+      expect(result.expenseBuckets, hasLength(1));
+      expect(result.expenseBuckets.first.amount, 400);
+    });
+
+    test(
+        'UT-CB12: reactividad — registrar un expense re-emite el stream con '
+        'el nuevo bucket',
+        () async {
+      final stream = reports.cashflowMonthBreakdown(monthAnchor: anchor);
+      final expectation = expectLater(
+        stream,
+        emitsThrough(
+          predicate<MonthBreakdown>((mb) =>
+              mb.expenseBuckets.length == 1 &&
+              mb.expenseBuckets.first.amount == 900),
+        ),
+      );
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 900,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      await expectation;
+    });
+
+    test(
+        'UT-CB16: FK huérfana (backup legacy con category_id sin match en '
+        'categories) → LEFT JOIN vacío → colapsa a "Sin categoría" (CB-P02)',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 600,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      // Sembrar FK huérfana: `PRAGMA foreign_keys=ON` bloquea el UPDATE
+      // que apuntaría a un UUID sin match. Deshabilitamos la FK
+      // temporalmente para simular un backup legacy que dejó `category_id`
+      // colgante post-import.
+      const ghostId = '019ffff0-cafe-7000-8000-000000000001';
+      await db.customStatement('PRAGMA foreign_keys = OFF');
+      await db.customStatement(
+        'UPDATE journal_entries SET category_id = ? WHERE category_id = ?',
+        [ghostId, catComida],
+      );
+      await db.customStatement('PRAGMA foreign_keys = ON');
+      final result =
+          await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
+      expect(result.expenseBuckets, hasLength(1));
+      expect(result.expenseBuckets.first.categoryId, isNull);
+      expect(result.expenseBuckets.first.label, 'Sin categoría');
+    });
+
+    test(
+        'UT-CB13: reactividad — renombrar categoría del mes re-emite con '
+        'nueva label',
+        () async {
+      await entriesDao.registerExpense(
+        accountOriginId: bolsa,
+        amount: 400,
+        occurredAt: anchor,
+        categoryId: catComida,
+      );
+      final stream = reports.cashflowMonthBreakdown(monthAnchor: anchor);
+      final expectation = expectLater(
+        stream,
+        emitsThrough(
+          predicate<MonthBreakdown>((mb) =>
+              mb.expenseBuckets.isNotEmpty &&
+              mb.expenseBuckets.first.label == 'Comida_Renombrada'),
+        ),
+      );
+      await categoriesDao.updateCategory(
+        id: catComida,
+        name: 'Comida_Renombrada',
+      );
+      await expectation;
+    });
+  });
+
+  // ===========================================================================
   // topMovements — sprint `flutter-reports-top-movements-v1`
   // Cubre RN-T01..T08 + casos borde CB-T01..T16 del test-plan.
   // ===========================================================================

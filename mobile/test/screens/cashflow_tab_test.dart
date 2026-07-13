@@ -89,5 +89,164 @@ void main() {
 
       await harness.dispose();
     });
+
+    // Sprint flutter-cashflow-monthly-breakdown-v1: sheet drill-down.
+    testWidgets(
+        'WT-CB01: tap en fila del mes con expense → sheet abre con sección '
+        'de gastos y sin sección de ingresos',
+        (tester) async {
+      final now = DateTime.now();
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        final catId = await deps.categoriesDao.create(
+          name: 'Comida_MBW',
+          appliesTo: 'expense',
+          colorSlug: 'red',
+          iconSlug: 'shopping-cart',
+        );
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          amount: 750,
+          occurredAt: DateTime(now.year, now.month, 12, 10),
+          categoryId: catId,
+          description: 'BreakdownExpense',
+        );
+      });
+
+      await openCashflowTab(tester);
+      // Fila del mes corriente aparece en el breakdown (label formato "MMM y").
+      final rows = find.byIcon(Icons.expand_more);
+      expect(rows, findsWidgets);
+      await tester.tap(rows.first);
+      await tester.pumpAndSettle();
+
+      // Sheet abierto: sección "Gastos por categoría" visible.
+      expect(find.text('Gastos por categoría'), findsOneWidget);
+      // Sin sección de ingresos.
+      expect(find.text('Ingresos por categoría'), findsNothing);
+      // Bucket con la categoría sembrada.
+      expect(find.text('Comida_MBW'), findsOneWidget);
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-CB02: mes con income + expense → sheet muestra ambas secciones',
+        (tester) async {
+      final now = DateTime.now();
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        await deps.entriesDao.registerIncome(
+          accountDestinationId: bolsa.id,
+          amount: 5000,
+          occurredAt: DateTime(now.year, now.month, 5, 9),
+          description: 'IncomeMBW',
+        );
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          amount: 1300,
+          occurredAt: DateTime(now.year, now.month, 15, 15),
+          description: 'ExpenseMBW',
+        );
+      });
+
+      await openCashflowTab(tester);
+      final rows = find.byIcon(Icons.expand_more);
+      await tester.tap(rows.first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ingresos por categoría'), findsOneWidget);
+      expect(find.text('Gastos por categoría'), findsOneWidget);
+      // Ambos buckets sin categoría (no se pasó categoryId).
+      expect(find.text('Sin categoría'), findsNWidgets(2));
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-CB03: BD vacía → tab renderea empty state SIN filas tap-ables '
+        '(blindaje regresivo)',
+        (tester) async {
+      final harness = await pumpFincoreApp(tester);
+      await openCashflowTab(tester);
+      // BD vacía → `_CashflowReport.isEmpty` → _EmptyState del tab base.
+      // No hay `_BreakdownRow` ni `expand_more`. El fallback del sheet
+      // se cubre en WT-CB05 con una fila mes-cero real.
+      expect(find.byIcon(Icons.expand_more), findsNothing);
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-CB05: preset "Año" con 1 movimiento en el mes actual → filas '
+        'de meses vacíos aparecen con ceros → tap muestra fallback "Sin '
+        'movimientos en este mes."',
+        (tester) async {
+      final now = DateTime.now();
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        // 1 income solo en el mes actual — el rango "Año" (1/1 a 31/12)
+        // dispara RN-C06 (rellenar los otros 11 meses con ceros).
+        await deps.entriesDao.registerIncome(
+          accountDestinationId: bolsa.id,
+          amount: 1500,
+          occurredAt: DateTime(now.year, now.month, 10, 12),
+          description: 'CurrentMonthIncome',
+        );
+      });
+      await openCashflowTab(tester);
+      // Cambiar preset a "Año" para que aparezcan 12 filas (una por mes).
+      await tester.tap(find.text('Año'));
+      await tester.pumpAndSettle();
+      final rows = find.byIcon(Icons.expand_more);
+      expect(rows, findsNWidgets(12));
+      // Tapear la primera fila (enero — siempre vacía si estamos después
+      // de enero en el año; si estamos exactamente en enero, usamos la
+      // última fila (diciembre) que también estará vacía porque el income
+      // sembrado cae en el mes actual = enero).
+      final targetRow = now.month == 1 ? rows.last : rows.first;
+      await tester.tap(targetRow);
+      await tester.pumpAndSettle();
+      expect(find.text('Sin movimientos en este mes.'), findsOneWidget);
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-CB04: tap "Ver movimientos" cierra sheet y navega a /entries',
+        (tester) async {
+      final now = DateTime.now();
+      final harness = await pumpFincoreApp(tester, seed: (db, deps) async {
+        final bolsa = (await deps.accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash');
+        await deps.entriesDao.registerExpense(
+          accountOriginId: bolsa.id,
+          amount: 400,
+          occurredAt: DateTime(now.year, now.month, 10, 12),
+          description: 'DrillDownExpense',
+        );
+      });
+
+      await openCashflowTab(tester);
+      final rows = find.byIcon(Icons.expand_more);
+      await tester.tap(rows.first);
+      await tester.pumpAndSettle();
+
+      // El botón "Ver movimientos" está dentro del sheet.
+      final drillButton = find.text('Ver movimientos');
+      expect(drillButton, findsOneWidget);
+      await tester.tap(drillButton);
+      await tester.pumpAndSettle();
+
+      // Sheet cerrado + navegación a /entries: la descripción del entry
+      // sembrado debe estar visible en la lista.
+      expect(find.text('Gastos por categoría'), findsNothing);
+      expect(find.text('DrillDownExpense'), findsOneWidget);
+
+      await harness.dispose();
+    });
   });
 }

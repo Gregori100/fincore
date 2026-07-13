@@ -307,4 +307,20 @@ void main() {
       expect(parsed.categoryIds, isEmpty);
     });
   });
+
+  group('forMonth (sprint cashflow-monthly-breakdown-v1)', () {
+    test('UT-CB14: junio 2026 → rango 2026-06-01 00:00 a 2026-06-30 23:59:59.999',
+        () {
+      final f = EntriesFilters.forMonth(firstDay: DateTime(2026, 6, 15));
+      expect(f.datePreset, DateRangePreset.custom);
+      expect(f.from, DateTime(2026, 6, 1));
+      expect(f.to, DateTime(2026, 6, 30, 23, 59, 59, 999));
+    });
+
+    test('UT-CB15: febrero 2024 (bisiesto) → 29/2 último día', () {
+      final f = EntriesFilters.forMonth(firstDay: DateTime(2024, 2, 1));
+      expect(f.from, DateTime(2024, 2, 1));
+      expect(f.to, DateTime(2024, 2, 29, 23, 59, 59, 999));
+    });
+  });
 }

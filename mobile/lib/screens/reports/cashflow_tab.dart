@@ -1,5 +1,7 @@
 import 'package:fincore/app_dependencies.dart';
+import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/constants/date_range_presets.dart';
+import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
@@ -7,6 +9,7 @@ import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/date_field_outlined.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 /// Tab "Cashflow mensual" del reporte. Sprint `flutter-reports-cashflow-v1`.
@@ -435,63 +438,96 @@ class _BreakdownRow extends StatelessWidget {
   final MonthCashflow month;
   const _BreakdownRow({required this.month});
 
+  void _openBreakdownSheet(BuildContext context) {
+    // Sprint flutter-cashflow-monthly-breakdown-v1: tap en la fila del
+    // mes abre el desglose por categoría del mes. Cachea el `monthAnchor`
+    // en el sheet — cambiar el rango del tab con el sheet abierto NO
+    // reactiva el sheet (CB-17 aceptado).
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: FincoreColors.surface,
+      isScrollControlled: true,
+      useSafeArea: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _MonthBreakdownSheet(monthAnchor: month.firstDay),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final netColor = month.net >= 0
         ? FincoreColors.positive
         : FincoreColors.negative;
     final monthLabel = DateFormat('MMM y', 'es_MX').format(month.firstDay);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 64,
-            child: Text(
-              monthLabel,
-              style: const TextStyle(
-                color: FincoreColors.textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openBreakdownSheet(context),
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 64,
+                child: Text(
+                  monthLabel,
+                  style: const TextStyle(
+                    color: FincoreColors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              formatAmount(month.income),
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: FincoreColors.positive,
-                fontSize: 12,
+              Expanded(
+                child: Text(
+                  formatAmount(month.income),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: FincoreColors.positive,
+                    fontSize: 12,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              formatAmount(month.expense),
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                color: FincoreColors.negative,
-                fontSize: 12,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  formatAmount(month.expense),
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                    color: FincoreColors.negative,
+                    fontSize: 12,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              month.net >= 0
-                  ? formatAmount(month.net)
-                  : '-${formatAmount(month.net.abs())}',
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                color: netColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  month.net >= 0
+                      ? formatAmount(month.net)
+                      : '-${formatAmount(month.net.abs())}',
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: netColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(width: 6),
+              const Icon(
+                // `expand_more` señala "abre desglose" (bottom sheet), no
+                // "navega a otra pantalla" — reservamos `chevron_right`
+                // para pushes de ruta (convención del proyecto).
+                Icons.expand_more,
+                size: 16,
+                color: FincoreColors.textSubtle,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -601,6 +637,420 @@ class _ErrorState extends StatelessWidget {
               foregroundColor: FincoreColors.accent,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bottom sheet del sprint flutter-cashflow-monthly-breakdown-v1
+// ---------------------------------------------------------------------------
+
+/// Sheet modal con el desglose por categoría del mes anclado en
+/// `monthAnchor`. Sprint `flutter-cashflow-monthly-breakdown-v1`.
+///
+/// Cachea el Stream una sola vez para que `pumpAndSettle` no cuelgue en
+/// widget tests (patrón cashflow tab). El sheet permanece abierto hasta
+/// que el usuario lo cierra — cambiar el rango del tab base con el sheet
+/// abierto NO reactiva el sheet (CB-17 aceptado).
+class _MonthBreakdownSheet extends StatefulWidget {
+  final DateTime monthAnchor;
+
+  const _MonthBreakdownSheet({required this.monthAnchor});
+
+  @override
+  State<_MonthBreakdownSheet> createState() => _MonthBreakdownSheetState();
+}
+
+class _MonthBreakdownSheetState extends State<_MonthBreakdownSheet> {
+  Stream<MonthBreakdown>? _stream;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _stream ??= AppDependencies.of(context)
+        .reportsService
+        .cashflowMonthBreakdown(monthAnchor: widget.monthAnchor);
+  }
+
+  Future<void> _drillDown() async {
+    // Capturar handlers antes del await por si el context se desmonta
+    // durante el pop del sheet (R3 del plan).
+    //
+    // `EntriesListScreen` NO lee `state.extra` — solo parsea query params
+    // vía `EntriesFilters.parse(uri.queryParameters)`. Por eso el drill-down
+    // usa `.toDeepLink()` para serializar el filtro como query string
+    // (patrón oficial del proyecto: ver calendar / heatmap tabs).
+    final navigator = Navigator.of(context);
+    final router = GoRouter.of(context);
+    final target = EntriesFilters.forMonth(firstDay: widget.monthAnchor)
+        .toDeepLink();
+    await navigator.maybePop();
+    if (!mounted) return;
+    router.push(target);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rawMonthName =
+        DateFormat('MMMM y', 'es_MX').format(widget.monthAnchor);
+    final monthTitle =
+        '${rawMonthName[0].toUpperCase()}${rawMonthName.substring(1)}';
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    monthTitle,
+                    style: const TextStyle(
+                      color: FincoreColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(
+                    Icons.close,
+                    color: FincoreColors.textSubtle,
+                  ),
+                  tooltip: 'Cerrar',
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            StreamBuilder<MonthBreakdown>(
+              stream: _stream,
+              builder: (context, snap) {
+                if (snap.hasError) {
+                  return _MonthBreakdownError(error: snap.error);
+                }
+                if (!snap.hasData) {
+                  return const _MonthBreakdownLoading();
+                }
+                final data = snap.data!;
+                final hasIncome = data.incomeBuckets.isNotEmpty;
+                final hasExpense = data.expenseBuckets.isNotEmpty;
+                if (!hasIncome && !hasExpense) {
+                  return const _MonthBreakdownEmpty();
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _BreakdownSummary(breakdown: data),
+                    const SizedBox(height: 16),
+                    if (hasIncome) ...[
+                      const _SectionHeader(label: 'Ingresos por categoría'),
+                      const SizedBox(height: 8),
+                      for (final b in data.incomeBuckets)
+                        _CategoryFlowRow(flow: b),
+                    ],
+                    if (hasIncome && hasExpense) const SizedBox(height: 16),
+                    if (hasExpense) ...[
+                      const _SectionHeader(label: 'Gastos por categoría'),
+                      const SizedBox(height: 8),
+                      for (final b in data.expenseBuckets)
+                        _CategoryFlowRow(flow: b),
+                    ],
+                    const SizedBox(height: 16),
+                    TextButton.icon(
+                      onPressed: _drillDown,
+                      icon: const Icon(Icons.arrow_forward, size: 18),
+                      label: const Text('Ver movimientos'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: FincoreColors.accent,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BreakdownSummary extends StatelessWidget {
+  final MonthBreakdown breakdown;
+  const _BreakdownSummary({required this.breakdown});
+
+  @override
+  Widget build(BuildContext context) {
+    final netColor = breakdown.net >= 0
+        ? FincoreColors.positive
+        : FincoreColors.negative;
+    final netLabel = breakdown.net >= 0
+        ? formatAmount(breakdown.net)
+        : '-${formatAmount(breakdown.net.abs())}';
+    return BaseCard(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ingresos',
+                  style: TextStyle(
+                    color: FincoreColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  formatAmount(breakdown.totalIncome),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: FincoreColors.positive,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Gastos',
+                  style: TextStyle(
+                    color: FincoreColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  formatAmount(breakdown.totalExpense),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: FincoreColors.negative,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Neto',
+                  style: TextStyle(
+                    color: FincoreColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  netLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: netColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  const _SectionHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: FincoreColors.textMuted,
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.3,
+      ),
+    );
+  }
+}
+
+/// Fila de una categoría dentro de una sección del sheet. Usa
+/// `colorBySlug`/`iconBySlug` directamente para evitar construir un
+/// objeto `Category` sintético (R8 del plan). Sin categoría → chip
+/// gris con `Icons.label_off_outlined` (fallback estándar del proyecto).
+class _CategoryFlowRow extends StatelessWidget {
+  final CategoryFlow flow;
+  const _CategoryFlowRow({required this.flow});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = flow.colorSlug != null
+        ? colorBySlug(flow.colorSlug)
+        : FincoreColors.textSubtle;
+    final icon = flow.iconSlug != null
+        ? iconBySlug(flow.iconSlug)
+        : Icons.label_off_outlined;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: color.withValues(alpha: 0.4),
+                width: 1,
+              ),
+            ),
+            child: Icon(icon, size: 15, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              flow.label,
+              style: const TextStyle(
+                color: FincoreColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            formatAmount(flow.amount),
+            style: const TextStyle(
+              color: FincoreColors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 44,
+            child: Text(
+              '${flow.percent.toStringAsFixed(1)}%',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: FincoreColors.textMuted,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthBreakdownLoading extends StatelessWidget {
+  const _MonthBreakdownLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 24),
+      child: Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: FincoreColors.accent,
+        ),
+      ),
+    );
+  }
+}
+
+class _MonthBreakdownEmpty extends StatelessWidget {
+  const _MonthBreakdownEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 32),
+      child: Column(
+        children: [
+          Icon(
+            Icons.event_busy,
+            color: FincoreColors.textSubtle,
+            size: 32,
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Sin movimientos en este mes.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: FincoreColors.textMuted,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthBreakdownError extends StatelessWidget {
+  final Object? error;
+  const _MonthBreakdownError({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.error_outline,
+            color: FincoreColors.negative,
+            size: 28,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'No se pudo cargar el desglose.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: FincoreColors.negative,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              error.toString(),
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: FincoreColors.textSubtle,
+                fontSize: 11,
+              ),
+            ),
+          ],
         ],
       ),
     );
