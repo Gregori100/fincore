@@ -38,7 +38,8 @@ class AppliesToPicker extends StatelessWidget {
       selected: {value},
       onSelectionChanged: enabled ? (s) => onChanged(s.first) : null,
       style: SegmentedButton.styleFrom(
-        selectedBackgroundColor: FincoreColors.accent.withValues(alpha: 0.2),
+        selectedBackgroundColor:
+            FincoreColors.accent.withValues(alpha: FincoreColors.alphaSelected),
         selectedForegroundColor: FincoreColors.accent,
       ),
     );

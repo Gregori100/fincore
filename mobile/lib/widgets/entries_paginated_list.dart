@@ -2,6 +2,8 @@ import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart';
 import 'package:fincore/widgets/entries_empty_state.dart';
 import 'package:fincore/widgets/movement_row.dart';
 import 'package:flutter/material.dart';
@@ -175,9 +177,14 @@ class _EntriesPaginatedListState extends State<EntriesPaginatedList> {
         final itemCount = entries.length + (hasFooter ? 1 : 0);
         return ListView.separated(
           controller: _scrollController,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+          padding: const EdgeInsets.fromLTRB(
+            kSpaceLg,
+            kSpaceMd,
+            kSpaceLg,
+            kFabClearance,
+          ),
           itemCount: itemCount,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (_, __) => const SizedBox(height: kSpaceSm),
           itemBuilder: (_, i) {
             if (hasFooter && i == entries.length) {
               return _PaginationFooter(
@@ -221,15 +228,12 @@ class _PaginationFooter extends StatelessWidget {
       text = 'Fin de los movimientos del rango.';
     }
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: kSpaceLg),
       child: Center(
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: FincoreColors.textSubtle,
-            fontSize: 12,
-          ),
+          style: label.copyWith(color: FincoreColors.textSubtle),
         ),
       ),
     );

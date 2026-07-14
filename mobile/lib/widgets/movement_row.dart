@@ -3,6 +3,9 @@ import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/database.dart' as db;
 import 'package:fincore/models/category.dart' as model;
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/category_badge.dart' as cb;
@@ -55,20 +58,21 @@ class MovementRow extends StatelessWidget {
 
     return BaseCard(
       onTap: () => context.push('/entries/${entry.id}/edit'),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: kEdgeListItem,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
+            // token-exception: 32 es tamaño de icono/leading, no de spacing.
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+              color: color.withValues(alpha: FincoreColors.alphaTint),
+              borderRadius: BorderRadius.circular(kRadiusMd),
             ),
             child: Icon(_kindIcon(kind), size: 16, color: color),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: kSpaceMd),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -81,36 +85,30 @@ class MovementRow extends StatelessWidget {
                         entry.description?.isNotEmpty == true
                             ? entry.description!
                             : kind.label,
-                        style: const TextStyle(
-                          color: FincoreColors.textPrimary,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: bodyM.copyWith(fontWeight: FontWeight.w500),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: kSpaceSm),
                     Text(
                       signedAmount,
-                      style: TextStyle(
+                      style: bodyM.copyWith(
                         color: color,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: kSpaceXs),
                 Text(
                   subtitleParts.join(' · '),
-                  style: const TextStyle(
-                    color: FincoreColors.textSubtle,
-                    fontSize: 11,
-                  ),
+                  style: overline,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (hasCategory) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: kSpaceXs),
                   cb.CategoryBadge(
                     category: _toModelCategory(item.category!),
                     compact: true,

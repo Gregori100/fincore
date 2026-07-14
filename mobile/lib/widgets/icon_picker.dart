@@ -1,5 +1,7 @@
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:flutter/material.dart';
 
 /// Grid de los ~30 íconos curados del catálogo. Selección por tap.
@@ -20,19 +22,22 @@ class IconPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+      spacing: kSpaceSm,
+      runSpacing: kSpaceSm,
       children: kCategoryIcons.map((i) {
         final selected = i.slug == selectedSlug;
         return InkWell(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(kRadiusMd),
           onTap: () => onChanged(i.slug),
           child: Container(
+            // 44dp = touch target mínimo A11Y. No es spacing, no aplica escala.
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: selected ? selectionColor.withValues(alpha: 0.2) : FincoreColors.surfaceElevated,
-              borderRadius: BorderRadius.circular(8),
+              color: selected
+                  ? selectionColor.withValues(alpha: FincoreColors.alphaSelected)
+                  : FincoreColors.surfaceElevated,
+              borderRadius: BorderRadius.circular(kRadiusMd),
               border: Border.all(
                 color: selected ? selectionColor : FincoreColors.border,
                 width: selected ? 2 : 1,

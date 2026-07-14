@@ -84,4 +84,21 @@ abstract final class FincoreColors {
 
   /// oklch(0.68 0.02 250)
   static const Color categoryGray = Color(0xFFA4A8B0);
+
+  // === Alphas semánticos (sprint flutter-design-tokens-v1) ===
+  // Usar como `Color.withValues(alpha: FincoreColors.alphaX)`.
+  // Prohibido `withValues(alpha: N)` con N literal fuera de esta escala en
+  // widgets/screens, salvo excepciones marcadas con `// token-exception:`.
+
+  /// Overlay hover sobre surface (cards interactivas).
+  static const double alphaHover = 0.08;
+
+  /// Bordes tinted (destructive hero, alert card).
+  static const double alphaHairline = 0.12;
+
+  /// Fill tinted por color de contexto (badge, kind tile, semántico).
+  static const double alphaTint = 0.15;
+
+  /// Estado seleccionado (chip active, picker tile).
+  static const double alphaSelected = 0.20;
 }

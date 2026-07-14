@@ -1,4 +1,7 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart' show overline;
 import 'package:flutter/material.dart';
 
 /// Wrapper de `Card` con padding interno consistente y borde sutil.
@@ -14,7 +17,7 @@ class BaseCard extends StatelessWidget {
   const BaseCard({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(16),
+    this.padding = kEdgeCard,
     this.onTap,
     this.onLongPress,
     this.backgroundColor,
@@ -27,12 +30,12 @@ class BaseCard extends StatelessWidget {
     final content = Padding(padding: padding, child: child);
     final card = Material(
       color: backgroundColor ?? FincoreColors.surface,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(kRadiusLg),
       child:
           (onTap == null && onLongPress == null)
               ? content
               : InkWell(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(kRadiusLg),
                 onTap: onTap,
                 onLongPress: onLongPress,
                 // Sin ripple animado: cuando `onTap` dispara una navegación,
@@ -41,14 +44,17 @@ class BaseCard extends StatelessWidget {
                 // un parpadeo del card. Reemplazamos el ripple por un
                 // highlight estático y un overlay sutil de hover/focus.
                 splashFactory: NoSplash.splashFactory,
+                // token-exception: elevación invertida documentada, patrón único de BaseCard
                 highlightColor: FincoreColors.canvas.withValues(alpha: 0.4),
-                hoverColor: FincoreColors.canvas.withValues(alpha: 0.2),
+                hoverColor: FincoreColors.canvas.withValues(
+                  alpha: FincoreColors.alphaSelected,
+                ),
                 child: content,
               ),
     );
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kRadiusLg),
         border: Border.all(
           color: borderColor ?? FincoreColors.border,
           width: borderWidth,
@@ -71,15 +77,7 @@ class SectionTitle extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: Text(
-            text.toUpperCase(),
-            style: const TextStyle(
-              color: FincoreColors.textSubtle,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.2,
-            ),
-          ),
+          child: Text(text.toUpperCase(), style: overline),
         ),
         if (trailing != null) trailing!,
       ],

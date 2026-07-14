@@ -4,6 +4,9 @@ import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -34,41 +37,45 @@ class EntriesActiveFiltersBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('d MMM', 'es_MX');
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: kSpaceLg,
+        vertical: kSpaceSm,
+      ),
       decoration: const BoxDecoration(
         border: Border(
           bottom: BorderSide(color: FincoreColors.border, width: 1),
         ),
       ),
       child: SizedBox(
+        // token-exception: 36 es altura de control del chip row, no spacing.
         height: 36,
         child: ListView(
           scrollDirection: Axis.horizontal,
           children: [
             if (filters.datePreset != DateRangePreset.thisMonth)
               _ActiveChip(
-                label:
+                text:
                     '${dateFormat.format(filters.from)} – ${dateFormat.format(filters.to)}',
                 onRemove: () => onRemove(FilterDimension.date),
               ),
             if (filters.kinds.isNotEmpty)
               _ActiveChip(
-                label: _kindsLabel(filters.kinds),
+                text: _kindsLabel(filters.kinds),
                 onRemove: () => onRemove(FilterDimension.kinds),
               ),
             if (filters.accountIds.isNotEmpty)
               _ActiveChip(
-                label: _accountsLabel(filters.accountIds),
+                text: _accountsLabel(filters.accountIds),
                 onRemove: () => onRemove(FilterDimension.accounts),
               ),
             if (filters.categoryIds.isNotEmpty)
               _ActiveChip(
-                label: _categoriesLabel(filters.categoryIds),
+                text: _categoriesLabel(filters.categoryIds),
                 onRemove: () => onRemove(FilterDimension.categories),
               ),
             if (filters.minAmount != null || filters.maxAmount != null)
               _ActiveChip(
-                label: _amountLabel(filters.minAmount, filters.maxAmount),
+                text: _amountLabel(filters.minAmount, filters.maxAmount),
                 onRemove: () => onRemove(FilterDimension.amount),
               ),
           ],
@@ -117,20 +124,25 @@ class EntriesActiveFiltersBar extends StatelessWidget {
 }
 
 class _ActiveChip extends StatelessWidget {
-  final String label;
+  final String text;
   final VoidCallback onRemove;
 
-  const _ActiveChip({required this.label, required this.onRemove});
+  const _ActiveChip({required this.text, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.only(right: kSpaceSm),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(
+          horizontal: kSpaceMd,
+          vertical: kSpaceXs,
+        ),
         decoration: BoxDecoration(
-          color: FincoreColors.accent.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
+          color: FincoreColors.accent.withValues(
+            alpha: FincoreColors.alphaTint,
+          ),
+          borderRadius: BorderRadius.circular(kRadiusXl),
           border: Border.all(color: FincoreColors.accent),
         ),
         child: Row(
@@ -138,17 +150,14 @@ class _ActiveChip extends StatelessWidget {
           children: [
             Flexible(
               child: Text(
-                label,
-                style: const TextStyle(
-                  color: FincoreColors.accent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+                text,
+                style: label.copyWith(color: FincoreColors.accent),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: kSpaceSm),
             SizedBox(
+              // token-exception: 32 es tap target de accesibilidad.
               width: 32,
               height: 32,
               child: InkResponse(

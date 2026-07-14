@@ -1,6 +1,9 @@
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/models/category.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart' as typo;
 import 'package:flutter/material.dart';
 
 /// Chip pequeño que muestra el color + ícono + nombre de la categoría.
@@ -47,27 +50,30 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final padding = compact
-        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 3)
-        : const EdgeInsets.symmetric(horizontal: 10, vertical: 4);
-    final fontSize = compact ? 11.0 : 13.0;
+        ? const EdgeInsets.symmetric(horizontal: kSpaceSm, vertical: kSpaceXs)
+        : const EdgeInsets.symmetric(horizontal: kSpaceMd, vertical: kSpaceXs);
+    // compact usa `label` (12/w600) y non-compact `bodyS` (13/w500). El 11 original
+    // se redondea a 12 (token label) para respetar la escala tipográfica.
+    final textStyle = (compact ? typo.label : typo.bodyS).copyWith(color: color);
     final iconSize = compact ? 12.0 : 14.0;
 
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(12),
+        color: color.withValues(alpha: FincoreColors.alphaTint),
+        borderRadius: BorderRadius.circular(kRadiusLg),
+        // token-exception: border tinted fuerte, uso puntual en badge
         border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: iconSize, color: color),
-          const SizedBox(width: 6),
+          const SizedBox(width: kSpaceSm),
           Flexible(
             child: Text(
               label,
-              style: TextStyle(color: color, fontSize: fontSize, fontWeight: FontWeight.w500),
+              style: textStyle,
               overflow: TextOverflow.ellipsis,
             ),
           ),

@@ -1,5 +1,8 @@
 import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart' as typo;
 import 'package:flutter/material.dart';
 
 /// Selector de tipo de movimiento. Lista visual de los 5 kinds.
@@ -15,17 +18,21 @@ class KindPicker extends StatelessWidget {
       children: JournalKind.values.map((k) {
         final selected = k == value;
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(bottom: kSpaceSm),
           child: Material(
-            color: selected ? FincoreColors.accent.withValues(alpha: 0.1) : FincoreColors.surface,
-            borderRadius: BorderRadius.circular(8),
+            color: selected
+                ? FincoreColors.accent.withValues(alpha: FincoreColors.alphaSelected)
+                : FincoreColors.surface,
+            borderRadius: BorderRadius.circular(kRadiusMd),
             child: InkWell(
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(kRadiusMd),
               onTap: () => onChanged(k),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                // 14/14 original (fuera de escala) redondeado a kSpaceMd
+                // para alinear al grid 4dp.
+                padding: const EdgeInsets.all(kSpaceMd),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(kRadiusMd),
                   border: Border.all(
                     color: selected ? FincoreColors.accent : FincoreColors.border,
                     width: selected ? 2 : 1,
@@ -34,15 +41,16 @@ class KindPicker extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
+                      // 36dp = tamaño del icon tile (no es spacing).
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: _kindColor(k).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
+                        color: _kindColor(k).withValues(alpha: FincoreColors.alphaTint),
+                        borderRadius: BorderRadius.circular(kRadiusMd),
                       ),
                       child: Icon(_kindIcon(k), color: _kindColor(k), size: 20),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: kSpaceMd),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,11 +60,12 @@ class KindPicker extends StatelessWidget {
                                 color: selected ? FincoreColors.accent : FincoreColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                               )),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: kSpace2xs),
+                          // fontSize 12 original → token `label` (12/w600)
+                          // por ser metadata secundaria bajo el título.
                           Text(
                             _kindDescription(k),
-                            style: const TextStyle(
-                                color: FincoreColors.textSubtle, fontSize: 12),
+                            style: typo.label.copyWith(color: FincoreColors.textSubtle),
                           ),
                         ],
                       ),

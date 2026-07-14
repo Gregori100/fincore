@@ -1,4 +1,6 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -26,13 +28,17 @@ class DateFieldOutlined extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(kRadiusMd),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: kSpaceMd,
+            // token-exception: 14 = alto de fila M3 outlined input estándar,
+            // fuera de la escala 4dp; cambiarlo altera la métrica del field.
+            vertical: 14,
+          ),
           suffixIcon: const Icon(
             Icons.calendar_today,
             size: 18,

@@ -1,4 +1,5 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
 import 'package:flutter/material.dart';
 
 /// Diálogo de confirmación reusable para acciones destructivas.
@@ -17,7 +18,7 @@ Future<bool> showConfirmDialog(
       backgroundColor: FincoreColors.surfaceElevated,
       title: Text(title),
       content: Text(message),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusLg)),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),

@@ -286,6 +286,44 @@ Capa UI (v3):
 - **No ejecutar `flutter pub upgrade`** sin revisar los changelogs de `drift`, `go_router` y `sqlite3_flutter_libs` (los tres con mayor superficie en el código). Cualquier bump de minor de esos paquetes puede romper queries, redirects o el binding nativo.
 - Antes de un release "estable" (commit a `main` con APK distribuido) considerar pinear las críticas a versión exacta y validar que `flutter test` + `flutter analyze` siguen verdes.
 
+## Sistema de tokens de diseño (sprint flutter-design-tokens-v1)
+
+FinCore usa un sistema de tokens explícito para tipografía, spacing, radios, alphas y motion. Fuente única en `mobile/lib/theme/`:
+
+- **`fincore_typography.dart`** — 7 `const TextStyle`: `displayXL` (56/800), `headingL` (20/700), `headingM` (16/600), `bodyM` (14/400 default), `bodyS` (13/500 chip/badge), `label` (12/600 muted metadata), `overline` (11/600/1.2 subtle upper).
+- **`fincore_spacing.dart`** — 7 `const double`: `kSpace2xs=2`, `kSpaceXs=4`, `kSpaceSm=8`, `kSpaceMd=12`, `kSpaceLg=16`, `kSpaceXl=24`, `kSpace2xl=32`. Semánticos derivados: `kEdgeCard`, `kEdgeListItem`, `kEdgeDialog`, `kEdgeScreen`, `kFabClearance=96`.
+- **`fincore_radii.dart`** — 5 `const double`: `kRadiusSm=6`, `kRadiusMd=8`, `kRadiusLg=12`, `kRadiusXl=20` (dialogs/sheets), `kRadiusPill=999`.
+- **`fincore_colors.dart`** (extendido) — 4 alphas semánticos: `alphaHover=0.08`, `alphaHairline=0.12`, `alphaTint=0.15`, `alphaSelected=0.20`. Usar como `FincoreColors.accent.withValues(alpha: FincoreColors.alphaTint)`.
+- **`fincore_motion.dart`** — 5 `const Duration`: `kMotionInstant=100ms`, `kMotionFast=200ms`, `kMotionMedium=300ms`, `kMotionSlow=500ms`, `kMotionPulse=1100ms`. 4 `const Curve`: `kCurveStandard`, `kCurveExit`, `kCurveEmphasized` (M3), `kCurveLinear`.
+
+El `textTheme` en `fincore_theme.dart` cablea los 15 slots M3 a los 7 tokens tipográficos con `fontSize` explícito. Consumir vía `Theme.of(context).textTheme.bodyMedium` o vía import directo (`import 'package:fincore/theme/fincore_typography.dart' show bodyM;`) cuando el widget es `const`.
+
+### Reglas vinculantes
+
+- **Prohibido** `TextStyle(fontSize: N)` inline en widgets/screens (salvo `fincore_typography.dart` que define los tokens, y `fincore_logo.dart` que usa `fontSize` proporcional documentado).
+- **Prohibido** `SizedBox(height: N)` o `SizedBox(width: N)` con `N` literal fuera de la escala de spacing.
+- **Prohibido** `BorderRadius.circular(N)` con `N` literal fuera de la escala de radios.
+- **Prohibido** `Color.withValues(alpha: N)` con `N` literal fuera de la escala de alphas.
+- **Prohibido** `Duration(milliseconds: N)` en animaciones sin usar `kMotionX`.
+
+Excepciones puntuales se marcan en el sitio con `// token-exception: <razón>`. Meta: mantenerlas ≤ 10 en toda la app; si un valor no cabe recurrentemente (≥3 usos), evaluar si falta un token en vez de multiplicar excepciones.
+
+Cambiar el valor de un token afecta a toda la app; requiere PR dedicada + comparación visual + smoke Android.
+
+### Convenciones adicionales del sistema de diseño
+
+- **Iconografía**: `Icons.xxx_outlined` por default; `Icons.xxx` (filled) solo para estados "current" (tab activo, item seleccionado en NavBar) o "selected" (chip seleccionado, picker item).
+- **Dialogs**: `ConfirmDialog` (`widgets/confirm_dialog.dart`) para acciones reversibles o de bajo impacto ("¿Descartar cambios?"). `DestructiveDialog` (`widgets/destructive_dialog.dart`) para irreversibles con impacto en datos ajenos (archivar cuenta con movimientos, wipe BD, importar respaldo).
+- **Colores semánticos reservados**:
+  - `FincoreColors.positive/negative` → **dinero** (ingreso verde, gasto rojo, saldo negativo).
+  - `FincoreColors.accent` → **affordance/acción** (FAB, links, chips seleccionados, primary buttons).
+  - `FincoreColors.warning` → **alertas operativas** (fecha de pago próxima, límite excedido). **NO** usar para tipos de cuenta (credit sigue mapeado a `warning` en `dashboard_screen._typeColor`; migrar a `textMuted` o color propio en el sprint que toque Dashboard).
+  - `FincoreColors.categoryX` (10 colores curados) → **taxonomía** de categorías del usuario. Nunca para señalizar estado.
+
+### Alcance del piloto (sprint 1) y siguientes sprints
+
+El sprint 1 (`flutter-design-tokens-v1`) migró **solo los widgets compartidos** de `mobile/lib/widgets/*.dart`. Screens (`mobile/lib/screens/**`) y widgets locales de features (`mobile/lib/screens/weekly_budgets/widgets/`) quedan para sprints por módulo. Cualquier PR nueva sobre esos archivos debe migrar el archivo tocado a tokens en el mismo cambio (regla "boy scout").
+
 ## Decisiones de pivote (2026-06-12 → 2026-06-17)
 
 1. Cliente online → app local-first por fricción de red en uso real (Tailscale + cert TLS).

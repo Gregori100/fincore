@@ -244,7 +244,17 @@ publish_to: 'none'
 # con mismo layout 3×4 mini-heatmaps + bottom sheet expandido. Reusa
 # heatmapDayForMonthPosition del spending. Sin schema bump, sin dep
 # externa. +21 tests.
-version: 0.20.2+96
+# 0.21.0+97 — sprint flutter-design-tokens-v1 (Sprint 1 del roadmap
+# de la auditoría de diseño 2026-07-14). Introduce sistema de tokens
+# explícito: 4 archivos nuevos en lib/theme/ (typography 7 tokens,
+# spacing 7 + 4 semánticos derivados, radii 5, motion 5 durations +
+# 4 curves) + fincore_colors.dart extendido con 4 alphas semánticos
+# (hover, hairline, tint, selected). textTheme cableado con fontSize
+# explícito por los 15 slots M3 mapeados a los 7 tokens. Migración
+# de los 24 widgets compartidos de lib/widgets/ a consumir tokens.
+# Documentación en CLAUDE.md con reglas vinculantes. Cero cambios
+# visuales percibidos (refactor puro). 680 tests verdes.
+version: 0.21.0+97
 
 environment:
   sdk: ^3.7.2

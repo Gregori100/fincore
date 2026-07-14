@@ -1,5 +1,7 @@
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:flutter/material.dart';
 
 /// Picker de cuenta filtrado por tipos permitidos. Usa `DropdownMenu<T>` de
@@ -34,10 +36,10 @@ class AccountPicker extends StatelessWidget {
 
     if (visible.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(kSpaceMd),
         decoration: BoxDecoration(
           color: FincoreColors.surface,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(kRadiusMd),
           border: Border.all(color: FincoreColors.border),
         ),
         child: const Text(

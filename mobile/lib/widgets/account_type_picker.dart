@@ -1,5 +1,8 @@
 import 'package:fincore/constants/account_types.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart' as typo;
 import 'package:flutter/material.dart';
 
 /// Selector entre Débito y Crédito para crear cuentas.
@@ -29,7 +32,7 @@ class AccountTypePicker extends StatelessWidget {
             onTap: enabled ? () => onChanged(AccountType.debit) : null,
           ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: kSpaceSm),
         Expanded(
           child: _TypeOption(
             label: 'Crédito',
@@ -63,15 +66,19 @@ class _TypeOption extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = selected ? FincoreColors.accent : FincoreColors.border;
     return Material(
-      color: selected ? FincoreColors.accent.withValues(alpha: 0.1) : FincoreColors.surface,
-      borderRadius: BorderRadius.circular(8),
+      color: selected
+          ? FincoreColors.accent.withValues(alpha: FincoreColors.alphaSelected)
+          : FincoreColors.surface,
+      borderRadius: BorderRadius.circular(kRadiusMd),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(kRadiusMd),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          // vertical: 14 (fuera de escala) redondeado a kSpaceMd para
+          // unificar con horizontal y respetar el grid 4dp.
+          padding: const EdgeInsets.all(kSpaceMd),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(kRadiusMd),
             border: Border.all(color: color, width: selected ? 2 : 1),
           ),
           child: Column(
@@ -80,7 +87,7 @@ class _TypeOption extends StatelessWidget {
               Row(
                 children: [
                   Icon(icon, color: selected ? FincoreColors.accent : FincoreColors.textMuted),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: kSpaceSm),
                   Text(label,
                       style: TextStyle(
                         color: selected ? FincoreColors.accent : FincoreColors.textPrimary,
@@ -88,9 +95,12 @@ class _TypeOption extends StatelessWidget {
                       )),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: kSpaceXs),
+              // fontSize 11 original → token `label` (12/w600) por ser
+              // metadata secundaria; leve bump de tamaño para alinear a la
+              // escala tipográfica canónica.
               Text(description,
-                  style: const TextStyle(color: FincoreColors.textSubtle, fontSize: 11)),
+                  style: typo.label.copyWith(color: FincoreColors.textSubtle)),
             ],
           ),
         ),

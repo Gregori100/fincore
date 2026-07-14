@@ -1,4 +1,6 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart';
 import 'package:flutter/material.dart';
 
 /// Estado vacío de la lista de movimientos.
@@ -20,7 +22,7 @@ class EntriesEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(kSpaceXl),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -29,10 +31,10 @@ class EntriesEmptyState extends StatelessWidget {
                   ? 'No hay movimientos con esos filtros.\nProbá ajustarlos.'
                   : 'No hay movimientos.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: FincoreColors.textMuted),
+              style: bodyM.copyWith(color: FincoreColors.textMuted),
             ),
             if (hasFilters) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: kSpaceLg),
               OutlinedButton.icon(
                 onPressed: onClearFilters,
                 icon: const Icon(Icons.refresh, size: 16),

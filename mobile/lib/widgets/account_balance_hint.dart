@@ -1,6 +1,8 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
@@ -36,7 +38,7 @@ class AccountBalanceHint extends StatelessWidget {
     final isCredit = selected.type == 'credit';
 
     return Padding(
-      padding: const EdgeInsets.only(top: 6, left: 12),
+      padding: const EdgeInsets.only(top: kSpaceSm, left: kSpaceMd),
       child: StreamBuilder<double>(
         stream: deps.stateService.watchAccountBalance(selected.id, selected.type),
         builder: (context, snapshot) {
@@ -56,13 +58,13 @@ class AccountBalanceHint extends StatelessWidget {
             return Row(
               children: [
                 _Chip(
-                  label: 'Deuda',
+                  labelText: 'Deuda',
                   value: balance,
                   color: balance > 0 ? FincoreColors.negative : FincoreColors.textMuted,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: kSpaceMd),
                 _Chip(
-                  label: 'Disponible',
+                  labelText: 'Disponible',
                   value: available,
                   color: available > 0 ? FincoreColors.positive : FincoreColors.negative,
                 ),
@@ -70,7 +72,7 @@ class AccountBalanceHint extends StatelessWidget {
             );
           }
           return _Chip(
-            label: 'Saldo',
+            labelText: 'Saldo',
             value: balance,
             color: balance < 0 ? FincoreColors.negative : FincoreColors.textMuted,
           );
@@ -81,10 +83,10 @@ class AccountBalanceHint extends StatelessWidget {
 }
 
 class _Chip extends StatelessWidget {
-  final String label;
+  final String labelText;
   final double value;
   final Color color;
-  const _Chip({required this.label, required this.value, required this.color});
+  const _Chip({required this.labelText, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -92,12 +94,15 @@ class _Chip extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          '$label: ',
-          style: const TextStyle(color: FincoreColors.textSubtle, fontSize: 12),
+          '$labelText: ',
+          style: label.copyWith(
+            color: FincoreColors.textSubtle,
+            fontWeight: FontWeight.w400,
+          ),
         ),
         Text(
           formatAmount(value),
-          style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+          style: label.copyWith(color: color),
         ),
       ],
     );

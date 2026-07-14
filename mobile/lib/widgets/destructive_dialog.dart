@@ -1,4 +1,7 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart' as t;
 import 'package:flutter/material.dart';
 
 /// Ítem de impacto que se muestra como chip visual en el diálogo. Cada uno
@@ -45,6 +48,8 @@ Future<bool> showDestructiveDialog(
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: true,
+    // token-exception: barrier scrim, 0.7 calibrado para el destructive
+    // (más denso que el default M3) y no forma parte de la escala alpha.
     barrierColor: Colors.black.withValues(alpha: 0.7),
     builder: (context) => _DestructiveDialog(
       title: title,
@@ -83,54 +88,52 @@ class _DestructiveDialog extends StatelessWidget {
     return Dialog(
       backgroundColor: FincoreColors.surface,
       elevation: 12,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusXl)),
+      // Vertical usa composición kSpace2xl + kSpaceSm = 40 para preservar
+      // el inset original alrededor del dialog.
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: kSpaceXl,
+        vertical: kSpace2xl + kSpaceSm,
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          padding: kEdgeDialog,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _HeroIcon(icon: icon),
-              const SizedBox(height: 20),
+              const SizedBox(height: kSpaceXl),
               Text(
                 title,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: FincoreColors.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                ),
+                style: t.headingL,
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: kSpaceSm),
               Text(
                 '"$objectName"',
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: t.bodyM.copyWith(
                   color: FincoreColors.textMuted,
-                  fontSize: 14,
                   fontStyle: FontStyle.italic,
                 ),
               ),
               if (impacts.isNotEmpty) ...[
-                const SizedBox(height: 20),
+                const SizedBox(height: kSpaceXl),
                 _ImpactList(impacts: impacts),
               ],
-              const SizedBox(height: 20),
+              const SizedBox(height: kSpaceXl),
               Text(
                 description,
-                style: const TextStyle(
+                style: t.bodyS.copyWith(
                   color: FincoreColors.textSubtle,
-                  fontSize: 13,
                   height: 1.5,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: kSpaceLg),
               const _IrreversibleBadge(),
-              const SizedBox(height: 24),
+              const SizedBox(height: kSpaceXl),
               _ActionRow(
                 cancelLabel: cancelLabel,
                 confirmLabel: confirmLabel,
@@ -153,12 +156,16 @@ class _HeroIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
+        // token-exception: hero icon del DestructiveDialog, diámetro específico
+        // calibrado para presencia visual (72dp) fuera de la escala de spacing.
         width: 72,
         height: 72,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: FincoreColors.negative.withValues(alpha: 0.12),
+          color: FincoreColors.negative.withValues(alpha: FincoreColors.alphaHairline),
           border: Border.all(
+            // token-exception: borde del hero icon, 0.3 calibrado para separar
+            // el círculo del surface sin competir con el fill (alphaHairline).
             color: FincoreColors.negative.withValues(alpha: 0.3),
             width: 1.5,
           ),
@@ -184,7 +191,7 @@ class _ImpactList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (int i = 0; i < impacts.length; i++) ...[
-          if (i > 0) const SizedBox(height: 8),
+          if (i > 0) const SizedBox(height: kSpaceSm),
           _ImpactChip(impact: impacts[i]),
         ],
       ],
@@ -199,10 +206,10 @@ class _ImpactChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: kSpaceLg, vertical: kSpaceMd),
       decoration: BoxDecoration(
         color: FincoreColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(kRadiusLg),
         border: Border.all(color: FincoreColors.border),
       ),
       child: Row(
@@ -211,8 +218,8 @@ class _ImpactChip extends StatelessWidget {
             width: 32,
             height: 32,
             decoration: BoxDecoration(
-              color: FincoreColors.negative.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(8),
+              color: FincoreColors.negative.withValues(alpha: FincoreColors.alphaHairline),
+              borderRadius: BorderRadius.circular(kRadiusMd),
             ),
             alignment: Alignment.center,
             child: Icon(
@@ -221,16 +228,11 @@ class _ImpactChip extends StatelessWidget {
               color: FincoreColors.negative,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: kSpaceMd),
           Expanded(
             child: Text(
               impact.label,
-              style: const TextStyle(
-                color: FincoreColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                height: 1.35,
-              ),
+              style: t.bodyS.copyWith(height: 1.35),
             ),
           ),
         ],
@@ -245,27 +247,27 @@ class _IrreversibleBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: kSpaceMd, vertical: kSpaceSm),
       decoration: BoxDecoration(
-        color: FincoreColors.warning.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(8),
+        color: FincoreColors.warning.withValues(alpha: FincoreColors.alphaHairline),
+        borderRadius: BorderRadius.circular(kRadiusMd),
+        // token-exception: borde de badge warning, 0.3 refuerza el contorno
+        // sobre el fill tinted (alphaHairline) sin ser tan intenso como el body.
         border: Border.all(color: FincoreColors.warning.withValues(alpha: 0.3)),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.warning_amber_rounded,
             size: 16,
             color: FincoreColors.warning,
           ),
-          SizedBox(width: 8),
+          const SizedBox(width: kSpaceSm),
           Expanded(
             child: Text(
               'Esta acción es definitiva y no se puede deshacer.',
-              style: TextStyle(
+              style: t.label.copyWith(
                 color: FincoreColors.warning,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
                 height: 1.3,
               ),
             ),
@@ -303,37 +305,37 @@ class _ActionRow extends StatelessWidget {
           style: FilledButton.styleFrom(
             backgroundColor: FincoreColors.negative,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 15),
+            padding: const EdgeInsets.symmetric(vertical: kSpaceMd),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(kRadiusLg),
             ),
           ),
           child: Text(
             confirmLabel,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 15, // token-exception: CTA destructivo, sin token entre bodyM (14) y headingM (16).
               fontWeight: FontWeight.w700,
               letterSpacing: 0.1,
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: kSpaceMd),
         OutlinedButton(
           onPressed: onCancel,
           style: OutlinedButton.styleFrom(
             foregroundColor: FincoreColors.textPrimary,
             side: const BorderSide(color: FincoreColors.border),
-            padding: const EdgeInsets.symmetric(vertical: 15),
+            padding: const EdgeInsets.symmetric(vertical: kSpaceMd),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(kRadiusLg),
             ),
           ),
           child: Text(
             cancelLabel,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 15, // token-exception: pareado con el confirm CTA (mismo criterio).
               fontWeight: FontWeight.w600,
             ),
           ),

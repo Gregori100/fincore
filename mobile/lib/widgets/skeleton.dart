@@ -1,4 +1,7 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_motion.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:flutter/material.dart';
 
 /// Rectángulo con pulse animado para placeholder mientras carga data.
@@ -13,7 +16,7 @@ class Skeleton extends StatefulWidget {
     super.key,
     required this.width,
     required this.height,
-    this.radius = 4,
+    this.radius = kRadiusSm,
   });
 
   @override
@@ -29,7 +32,7 @@ class _SkeletonState extends State<Skeleton>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1100),
+      duration: kMotionPulse,
     )..repeat(reverse: true);
   }
 
@@ -49,6 +52,7 @@ class _SkeletonState extends State<Skeleton>
           width: widget.width,
           height: widget.height,
           decoration: BoxDecoration(
+            // token-exception: valores intencionalmente fuera de escala para el efecto pulse
             color: FincoreColors.border.withValues(alpha: 0.4 + t * 0.4),
             borderRadius: BorderRadius.circular(widget.radius),
           ),
@@ -66,28 +70,31 @@ class SkeletonCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(
+        horizontal: kSpaceMd,
+        vertical: kSpaceMd,
+      ),
       decoration: BoxDecoration(
         color: FincoreColors.surface,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(kRadiusMd),
         border: Border.all(color: FincoreColors.border),
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const Skeleton(width: 40, height: 40, radius: 8),
-          const SizedBox(width: 12),
-          const Expanded(
+          Skeleton(width: 40, height: 40, radius: kRadiusMd),
+          SizedBox(width: kSpaceMd),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Skeleton(width: 140, height: 14),
-                SizedBox(height: 8),
+                SizedBox(height: kSpaceSm),
                 Skeleton(width: 90, height: 11),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          const Skeleton(width: 70, height: 16),
+          SizedBox(width: kSpaceSm),
+          Skeleton(width: 70, height: 16),
         ],
       ),
     );

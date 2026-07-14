@@ -3,6 +3,9 @@ import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/models/domain_error.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart';
 import 'package:flutter/material.dart';
 
 /// Mapeo de códigos de `BackupError` (validaciones del import de respaldos) a
@@ -109,17 +112,17 @@ SnackBar _buildFincoreSnackBar({
       color: Colors.transparent,
       child: InkWell(
         onTap: messenger.hideCurrentSnackBar,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(kRadiusLg),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: const EdgeInsets.symmetric(vertical: kSpaceXs),
           child: Row(
             children: [
               Icon(icon, color: foreground, size: 20),
-              const SizedBox(width: 10),
+              const SizedBox(width: kSpaceSm),
               Expanded(
                 child: Text(
                   message,
-                  style: TextStyle(
+                  style: bodyM.copyWith(
                     color: foreground,
                     fontWeight: FontWeight.w500,
                   ),
@@ -132,8 +135,8 @@ SnackBar _buildFincoreSnackBar({
     ),
     backgroundColor: background,
     behavior: SnackBarBehavior.floating,
-    margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    margin: const EdgeInsets.fromLTRB(kSpaceLg, 0, kSpaceLg, kSpaceMd),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusLg)),
     elevation: 6,
     duration: duration,
   );

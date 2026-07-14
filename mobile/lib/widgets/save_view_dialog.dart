@@ -1,4 +1,7 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart' as t;
 import 'package:flutter/material.dart';
 
 /// Modal Bottom Sheet para ingresar el nombre de una vista guardada.
@@ -28,7 +31,7 @@ Future<String?> showSaveViewDialog(
     showDragHandle: true,
     backgroundColor: FincoreColors.surface,
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusXl)),
     ),
     builder: (ctx) => _SaveViewSheet(
       title: title,
@@ -87,10 +90,10 @@ class _SaveViewSheetState extends State<_SaveViewSheet> {
     final media = MediaQuery.of(context);
     return Padding(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 4,
-        bottom: media.viewInsets.bottom + media.viewPadding.bottom + 20,
+        left: kSpaceXl,
+        right: kSpaceXl,
+        top: kSpaceXs,
+        bottom: media.viewInsets.bottom + media.viewPadding.bottom + kSpaceXl,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -103,37 +106,30 @@ class _SaveViewSheetState extends State<_SaveViewSheet> {
                 color: FincoreColors.accent,
                 size: 22,
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: kSpaceMd),
               Expanded(
                 child: Text(
                   widget.title,
-                  style: const TextStyle(
-                    color: FincoreColors.textPrimary,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: t.headingL,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: kSpaceLg),
           TextField(
             controller: _ctrl,
             autofocus: true,
             maxLength: 50,
             textCapitalization: TextCapitalization.sentences,
             textInputAction: TextInputAction.done,
-            style: const TextStyle(
-              color: FincoreColors.textPrimary,
-              fontSize: 15,
-            ),
+            style: t.bodyM,
             decoration: InputDecoration(
               hintText: 'Ej: Gastos comida del mes',
               border: const OutlineInputBorder(),
               errorText: _errorText,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
+                horizontal: kSpaceLg,
+                vertical: kSpaceLg,
               ),
             ),
             onChanged: (_) {
@@ -143,7 +139,7 @@ class _SaveViewSheetState extends State<_SaveViewSheet> {
             },
             onSubmitted: (_) => _submit(),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: kSpaceMd),
           Row(
             children: [
               Expanded(
@@ -151,20 +147,20 @@ class _SaveViewSheetState extends State<_SaveViewSheet> {
                   onPressed: () => Navigator.of(context).pop(),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: FincoreColors.textSubtle,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: kSpaceMd),
                     side: const BorderSide(color: FincoreColors.border),
                   ),
                   child: const Text('Cancelar'),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: kSpaceMd),
               Expanded(
                 child: FilledButton(
                   onPressed: _submit,
                   style: FilledButton.styleFrom(
                     backgroundColor: FincoreColors.accent,
                     foregroundColor: FincoreColors.canvas,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: kSpaceMd),
                     textStyle: const TextStyle(
                       fontWeight: FontWeight.w700,
                     ),
