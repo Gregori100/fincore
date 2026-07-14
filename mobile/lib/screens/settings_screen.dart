@@ -27,6 +27,54 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _working = false;
 
+  /// Día de inicio de la semana (ISO 8601, 1..7) para el planeador de
+  /// presupuestos. `null` mientras se carga desde `AppPreferencesDao`.
+  /// Sprint `flutter-weekly-budgets-v1` (T024).
+  int? _weekStartDow;
+
+  static const Map<int, String> _weekStartDowLabels = {
+    1: 'Lunes',
+    2: 'Martes',
+    3: 'Miércoles',
+    4: 'Jueves',
+    5: 'Viernes',
+    6: 'Sábado',
+    7: 'Domingo',
+  };
+
+  // Guardrail una-vez: `didChangeDependencies` corre más de una vez si el
+  // árbol de InheritedWidgets se reconstruye. `AppDependencies` no cambia
+  // en runtime, así que solo nos interesa la primera pasada (justo después
+  // de `initState`). Evita re-disparar la carga async en cada rebuild.
+  bool _weekStartDowLoadStarted = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_weekStartDowLoadStarted) {
+      _weekStartDowLoadStarted = true;
+      _loadWeekStartDow();
+    }
+  }
+
+  Future<void> _loadWeekStartDow() async {
+    final deps = AppDependencies.of(context);
+    final dow = await deps.appPreferencesDao.weekStartDow();
+    if (mounted) setState(() => _weekStartDow = dow);
+  }
+
+  Future<void> _onWeekStartDowChanged(int? value) async {
+    if (value == null || value == _weekStartDow) return;
+    final deps = AppDependencies.of(context);
+    await deps.appPreferencesDao.setWeekStartDow(value);
+    if (!mounted) return;
+    setState(() => _weekStartDow = value);
+    showSuccessSnackbar(
+      context,
+      'Día de inicio actualizado a ${_weekStartDowLabels[value]}.',
+    );
+  }
+
   Future<void> _export() async {
     if (_working) return;
     setState(() => _working = true);
@@ -327,6 +375,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 // ignore: prefer_const_constructors
                 _LastExportInfo(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const SectionTitle('Preferencias'),
+          const SizedBox(height: 8),
+          BaseCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Configuración del planeador semanal de presupuestos.',
+                  style: TextStyle(color: FincoreColors.textMuted, fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Día de inicio de la semana',
+                        style: TextStyle(
+                            color: FincoreColors.textPrimary,
+                            fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    _weekStartDow == null
+                        ? const Skeleton(width: 90, height: 32)
+                        : DropdownButton<int>(
+                            value: _weekStartDow,
+                            dropdownColor: FincoreColors.surfaceElevated,
+                            onChanged: _onWeekStartDowChanged,
+                            items: _weekStartDowLabels.entries
+                                .map((entry) => DropdownMenuItem<int>(
+                                      value: entry.key,
+                                      child: Text(
+                                        entry.value,
+                                        style: const TextStyle(
+                                            color: FincoreColors.textPrimary),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                  ],
+                ),
               ],
             ),
           ),

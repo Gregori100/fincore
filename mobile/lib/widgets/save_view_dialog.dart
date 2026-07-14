@@ -81,12 +81,16 @@ class _SaveViewSheetState extends State<_SaveViewSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // Sumar viewPadding.bottom (nav bar gestual Android) además de
+    // viewInsets.bottom (teclado). `useSafeArea: true` en
+    // showModalBottomSheet no cubre la nav bar inferior.
+    final media = MediaQuery.of(context);
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
         top: 4,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bottom: media.viewInsets.bottom + media.viewPadding.bottom + 20,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

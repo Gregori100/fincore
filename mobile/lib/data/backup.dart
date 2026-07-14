@@ -91,6 +91,10 @@ class BackupService {
           ..where((e) => e.deletedAt.isNull()))
         .get();
 
+    // Sprint flutter-weekly-budgets-v1 (RN-B13): las 4 tablas del planeador
+    // semanal (weekly_budgets, weekly_budget_items
+    // budget_template_items) NO se incluyen en el backup por decisión de
+    // diseño (P-001). El usuario acepta perderlas en cada restore.
     final payload = <String, dynamic>{
       'version': _supportedVersion,
       'exported_at': DateTime.now().toUtc().toIso8601String(),
@@ -144,6 +148,12 @@ class BackupService {
       );
     }
 
+    // Sprint flutter-weekly-budgets-v1: el shape solo se valida para
+    // accounts/categories/journal_entries. Si el payload trae además arrays
+    // 'weekly_budgets' / 'weekly_budget_items' (backup de un fork o de una
+    // versión futura que sí los exporte), se ignoran silenciosamente: no se
+    // leen ni se valida su ausencia. No hay allowlist estricta de keys del
+    // payload a propósito.
     final accountsRaw = payload['accounts'];
     final categoriesRaw = payload['categories'];
     final entriesRaw = payload['journal_entries'];
@@ -266,6 +276,12 @@ class BackupService {
   }
 
   Future<void> _wipeTablesInternal() async {
+    // Sprint flutter-weekly-budgets-v1 (RN-B13): las 4 tablas nuevas no van
+    // al backup, pero se borran en wipeAll para dejar la BD como recién
+    // instalada. Items primero (FK a su parent y, en el caso de los items,
+    // a categories) y luego los parents.
+    await _db.delete(_db.weeklyBudgetItems).go();
+    await _db.delete(_db.weeklyBudgets).go();
     await _db.delete(_db.journalEntries).go();
     await _db.delete(_db.categories).go();
     await _db.delete(_db.accounts).go();

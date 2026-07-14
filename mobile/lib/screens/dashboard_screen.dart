@@ -136,14 +136,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () => context.push('/reports'),
           ),
           IconButton(
-            icon: const Icon(Icons.label_outline),
-            tooltip: 'Categorías',
-            onPressed: () => context.push('/categories'),
+            icon: const Icon(Icons.calendar_month_outlined),
+            tooltip: 'Presupuestos semanales',
+            onPressed: () => context.push('/budgets'),
           ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'Configuración',
             onPressed: () => context.push('/settings'),
+          ),
+          // Sprint quality-review (A5): con los 4 IconButtons directos
+          // originales (Reportes, Presupuestos semanales, Categorías,
+          // Configuración) el AppBar no cabía en un cel de 360dp y partía
+          // el wordmark "FinCore". "Categorías" se mueve a este menú por
+          // ser la acción menos frecuente de las 4 (se navega mucho más
+          // seguido a Reportes/Presupuestos/Configuración).
+          PopupMenuButton<String>(
+            tooltip: 'Más opciones',
+            onSelected: (value) {
+              if (value == 'categories') context.push('/categories');
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'categories',
+                child: Row(
+                  children: [
+                    Icon(Icons.label_outline),
+                    SizedBox(width: 8),
+                    Text('Categorías'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),

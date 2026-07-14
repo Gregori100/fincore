@@ -25,13 +25,17 @@ void main() {
       // sin mock). `pump` con frame manual basta para montar SettingsScreen.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
+      // Sprint flutter-weekly-budgets-v1: sección Preferencias con
+      // `didChangeDependencies` async que dispara setState al resolverse.
+      // Pump extra para dejar que se estabilice.
+      await tester.pump(const Duration(milliseconds: 200));
 
       expect(find.byType(SettingsScreen), findsOneWidget);
 
       // Scroll al botón destructivo en "Zona peligrosa". `OutlinedButton.icon`
       // genera widgets internos donde el Text es descendant del button; usamos
       // `find.text` y subimos al OutlinedButton ancestor.
-      final resetText = find.text('Reiniciar sin exportar');
+      final resetText = find.text('Reiniciar sin exportar', skipOffstage: false);
       await tester.ensureVisible(resetText);
       await tester.pump(const Duration(milliseconds: 100));
       await tester.tap(resetText);
@@ -95,6 +99,12 @@ void main() {
       GoRouter.of(ctx).push('/settings');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
+      // Sprint flutter-weekly-budgets-v1: sección Preferencias agrega un
+      // `didChangeDependencies` async que dispara setState al resolverse.
+      // Un pump extra deja que se estabilicen ese setState + el
+      // FutureBuilder de `_LastExportInfo` (que se rebuildea con el
+      // setState del padre).
+      await tester.pump(const Duration(milliseconds: 200));
     }
 
     testWidgets(
@@ -103,7 +113,13 @@ void main() {
       final harness = await pumpFincoreApp(tester);
       await openSettings(tester);
       expect(find.byType(SettingsScreen), findsOneWidget);
-      expect(find.text('Aún no exportaste un respaldo.'), findsOneWidget);
+      // Sprint flutter-weekly-budgets-v1: la sección Preferencias empujó
+      // el "Respaldo" fuera del viewport inicial en algunos runs.
+      // `skipOffstage: false` para tolerar el layout más largo.
+      expect(
+        find.text('Aún no exportaste un respaldo.', skipOffstage: false),
+        findsOneWidget,
+      );
       await harness.dispose();
     });
 
@@ -117,8 +133,14 @@ void main() {
             .set(kPrefLastExportAt, fiveDaysAgo.toIso8601String());
       });
       await openSettings(tester);
-      expect(find.text('Último respaldo: hace 5 días.'), findsOneWidget);
-      expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+      expect(
+        find.text('Último respaldo: hace 5 días.', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.byIcon(Icons.warning_amber_rounded, skipOffstage: false),
+        findsNothing,
+      );
       await harness.dispose();
     });
 
@@ -133,10 +155,14 @@ void main() {
       });
       await openSettings(tester);
       expect(
-        find.textContaining('te recomendamos exportar pronto'),
+        find.textContaining('te recomendamos exportar pronto',
+            skipOffstage: false),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+      expect(
+        find.byIcon(Icons.warning_amber_rounded, skipOffstage: false),
+        findsOneWidget,
+      );
       await harness.dispose();
     });
 
@@ -147,7 +173,10 @@ void main() {
         await deps.appPreferencesDao.set(kPrefLastExportAt, 'not-a-date');
       });
       await openSettings(tester);
-      expect(find.text('Aún no exportaste un respaldo.'), findsOneWidget);
+      expect(
+        find.text('Aún no exportaste un respaldo.', skipOffstage: false),
+        findsOneWidget,
+      );
       await harness.dispose();
     });
 
@@ -156,15 +185,19 @@ void main() {
         (tester) async {
       final harness = await pumpFincoreApp(tester);
       await openSettings(tester);
-      // El SettingsScreen es un ListView; la sección "Ayuda" puede no
-      // estar montada en el viewport inicial. Scrollear hasta verla.
-      await tester.scrollUntilVisible(
-        find.text('FAQ sobre kinds, reportes y backup.'),
-        300,
-        scrollable: find.byType(Scrollable).first,
+      // Sprint flutter-weekly-budgets-v1: la sección Preferencias empujó
+      // "Ayuda" más abajo del cacheExtent del ListView, así que
+      // `find.text` (con o sin skipOffstage) no encuentra el widget
+      // porque nunca se construyó. Scrolleamos con `dragUntilVisible`
+      // hasta que se materialice.
+      final helpFinder = find.text('FAQ sobre kinds, reportes y backup.');
+      await tester.dragUntilVisible(
+        helpFinder,
+        find.byType(Scrollable).first,
+        const Offset(0, -100),
       );
       await tester.pump(const Duration(milliseconds: 100));
-      await tester.tap(find.text('FAQ sobre kinds, reportes y backup.'));
+      await tester.tap(helpFinder);
       await tester.pumpAndSettle();
       expect(find.byType(HelpScreen), findsOneWidget);
       await harness.dispose();

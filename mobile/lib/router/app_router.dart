@@ -13,6 +13,10 @@ import 'package:fincore/screens/help_screen.dart';
 import 'package:fincore/screens/onboarding_screen.dart';
 import 'package:fincore/screens/reports_screen.dart';
 import 'package:fincore/screens/settings_screen.dart';
+import 'package:fincore/screens/weekly_budgets/calendar_screen.dart';
+import 'package:fincore/screens/weekly_budgets/compare_screen.dart';
+import 'package:fincore/screens/weekly_budgets/detail_screen.dart';
+import 'package:fincore/screens/weekly_budgets/list_screen.dart';
 import 'package:fincore/screens/splash_screen.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
@@ -183,6 +187,32 @@ GoRouter buildAppRouter({
       ),
       GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
+      // Sprint flutter-weekly-budgets-v1: planeador semanal + plantillas.
+      GoRoute(
+        path: '/budgets',
+        builder: (_, __) => const WeeklyBudgetsListScreen(),
+        routes: <RouteBase>[
+          GoRoute(
+            path: 'calendar',
+            builder: (_, __) => const BudgetCalendarScreen(),
+          ),
+          // Comparación side-by-side de 2 presupuestos de la misma semana.
+          // Path estático de 3 segmentos ('compare/:a/:b'), sin ambigüedad
+          // con ':id' (1 segmento) sin importar el orden de declaración.
+          GoRoute(
+            path: 'compare/:a/:b',
+            builder: (_, st) => BudgetCompareScreen(
+              budgetIdA: st.pathParameters['a']!,
+              budgetIdB: st.pathParameters['b']!,
+            ),
+          ),
+          GoRoute(
+            path: ':id',
+            builder: (_, st) =>
+                WeeklyBudgetScreen(budgetId: st.pathParameters['id']!),
+          ),
+        ],
+      ),
     ],
   );
 }

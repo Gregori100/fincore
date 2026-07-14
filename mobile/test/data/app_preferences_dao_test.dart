@@ -1,4 +1,5 @@
 import 'package:drift/native.dart';
+import 'package:fincore/data/app_preferences_keys.dart';
 import 'package:fincore/data/database.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -54,5 +55,41 @@ void main() {
     final exportAt = await db.appPreferencesDao.get('last_export_at');
     expect(seen, 'true');
     expect(exportAt, '2026-06-29T10:00:00.000');
+  });
+
+  group('weekStartDow (sprint flutter-weekly-budgets-v1)', () {
+    test('UT-AP01: clave ausente retorna default 5 (viernes)', () async {
+      final result = await db.appPreferencesDao.weekStartDow();
+      expect(result, 5);
+    });
+
+    test('UT-AP02: valor numérico válido en rango retorna el int parseado',
+        () async {
+      await db.appPreferencesDao.set(kPrefWeekStartDow, '3');
+      final result = await db.appPreferencesDao.weekStartDow();
+      expect(result, 3);
+    });
+
+    test('UT-AP03: valor corrupto no numérico retorna default 5', () async {
+      await db.appPreferencesDao.set(kPrefWeekStartDow, 'abc');
+      final result = await db.appPreferencesDao.weekStartDow();
+      expect(result, 5);
+    });
+
+    test('UT-AP04: valor numérico fuera de rango [1,7] retorna default 5',
+        () async {
+      await db.appPreferencesDao.set(kPrefWeekStartDow, '0');
+      expect(await db.appPreferencesDao.weekStartDow(), 5);
+
+      await db.appPreferencesDao.set(kPrefWeekStartDow, '8');
+      expect(await db.appPreferencesDao.weekStartDow(), 5);
+    });
+
+    test('UT-AP05: setWeekStartDow persiste y el siguiente get lo retorna',
+        () async {
+      await db.appPreferencesDao.setWeekStartDow(3);
+      final result = await db.appPreferencesDao.weekStartDow();
+      expect(result, 3);
+    });
   });
 }

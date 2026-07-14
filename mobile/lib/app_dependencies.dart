@@ -5,6 +5,7 @@ import 'package:fincore/data/daos/app_preferences_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
+import 'package:fincore/data/daos/weekly_budgets_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/reports.dart';
@@ -22,6 +23,7 @@ class AppDependencies {
   final EntriesDao entriesDao;
   final SavedViewsDao savedViewsDao;
   final AppPreferencesDao appPreferencesDao;
+  final WeeklyBudgetsDao weeklyBudgetsDao;
   final FinancialStateService stateService;
   final BackupService backupService;
   final ReportsService reportsService;
@@ -34,6 +36,7 @@ class AppDependencies {
     required this.entriesDao,
     required this.savedViewsDao,
     required this.appPreferencesDao,
+    required this.weeklyBudgetsDao,
     required this.stateService,
     required this.backupService,
     required this.reportsService,
@@ -56,6 +59,7 @@ class AppDependencies {
     final entriesDao = database.entriesDao;
     final savedViewsDao = database.savedViewsDao;
     final appPreferencesDao = database.appPreferencesDao;
+    final weeklyBudgetsDao = database.weeklyBudgetsDao;
     final backupService = BackupService(database, stateService);
     final reportsService = ReportsService(database);
     final categorySuggestionService = CategorySuggestionService(database);
@@ -66,6 +70,7 @@ class AppDependencies {
       entriesDao: entriesDao,
       savedViewsDao: savedViewsDao,
       appPreferencesDao: appPreferencesDao,
+      weeklyBudgetsDao: weeklyBudgetsDao,
       stateService: stateService,
       backupService: backupService,
       reportsService: reportsService,

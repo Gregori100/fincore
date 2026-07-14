@@ -160,6 +160,26 @@ class HelpScreen extends StatelessWidget {
                 'Para restaurar, usar "Importar respaldo" en la misma '
                 'sección. Recomendado: exportar cada 1-2 semanas.',
           ),
+          const _FaqTile(
+            title: '¿Qué diferencia hay entre "Presupuestos" del reporte '
+                'y "Presupuestos semanales"?',
+            body:
+                'El reporte de "Presupuestos" (dentro de Reportes) mide el '
+                'gasto real por categoría contra un límite mensual que se '
+                'define al editar cada categoría. Sirve para no gastar más de '
+                '\$X en Comida al mes. Es reactivo sobre los movimientos '
+                'reales.\n\n'
+                '"Presupuestos semanales" (en la ruta Presupuestos desde el '
+                'dashboard) es un planeador anticipado: permite crear con '
+                'anticipación una lista de ingresos y gastos previstos para '
+                'una semana concreta (viernes 17 al jueves 23, por ejemplo) y '
+                'ver cuánto sobra o falta antes de que la semana comience. Se '
+                'pueden crear varios planes por semana (Conservador, '
+                'Optimista) y guardar plantillas para reutilizar. '
+                'IMPORTANTE: los presupuestos semanales y sus plantillas NO '
+                'se guardan en el respaldo (backup). Se pierden si se '
+                'reinstala la app o se restaura un respaldo previo.',
+          ),
         ],
       ),
     );

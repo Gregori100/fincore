@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:fincore/data/app_preferences_keys.dart';
 import 'package:fincore/data/database.dart';
 
 part 'app_preferences_dao.g.dart';
@@ -36,5 +37,32 @@ class AppPreferencesDao extends DatabaseAccessor<FincoreDatabase>
     await into(appPreferences).insertOnConflictUpdate(
       AppPreferencesCompanion.insert(key: key, value: value),
     );
+  }
+
+  /// Retorna el día de inicio de la semana para el planeador de presupuestos
+  /// (ISO 8601: 1=Lunes, 2=Martes, ..., 7=Domingo).
+  ///
+  /// Lógica defensiva:
+  /// - Si la clave no existe → `5` (viernes, default)
+  /// - Si el valor no es numérico → `5`
+  /// - Si está fuera del rango `[1, 7]` → `5`
+  /// - En caso contrario → retorna el int parseado
+  ///
+  /// Robusto ante BDs corruptas o valores legacy inválidos.
+  Future<int> weekStartDow() async {
+    final value = await get(kPrefWeekStartDow);
+    if (value == null) return 5;
+    final parsed = int.tryParse(value);
+    if (parsed == null) return 5;
+    if (parsed < 1 || parsed > 7) return 5;
+    return parsed;
+  }
+
+  /// Establece el día de inicio de la semana para el planeador de presupuestos.
+  ///
+  /// `dow` debe estar en el rango `[1, 7]` (ISO 8601).
+  Future<void> setWeekStartDow(int dow) async {
+    assert(dow >= 1 && dow <= 7, 'week_start_dow debe estar en [1,7] ISO 8601');
+    await set(kPrefWeekStartDow, dow.toString());
   }
 }

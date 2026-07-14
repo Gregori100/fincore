@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/native.dart';
 import 'package:fincore/data/backup.dart';
 import 'package:fincore/data/bootstrap.dart';
@@ -693,6 +695,148 @@ void main() {
       final all = await accountsDao.listAll();
       final amex = all.firstWhere((a) => a.name == 'AmexRoundTrip');
       expect(amex.creditLimit, 15000);
+    });
+  });
+
+  // ===========================================================================
+  // Sprint flutter-weekly-budgets-v1 (RN-B13), refactor 2026-07-14: las 2
+  // tablas del planeador semanal (`weekly_budgets` + `weekly_budget_items`,
+  // ya sin las tablas separadas de plantilla — el flag `is_template` vive en
+  // `weekly_budgets`) NO viajan en el backup JSON v1, y `wipeAll` (disparado
+  // por el reemplazo total del import) las borra. RG-01..RG-04 del test-plan.
+  // ===========================================================================
+  group('Backup — weekly budgets (RN-B13, sprint flutter-weekly-budgets-v1)',
+      () {
+    const rootKeys = {
+      'version',
+      'exported_at',
+      'accounts',
+      'categories',
+      'journal_entries',
+    };
+
+    test(
+        'RG-01: export sin budgets → mismas keys del sprint previo '
+        '(sin "weekly_budgets" ni afines)', () async {
+      await seed();
+      final json = await backup.exportToJson();
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+      expect(decoded.keys.toSet(), rootKeys);
+      expect(json, isNot(contains('weekly_budgets')));
+      expect(json, isNot(contains('weekly_budget_items')));
+    });
+
+    test(
+        'RG-02: export CON budgets (incluyendo uno marcado como plantilla) '
+        '→ tampoco los incluye (mismas keys del objeto raíz)', () async {
+      await seed();
+      final budgetId = await db.weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 17),
+        label: 'Presupuesto RG-02',
+      );
+      await db.weeklyBudgetsDao.addItem(
+        budgetId: budgetId,
+        name: 'Renta',
+        amount: 5000,
+        kind: 'expense',
+      );
+      final templateId = await db.weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 24),
+        label: 'Plantilla RG-02',
+      );
+      await db.weeklyBudgetsDao.toggleTemplateFlag(templateId);
+
+      final json = await backup.exportToJson();
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+      expect(decoded.keys.toSet(), rootKeys,
+          reason: 'el objeto raíz del backup no debe ganar keys nuevas '
+              'aunque existan budgets/plantillas activos');
+      expect(json, isNot(contains('weekly_budget')));
+      expect(json, isNot(contains('Plantilla RG-02')));
+      expect(json, isNot(contains('Presupuesto RG-02')));
+    });
+
+    test(
+        'RG-03: import de JSON v1 legacy sobre BD con budgets activos → '
+        'wipeAll los borra (count=0) + data legacy poblada',
+        () async {
+      // BD "existente" con budgets (uno plantilla) + su propio ledger.
+      await seed();
+      final budgetId = await db.weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 17),
+        label: 'Presupuesto pre-import',
+      );
+      await db.weeklyBudgetsDao.addItem(
+        budgetId: budgetId,
+        name: 'Renglón pre-import',
+        amount: 1000,
+        kind: 'expense',
+      );
+      final templateId = await db.weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 24),
+        label: 'Plantilla pre-import',
+      );
+      await db.weeklyBudgetsDao.toggleTemplateFlag(templateId);
+      expect((await db.weeklyBudgetsDao.watchAll().first).length, 2);
+
+      // JSON legacy v1 (formato sin conocimiento de budgets, como el de
+      // cualquier sprint previo a este).
+      final report = await backup.importFromJson(buildPayload());
+
+      expect(report.accountsCount, 1);
+      expect(report.categoriesCount, 1);
+      expect(report.entriesCount, 1);
+      // Las 2 tablas quedan vacías tras el reemplazo total.
+      expect(await db.weeklyBudgetsDao.watchAll().first, isEmpty);
+      final wbItemsCount = await db
+          .customSelect('SELECT COUNT(*) AS c FROM weekly_budget_items',
+              readsFrom: const {})
+          .getSingle();
+      expect(wbItemsCount.data['c'], 0);
+      // Data legacy sí quedó poblada.
+      final accounts = await accountsDao.listAll();
+      expect(accounts, isNotEmpty);
+    });
+
+    test(
+        'RG-04: import de JSON con array "weekly_budgets" spurio no crashea '
+        '→ mismo resultado que RG-03 (se ignora silenciosamente)', () async {
+      await seed();
+      final budgetId = await db.weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 17),
+        label: 'Presupuesto pre-import RG-04',
+      );
+      await db.weeklyBudgetsDao.addItem(
+        budgetId: budgetId,
+        name: 'Renglón RG-04',
+        amount: 200,
+        kind: 'income',
+      );
+      final templateId = await db.weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 24),
+        label: 'Plantilla RG-04',
+      );
+      await db.weeklyBudgetsDao.toggleTemplateFlag(templateId);
+
+      // Payload legacy válido + un array inesperado 'weekly_budgets'.
+      final payload = jsonDecode(buildPayload()) as Map<String, dynamic>;
+      payload['weekly_budgets'] = [
+        {
+          'id': 'spurious-id-no-uuid',
+          'label': 'No debería leerse',
+        }
+      ];
+      final spuriousJson = jsonEncode(payload);
+
+      final report = await backup.importFromJson(spuriousJson);
+
+      expect(report.accountsCount, 1);
+      expect(report.categoriesCount, 1);
+      expect(report.entriesCount, 1);
+      expect(await db.weeklyBudgetsDao.watchAll().first, isEmpty,
+          reason:
+              'el array spurio "weekly_budgets" del JSON se ignora; wipeAll '
+              'igual borra los budgets pre-existentes');
     });
   });
 }

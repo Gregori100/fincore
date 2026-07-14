@@ -262,4 +262,157 @@ void main() {
 
     await db.close();
   });
+
+  // ===========================================================================
+  // Sprint flutter-weekly-budgets-v1: schema bump v6 → v7
+  // ===========================================================================
+  // MG-01..MG-04 del test-plan. Mismo patrón que MT-01..03: la BD in-memory
+  // abre siempre en schemaVersion actual (7) vía onCreate; para simular una
+  // instalación existente en v6 dropeamos las 2 tablas del planeador semanal
+  // + sus índices y llamamos a `onUpgrade` vía `Migrator` directo con
+  // `from=6, to=7`.
+  //
+  // Refactor 2026-07-14: las tablas `budget_templates`/`budget_template_items`
+  // fueron eliminadas — el rol de plantilla ahora vive como `is_template` en
+  // `weekly_budgets`. MG-01..04 quedan con 2 tablas y 3 índices (sin
+  // `idx_bt_items_template_sort`, reemplazado por `idx_weekly_budgets_template`).
+
+  test(
+      'MG-01: BD virgen con schemaVersion=7 (onCreate) → las 2 tablas del '
+      'planeador semanal existen y son usables', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll(); // fuerza onCreate.
+
+    for (final table in [
+      'weekly_budgets',
+      'weekly_budget_items',
+    ]) {
+      final rows = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='$table'",
+            readsFrom: const {},
+          )
+          .get();
+      expect(rows, hasLength(1), reason: 'tabla $table debería existir tras onCreate');
+    }
+
+    // Usable end-to-end vía el DAO, incluyendo el flag de plantilla.
+    final budgetId = await db.weeklyBudgetsDao.createBudget(
+      weekStartDate: DateTime(2026, 7, 17),
+      label: 'MG-01',
+    );
+    expect(budgetId, isNotEmpty);
+    await db.weeklyBudgetsDao.toggleTemplateFlag(budgetId);
+    final row = await db.weeklyBudgetsDao.findById(budgetId);
+    expect(row!.isTemplate, isTrue);
+
+    await db.close();
+  });
+
+  test(
+      'MG-02: BD "existente v6" (sin las 2 tablas nuevas) → onUpgrade(6, 7) '
+      'las crea sin perder datos pre-existentes', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll(); // fuerza onCreate en v7.
+
+    // Datos del usuario sembrados ANTES de simular la migración.
+    final accountId =
+        await db.accountsDao.create(name: 'Banamex_MG02', type: 'debit');
+    final categoryId = await db.categoriesDao.create(
+      name: 'Comida_MG02',
+      appliesTo: 'expense',
+      colorSlug: 'red',
+      iconSlug: 'shopping-cart',
+    );
+
+    // Simular estado pre-6→7: dropear las 2 tablas nuevas + sus índices.
+    await db.customStatement('DROP TABLE weekly_budget_items');
+    await db.customStatement('DROP TABLE weekly_budgets');
+    final preRows = await db
+        .customSelect(
+          "SELECT name FROM sqlite_master WHERE type='table' "
+          "AND name IN ('weekly_budgets', 'weekly_budget_items')",
+          readsFrom: const {},
+        )
+        .get();
+    expect(preRows, isEmpty,
+        reason: 'las 2 tablas deberían estar dropeadas antes de migrar');
+
+    // Ejecutar onUpgrade(6, 7) vía Migrator directo.
+    final migrator = db.createMigrator();
+    await db.migration.onUpgrade(migrator, 6, 7);
+
+    // Verificar las 2 tablas creadas y usables end-to-end.
+    final budgetId = await db.weeklyBudgetsDao.createBudget(
+      weekStartDate: DateTime(2026, 7, 17),
+      label: 'MG-02',
+    );
+    await db.weeklyBudgetsDao.addItem(
+      budgetId: budgetId,
+      name: 'Renglón MG-02',
+      amount: 100,
+      kind: 'expense',
+    );
+    expect(await db.weeklyBudgetsDao.watchAll().first, hasLength(1));
+    await db.weeklyBudgetsDao.toggleTemplateFlag(budgetId);
+    expect(await db.weeklyBudgetsDao.watchTemplates().first, hasLength(1));
+
+    // Verificar que los datos pre-existentes NO se perdieron.
+    final accountsAfter = await db.accountsDao.listAll();
+    expect(accountsAfter.any((a) => a.id == accountId), isTrue,
+        reason: 'cuenta sembrada antes de la migración debe persistir');
+    final categoriesAfter = await db.categoriesDao.listAll();
+    expect(categoriesAfter.any((c) => c.id == categoryId), isTrue,
+        reason: 'categoría sembrada antes de la migración debe persistir');
+
+    await db.close();
+  });
+
+  test(
+      'MG-03: migración 6 → 7 es aditiva pura — crea los 3 índices nuevos '
+      'sin migración de datos', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll();
+
+    // Simular estado pre-6→7: dropear tablas + índices.
+    await db.customStatement('DROP INDEX idx_weekly_budgets_start');
+    await db.customStatement('DROP INDEX idx_wb_items_budget_sort');
+    await db.customStatement('DROP INDEX idx_weekly_budgets_template');
+    await db.customStatement('DROP TABLE weekly_budget_items');
+    await db.customStatement('DROP TABLE weekly_budgets');
+
+    final migrator = db.createMigrator();
+    await db.migration.onUpgrade(migrator, 6, 7);
+
+    for (final index in [
+      'idx_weekly_budgets_start',
+      'idx_wb_items_budget_sort',
+      'idx_weekly_budgets_template',
+    ]) {
+      final rows = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='$index'",
+            readsFrom: const {},
+          )
+          .get();
+      expect(rows, hasLength(1), reason: 'índice $index debe recrearse en 6→7');
+    }
+
+    await db.close();
+  });
+
+  test(
+      'MG-04: guardrail UnimplementedError sigue activo para un upgrade no '
+      'implementado (from=99, to=100)', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll();
+    final migrator = db.createMigrator();
+
+    expect(
+      () => db.migration.onUpgrade(migrator, 99, 100),
+      throwsA(isA<UnimplementedError>()),
+    );
+
+    await db.close();
+  });
 }

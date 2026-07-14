@@ -5,6 +5,7 @@ import 'package:fincore/data/daos/app_preferences_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
+import 'package:fincore/data/daos/weekly_budgets_dao.dart';
 
 part 'database.g.dart';
 
@@ -131,6 +132,71 @@ class SavedViews extends Table {
 }
 
 // =============================================================================
+// Tablas: weekly_budgets + weekly_budget_items (sprint flutter-weekly-budgets-v1)
+// =============================================================================
+// Planeador semanal anticipado. Independiente del ledger — ni EntriesDao ni
+// FinancialStateService leen estas tablas. Hard delete (sin `deleted_at`):
+// borrar un presupuesto lo elimina físicamente + cascade a sus items.
+//
+// La cascade se gestiona en aplicación dentro de WeeklyBudgetsDao.deleteBudget
+// (transacción `delete items` + `delete budget`) para portabilidad y para no
+// depender del comportamiento de drift/SQLite con onDelete. Ver RN-B05.
+//
+// `week_start_date` guarda medianoche local del día de arranque (normalizado
+// en el DAO). El rango cubierto es [week_start_date, week_start_date + 7 días).
+// Immutable post-create (RN-B09) para preservar el rango de los renglones ya
+// agregados.
+//
+// Multi-plan por semana permitido: sin UNIQUE por week_start_date; se
+// diferencian por `label`.
+//
+// **Refactor 2026-07-14**: la columna `is_template` unifica el concepto de
+// "plantilla" con el de "presupuesto". Un budget marcado como plantilla
+// aparece en el listado normal con un badge y, además, se ofrece como
+// origen al crear un presupuesto nuevo desde el flujo "Desde plantilla".
+// Al crear desde plantilla se copia snapshot de los items (nuevos ids) —
+// editar el origen no afecta a los derivados y viceversa. Este refactor
+// eliminó las tablas `budget_templates` y `budget_template_items` (que
+// duplicaban el shape) y su DAO.
+//
+// NO se incluyen en el backup JSON v1. `BackupService.wipeAll()` sí las
+// borra para dejar la BD como recién instalada.
+@DataClassName('WeeklyBudgetRow')
+class WeeklyBudgets extends Table {
+  TextColumn get id => text()();
+  DateTimeColumn get weekStartDate => dateTime()();
+  TextColumn get label => text()();
+  BoolColumn get isTemplate => boolean().withDefault(const Constant(false))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// Renglones de un presupuesto semanal. `amount > 0` y `name` no vacío se
+// validan en el DAO. `category_id` opcional — si la categoría se archiva
+// después, el badge desaparece en el render pero el renglón no se rompe.
+// `kind ∈ {income, expense}`. `sort_order` para reorder manual (drag & drop
+// con handle).
+@DataClassName('WeeklyBudgetItemRow')
+class WeeklyBudgetItems extends Table {
+  TextColumn get id => text()();
+  TextColumn get budgetId => text().references(WeeklyBudgets, #id)();
+  TextColumn get name => text()();
+  TextColumn get categoryId =>
+      text().nullable().references(Categories, #id)();
+  RealColumn get amount => real()();
+  TextColumn get kind => text()(); // 'income' | 'expense'
+  IntColumn get sortOrder => integer()();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// =============================================================================
 // Tabla: app_preferences (sprint flutter-onboarding-for-testers-v1)
 // =============================================================================
 // Estado simple key/value para preferencias de UI que deben sobrevivir
@@ -177,13 +243,22 @@ class AppPreferences extends Table {
 // previo al recreate. Los índices no declarados en el schema Dart se
 // re-crean explícitamente después de alterTable.
 @DriftDatabase(
-  tables: [Accounts, Categories, JournalEntries, SavedViews, AppPreferences],
+  tables: [
+    Accounts,
+    Categories,
+    JournalEntries,
+    SavedViews,
+    AppPreferences,
+    WeeklyBudgets,
+    WeeklyBudgetItems,
+  ],
   daos: [
     AccountsDao,
     CategoriesDao,
     EntriesDao,
     SavedViewsDao,
     AppPreferencesDao,
+    WeeklyBudgetsDao,
   ],
 )
 class FincoreDatabase extends _$FincoreDatabase {
@@ -191,7 +266,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -218,6 +293,24 @@ class FincoreDatabase extends _$FincoreDatabase {
           );
           await customStatement(
             'CREATE INDEX idx_entries_kind ON journal_entries(kind)',
+          );
+          // Sprint flutter-weekly-budgets-v1: índices para el planeador
+          // semanal. `idx_weekly_budgets_start` para agrupar por rango
+          // en el listado; `idx_wb_items_budget_sort` para leer items
+          // ordenados por sort_order dentro de un budget sin sort
+          // adicional. `idx_weekly_budgets_template` acelera el filtro
+          // del selector "Desde plantilla" (is_template = 1).
+          await customStatement(
+            'CREATE INDEX idx_weekly_budgets_start '
+            'ON weekly_budgets(week_start_date)',
+          );
+          await customStatement(
+            'CREATE INDEX idx_wb_items_budget_sort '
+            'ON weekly_budget_items(budget_id, sort_order)',
+          );
+          await customStatement(
+            'CREATE INDEX idx_weekly_budgets_template '
+            'ON weekly_budgets(is_template) WHERE is_template = 1',
           );
           // Nota futura (M7 del quality review v1 del sprint
           // flutter-reports-v1): si `ReportsService.spendingByCategory`
@@ -379,6 +472,132 @@ class FincoreDatabase extends _$FincoreDatabase {
             );
             await customStatement(
               'ALTER TABLE accounts ADD COLUMN minimum_floor REAL NOT NULL DEFAULT 150',
+            );
+            return;
+          }
+          // Migración 6 → 7 (sprint flutter-weekly-budgets-v1): crea las 4
+          // tablas del planeador semanal + sus índices. Aditiva, no
+          // destructiva, no toca datos del usuario.
+          //
+          // Fix A1 (branch-quality-review flutter-weekly-budgets-v1):
+          // `m.createTable(...)` no acepta `IF NOT EXISTS`. Si la app crashea
+          // a mitad de esta migración (batería, kill de OS), el siguiente
+          // `open()` re-ejecuta `onUpgrade(6,7)` desde cero y explotaba con
+          // "table already exists". DDL manual con `CREATE TABLE/INDEX IF NOT
+          // EXISTS` (mismo patrón que 4→5 con `idx_accounts_deleted`) para
+          // que la migración sea idempotente ante reintentos. El DDL replica
+          // exactamente lo que generaba `m.createTable` (columnas + FKs +
+          // PK), verificado contra el schema real emitido por drift.
+          if (from == 6 && to == 7) {
+            // Refactor 2026-07-14: tablas `budget_templates` y
+            // `budget_template_items` eliminadas del schema; el rol de
+            // plantilla ahora vive como `is_template` en weekly_budgets.
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS weekly_budgets ('
+              'id TEXT NOT NULL, '
+              'week_start_date TEXT NOT NULL, '
+              'label TEXT NOT NULL, '
+              'is_template INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1)), '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS weekly_budget_items ('
+              'id TEXT NOT NULL, '
+              'budget_id TEXT NOT NULL REFERENCES weekly_budgets (id), '
+              'name TEXT NOT NULL, '
+              'category_id TEXT NULL REFERENCES categories (id), '
+              'amount REAL NOT NULL, '
+              'kind TEXT NOT NULL, '
+              'sort_order INTEGER NOT NULL, '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_start '
+              'ON weekly_budgets(week_start_date)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_wb_items_budget_sort '
+              'ON weekly_budget_items(budget_id, sort_order)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            return;
+          }
+          // Migración 7 → 8 (hotfix del refactor de plantillas 2026-07-14):
+          // instalaciones que corrieron el sprint pre-refactor tienen
+          // `weekly_budgets` sin la columna `is_template` + las tablas
+          // `budget_templates` y `budget_template_items` con datos huérfanos.
+          // Alinea el schema in-place para no forzar reinstall:
+          //   1) agrega columna `is_template` NOT NULL DEFAULT 0.
+          //   2) dropea las 2 tablas obsoletas (pierden las plantillas viejas
+          //      — Diego marca las nuevas desde el detalle del presupuesto).
+          //   3) crea el índice parcial nuevo del selector de plantillas.
+          //   4) borra el índice viejo si existía.
+          // Los presupuestos y sus renglones se preservan intactos.
+          if (from == 7 && to == 8) {
+            await customStatement(
+              'ALTER TABLE weekly_budgets ADD COLUMN is_template '
+              'INTEGER NOT NULL DEFAULT 0 '
+              'CHECK (is_template IN (0, 1))',
+            );
+            await customStatement(
+              'DROP TABLE IF EXISTS budget_template_items',
+            );
+            await customStatement('DROP TABLE IF EXISTS budget_templates');
+            await customStatement(
+              'DROP INDEX IF EXISTS idx_bt_items_template_sort',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            return;
+          }
+          // Migración 6 → 8 (defensiva): instalación que se saltó la 7 —
+          // vino directamente de v6. Aplica la migración 6→7 (versión ya
+          // refactoreada del schema, sin las 2 tablas de templates) y no
+          // necesita nada de la rama 7→8 porque el schema queda igual.
+          if (from == 6 && to == 8) {
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS weekly_budgets ('
+              'id TEXT NOT NULL, '
+              'week_start_date TEXT NOT NULL, '
+              'label TEXT NOT NULL, '
+              'is_template INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1)), '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS weekly_budget_items ('
+              'id TEXT NOT NULL, '
+              'budget_id TEXT NOT NULL REFERENCES weekly_budgets (id), '
+              'name TEXT NOT NULL, '
+              'category_id TEXT NULL REFERENCES categories (id), '
+              'amount REAL NOT NULL, '
+              'kind TEXT NOT NULL, '
+              'sort_order INTEGER NOT NULL, '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_start '
+              'ON weekly_budgets(week_start_date)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_wb_items_budget_sort '
+              'ON weekly_budget_items(budget_id, sort_order)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
             );
             return;
           }

@@ -13,3 +13,12 @@ const String kPrefOnboardingSeen = 'onboarding_seen';
 /// `Share.shareXFiles` retornó `ShareResultStatus.success`). Cuando la
 /// clave no existe, el usuario nunca exportó respaldo.
 const String kPrefLastExportAt = 'last_export_at';
+
+/// Día de inicio de la semana para el planeador de presupuestos
+/// (sprint `flutter-weekly-budgets-v1`). Valor string `'1'`..`'7'`
+/// con estándar ISO 8601: 1=Lunes, 2=Martes, ..., 7=Domingo. Cuando
+/// la clave no existe, el default operativo es `5` (viernes) —
+/// caso de uso primario. Solo actúa como sugerido inicial del
+/// picker de fecha; no fuerza restricción dura al crear presupuesto
+/// (RN-B02 / RN-B10 del sprint).
+const String kPrefWeekStartDow = 'week_start_dow';
