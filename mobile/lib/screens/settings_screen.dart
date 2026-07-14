@@ -204,7 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // en BD, pero el state EN MEMORIA sigue siendo `true`. Sin resetear
     // ambos, el router ve `hasBolsa=false && onboardingSeen=true` y va
     // a `/first-run` (no a `/onboarding` como dice el comentario en
-    // `backup.dart`). Resetear los dos flags acá mantiene la promesa
+    // `backup.dart`). Resetear los dos flags aquí mantiene la promesa
     // de RN-O04 ("el usuario queda como recién instalado").
     firstRunState.setInitial(hasBolsa: false, onboardingSeen: false);
     // Salimos de Settings para que el redirect se vea.
@@ -498,7 +498,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               color: FincoreColors.textPrimary,
                               fontWeight: FontWeight.w600)),
                       SizedBox(height: 2),
-                      Text('FAQ sobre kinds, reportes y backup.',
+                      Text('FAQ sobre tipos de movimientos, reportes, presupuestos y respaldo.',
                           style: TextStyle(
                               color: FincoreColors.textSubtle, fontSize: 12)),
                     ],

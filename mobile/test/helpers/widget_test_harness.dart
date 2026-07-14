@@ -75,7 +75,7 @@ Future<FincoreTestHarness> pumpFincoreApp(
   assert(
     !(seedBolsa && initialRoute == '/first-run'),
     "pumpFincoreApp: combinación ambigua seedBolsa=true + initialRoute='/first-run'. "
-    "Si querés testear el first-run, pasá seedBolsa: false.",
+    "Si quieres probar el first-run, pasar seedBolsa: false.",
   );
   initSqliteOverride();
   // Cada widget test arma su propio FincoreDatabase in-memory. Drift loguea un
@@ -84,7 +84,7 @@ Future<FincoreTestHarness> pumpFincoreApp(
   driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
   // Las pantallas que formatean fechas (entry_form, dashboard) crashean con
   // LocaleDataException si `initializeDateFormatting('es_MX')` nunca corrió.
-  // El `main.dart` real lo hace antes de runApp; en tests lo hacemos acá
+  // El `main.dart` real lo hace antes de runApp; en tests lo hacemos aquí
   // una sola vez por isolate.
   if (!_localeInitialized) {
     await initializeDateFormatting('es_MX', null);

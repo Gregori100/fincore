@@ -77,7 +77,7 @@ class _EntryFormScreenState extends State<EntryFormScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
     // Listener para recalcular la sugerencia al tipear descripción. Se
     // agrega en `initState` porque el `TextEditingController` existe
-    // desde acá. El handler short-circuit en `_isEdit` y `_categoryTouched`.
+    // desde aquí. El handler short-circuit en `_isEdit` y `_categoryTouched`.
     // (Tras refactor v2 ya NO escuchamos `_amountCtrl` — el monto no
     // influye en la sugerencia.)
     _descCtrl.addListener(_onSuggestionInputChanged);
@@ -709,7 +709,7 @@ class _EntryFormScreenState extends State<EntryFormScreen>
   String _originLabel(JournalKind k) => switch (k) {
         JournalKind.expense => 'Cuenta origen',
         JournalKind.creditExpense => 'Tarjeta',
-        JournalKind.debtPayment => 'Pagás desde',
+        JournalKind.debtPayment => 'Pago desde',
         JournalKind.transfer => 'Cuenta origen',
         JournalKind.income => '',
       };

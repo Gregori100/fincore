@@ -438,7 +438,7 @@ class _EmptyState extends StatelessWidget {
           ),
           SizedBox(height: 12),
           Text(
-            'Necesitás al menos 1 mes cerrado de uso para calcular promedio.',
+            'Se necesita al menos 1 mes cerrado de uso para calcular el promedio.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: FincoreColors.textPrimary,

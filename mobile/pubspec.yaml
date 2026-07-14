@@ -254,7 +254,16 @@ publish_to: 'none'
 # de los 24 widgets compartidos de lib/widgets/ a consumir tokens.
 # Documentación en CLAUDE.md con reglas vinculantes. Cero cambios
 # visuales percibidos (refactor puro). 680 tests verdes.
-version: 0.21.0+97
+# 0.21.1+98 — sprint flutter-language-cleanup-v1 (Sprint 2 del roadmap
+# de la auditoría de diseño 2026-07-14). Purga total del voseo
+# rioplatense: 10 sitios de copy visible al usuario migrados a español
+# neutral (tú directo o infinitivo impersonal), 15 comentarios "acá" →
+# "aquí" en lib/ y test/, 1 mención de "kinds" en Settings → "tipos
+# de movimientos". Test guardrail nuevo en test/language/no_voseo_test.dart
+# que bloquea regresión en CI. 5 matchers de integration_test
+# actualizados al copy neutral actual (estaban apuntando a strings
+# ya inexistentes en lib/). Convención documentada en CLAUDE.md.
+version: 0.21.1+98
 
 environment:
   sdk: ^3.7.2

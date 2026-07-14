@@ -218,7 +218,7 @@ class _EmptyState extends StatelessWidget {
             ),
             SizedBox(height: 6),
             Text(
-              'Configurá filtros y tap "Guardar como vista" '
+              'Configura filtros y toca "Guardar como vista" '
               'desde el panel de filtros.',
               textAlign: TextAlign.center,
               style: TextStyle(

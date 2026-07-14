@@ -28,7 +28,7 @@ class EntriesEmptyState extends StatelessWidget {
           children: [
             Text(
               hasFilters
-                  ? 'No hay movimientos con esos filtros.\nProbá ajustarlos.'
+                  ? 'No hay movimientos con esos filtros.\nAjusta los filtros o cambia el rango.'
                   : 'No hay movimientos.',
               textAlign: TextAlign.center,
               style: bodyM.copyWith(color: FincoreColors.textMuted),

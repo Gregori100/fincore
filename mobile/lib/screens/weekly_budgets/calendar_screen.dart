@@ -20,7 +20,7 @@ import 'package:table_calendar/table_calendar.dart';
 /// "Calendario" de movimientos) en vez de armar un grid manual, siguiendo
 /// el mismo patrón que `lib/screens/reports/movements_calendar_tab.dart`.
 ///
-/// A diferencia del tab de reportes, acá no hace falta re-consultar por
+/// A diferencia del tab de reportes, aquí no hace falta re-consultar por
 /// mes: `weeklyBudgetsDao.watchAll()` trae todos los presupuestos (son
 /// pocos por diseño — un usuario single-user no acumula miles) y se
 /// agrupan en memoria por día normalizado.

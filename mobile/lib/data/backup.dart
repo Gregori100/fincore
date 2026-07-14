@@ -50,7 +50,7 @@ const _supportedVersion = 1;
 /// la BD existente queda intacta.
 // Constantes de validación del import (RF-001..RF-006, RN-H01).
 // Mantener sincronizadas con las del DAO (`_validKinds` en entries_dao.dart,
-// catálogo de slugs en category_catalog.dart). El import valida acá antes de
+// catálogo de slugs en category_catalog.dart). El import valida aquí antes de
 // construir el Companion para que payloads corruptos NO toquen la BD.
 
 const Set<String> _validKinds = {

@@ -744,7 +744,7 @@ class ReportsService {
   /// cambios de límite, archivado y nuevas cuentas).
   ///
   /// Nota RN-DB01: la exclusión de `transfer` y `debt_payment` que aplica
-  /// a `watchTodaySummary` (flujo del día) NO aplica acá. Este método
+  /// a `watchTodaySummary` (flujo del día) NO aplica aquí. Este método
   /// computa BALANCES agregados; `transfer` y `debt_payment` son
   /// movimientos internos que se autocancelan matemáticamente entre
   /// origen y destino dentro del mismo agregado (ej. un transfer

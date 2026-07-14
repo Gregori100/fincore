@@ -91,7 +91,7 @@ void main() {
     await harness.dispose();
   });
 
-  // T3 del quality review del gastos aplicado acá: verificar que el
+  // T3 del quality review del gastos aplicado aquí: verificar que el
   // drill-down filtra por kinds=['income'] y NO incluye expenses del
   // mismo día.
   testWidgets(

@@ -487,7 +487,7 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
           // explica el bloqueo.
           Tooltip(
             message: _editing.activeCount == 0
-                ? 'Configurá al menos un filtro antes de guardar.'
+                ? 'Configura al menos un filtro antes de guardar.'
                 : '',
             child: OutlinedButton.icon(
               onPressed: _editing.activeCount == 0 ? null : _saveView,

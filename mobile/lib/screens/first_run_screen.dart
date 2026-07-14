@@ -99,7 +99,7 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
 
   Future<void> _completeAndGo() async {
     // Sprint `flutter-onboarding-for-testers-v1` (SP-06 del plan): si el
-    // usuario llegó hasta acá por "Importar respaldo" o "Arrancar limpio",
+    // usuario llegó hasta aquí por "Importar respaldo" o "Arrancar limpio",
     // ya está en uso real. Marcamos `onboarding_seen = true` para que un
     // wipe + re-instalación futura no lo fuerce a ver el tour si el flag
     // sigue en false por alguna razón.

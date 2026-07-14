@@ -12,7 +12,7 @@ import '../helpers/widget_test_harness.dart';
 /// - income → solo `Cuenta destino` (cash/debit)
 /// - expense → solo `Cuenta origen` (cash/debit)
 /// - credit_expense → solo `Tarjeta` (credit)
-/// - debt_payment → `Pagás desde` + `Tarjeta a pagar`
+/// - debt_payment → `Pago desde` + `Tarjeta a pagar`
 /// - transfer → `Cuenta origen` + `Cuenta destino`
 void main() {
   group('EntryFormScreen — 5 kinds (T044 / RF-006)', () {
@@ -69,7 +69,7 @@ void main() {
       expect(find.text('Cuenta destino'), findsOneWidget);
       expect(find.text('Cuenta origen'), findsNothing);
       expect(find.text('Tarjeta'), findsNothing);
-      expect(find.text('Pagás desde'), findsNothing);
+      expect(find.text('Pago desde'), findsNothing);
 
       // RF-019 v1: validar contenido del DropdownMenu. Ingreso solo acepta
       // dest cash/debit → Bolsa + Banamex; Visa (credit) NO debe aparecer.
@@ -114,7 +114,7 @@ void main() {
 
       expect(find.text('Tarjeta'), findsOneWidget);
       expect(find.text('Cuenta destino'), findsNothing);
-      expect(find.text('Pagás desde'), findsNothing);
+      expect(find.text('Pago desde'), findsNothing);
 
       // RF-019 v1: origen credit → Visa; Bolsa + Banamex NO.
       await openDropdownByLabel(tester, 'Tarjeta');
@@ -127,13 +127,13 @@ void main() {
       await harness.dispose();
     });
 
-    testWidgets('Pago de tarjeta muestra "Pagás desde" + "Tarjeta a pagar"',
+    testWidgets('Pago de tarjeta muestra "Pago desde" + "Tarjeta a pagar"',
         (tester) async {
       final harness = await pumpFincoreApp(tester, seed: seedAccounts);
       await pushNewEntry(tester);
       await selectKind(tester, 'Pago de tarjeta');
 
-      expect(find.text('Pagás desde'), findsOneWidget);
+      expect(find.text('Pago desde'), findsOneWidget);
       expect(find.text('Tarjeta a pagar'), findsOneWidget);
       expect(find.text('Cuenta destino'), findsNothing);
 

@@ -119,7 +119,7 @@ class KindPicker extends StatelessWidget {
       case JournalKind.creditExpense:
         return 'Cargo a una tarjeta';
       case JournalKind.debtPayment:
-        return 'Pagás una tarjeta desde otra cuenta';
+        return 'Pagar una tarjeta desde otra cuenta';
       case JournalKind.transfer:
         return 'Mover dinero entre cuentas';
     }

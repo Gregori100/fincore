@@ -11,8 +11,8 @@ import 'package:go_router/go_router.dart';
 ///
 /// 3 slides en `PageView` horizontal:
 /// 1. Wordmark + tagline.
-/// 2. "Registrá cada movimiento" + lista de los 5 kinds.
-/// 3. "Mirá tus reportes y patrones" + lista de los 5 tabs de /reports.
+/// 2. "Registrar cada movimiento" + lista de los 5 tipos de movimiento.
+/// 3. "Ver reportes y patrones" + lista de los 5 tabs de /reports.
 ///
 /// Botón "Saltar" en la AppBar (top-right) visible siempre. Botón
 /// principal en el bottom: "Siguiente" en slides 1-2, "Empezar" en

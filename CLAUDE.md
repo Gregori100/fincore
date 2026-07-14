@@ -264,7 +264,7 @@ Capa UI (v3):
 
 ## Convenciones del repo
 
-- Lenguaje: **español** para comentarios de dominio, mensajes de UI, commits y documentación. Identificadores en inglés.
+- Lenguaje: **español neutral** para comentarios de dominio, mensajes de UI, commits y documentación. Identificadores en inglés. Nunca voseo rioplatense (`pagás/podés/tenés/acá`); usar `tienes/puedes/aquí`. El test `mobile/test/language/no_voseo_test.dart` blindea `mobile/lib/` contra regresión.
 - `flutter analyze` debe quedar en 0 errores antes de commit. Un hint cosmético en `widgets/skeleton.dart:75` (`prefer_const_constructors`) es tolerable.
 - Bump de version en 2 lugares por release (desde el sprint `flutter-local-hardening`):
   1. `pubspec.yaml`: `version: X.Y.Z+N`

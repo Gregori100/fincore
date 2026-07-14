@@ -190,7 +190,7 @@ void main() {
       // `find.text` (con o sin skipOffstage) no encuentra el widget
       // porque nunca se construyó. Scrolleamos con `dragUntilVisible`
       // hasta que se materialice.
-      final helpFinder = find.text('FAQ sobre kinds, reportes y backup.');
+      final helpFinder = find.text('FAQ sobre tipos de movimientos, reportes, presupuestos y respaldo.');
       await tester.dragUntilVisible(
         helpFinder,
         find.byType(Scrollable).first,

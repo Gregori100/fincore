@@ -1,7 +1,7 @@
 // Claves canónicas para entradas en la tabla `app_preferences`.
 // Sprint `flutter-onboarding-for-testers-v1`.
 //
-// Centralizadas acá para evitar typos mágicos en strings repartidos por
+// Centralizadas aquí para evitar typos mágicos en strings repartidos por
 // la codebase. Si se agregan claves nuevas en sprints futuros, sumarlas
 // a este archivo manteniendo la convención `kPref<Nombre>`.
 

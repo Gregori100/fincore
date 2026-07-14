@@ -223,7 +223,7 @@ class _PaginationFooter extends StatelessWidget {
       text = 'Cargando…';
     } else if (reachedMaxLimit) {
       text = 'Llegaste a $_kMaxLimit movimientos cargados.\n'
-          'Acotá filtros para ver entries más viejos.';
+          'Reducir el rango de filtros para ver movimientos más antiguos.';
     } else {
       text = 'Fin de los movimientos del rango.';
     }

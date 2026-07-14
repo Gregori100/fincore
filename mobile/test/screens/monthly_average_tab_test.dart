@@ -109,7 +109,7 @@ void main() {
 
       expect(
         find.text(
-          'Necesitás al menos 1 mes cerrado de uso para calcular promedio.',
+          'Se necesita al menos 1 mes cerrado de uso para calcular el promedio.',
         ),
         findsOneWidget,
       );

@@ -37,7 +37,7 @@ void main() async {
   // (símbolo + canvas) termina, Flutter pinta el primer frame con la
   // `SplashScreen` widget (wordmark + spinner) hasta que el state
   // resuelve, y recién ahí el redirect lleva al destino. El usuario
-  // ve DOS logos consecutivos. Con await acá, el splash nativo se
+  // ve DOS logos consecutivos. Con await aquí, el splash nativo se
   // mantiene hasta que tenemos la respuesta, y el primer frame de
   // Flutter ya es la pantalla destino. Las queries son in-memory
   // SQLite (BD local pequeña) — overhead típico <50ms.

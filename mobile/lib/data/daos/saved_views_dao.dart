@@ -143,7 +143,7 @@ class SavedViewsDao extends DatabaseAccessor<FincoreDatabase>
     if (trimmed.isEmpty || trimmed.length > 50) {
       throw const SavedViewsDaoError(
         'invalid_name',
-        'El nombre no es válido. Probá con 1-50 caracteres.',
+        'El nombre no es válido. Debe tener entre 1 y 50 caracteres.',
       );
     }
   }

@@ -3,7 +3,7 @@ import 'package:flutter/animation.dart';
 /// Tokens de motion canónicos de FinCore (sprint flutter-design-tokens-v1).
 ///
 /// Filosofía: **motion existe para (1) señalizar causalidad ("esto vino
-/// de acá") y (2) suavizar cambios de estado. Nunca para decorar.**
+/// de aquí") y (2) suavizar cambios de estado. Nunca para decorar.**
 ///
 /// - No usar animaciones spring bouncy en formularios (dan sensación de
 ///   juguete en una app financiera).

@@ -18,7 +18,7 @@ import 'package:intl/date_symbol_data_local.dart';
 ///
 /// Cobertura:
 /// - AF-01: alta debit (default del picker) → cuenta visible en la BD.
-/// - AF-02: alta con nombre vacío → validator inline "Ingresá un nombre.".
+/// - AF-02: alta con nombre vacío → validator inline "Ingresar un nombre.".
 /// - AF-03: alta con nombre duplicado → snackbar con `duplicate_account_name`.
 /// - AF-04: edición de Bolsa → muestra _ProtectedView (read-only).
 /// - AF-05: alta credit con metadata válida → cuenta + metadata persisten.
@@ -103,7 +103,7 @@ void main() {
     await tester.tap(find.text('Crear cuenta'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ingresá un nombre.'), findsOneWidget,
+    expect(find.text('Ingresar un nombre.'), findsOneWidget,
         reason: 'El validator del field Nombre debe mostrar el mensaje');
     // Y no se creó ninguna cuenta nueva (solo la Bolsa del seed).
     final accounts = await deps.accountsDao.listAll();
@@ -131,7 +131,7 @@ void main() {
 
     // Snackbar de error con texto correspondiente a `duplicate_account_name`.
     // El mapping vive en error_snackbar.dart.
-    expect(find.textContaining('Ya tenés una cuenta con ese nombre'),
+    expect(find.textContaining('Ya existe una cuenta con ese nombre'),
         findsOneWidget,
         reason: 'Snackbar debe mostrar el mensaje del código duplicate_account_name');
     // Solo hay 2 cuentas (Bolsa + Repetida del seed). No se duplicó.

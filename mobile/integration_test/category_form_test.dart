@@ -99,7 +99,7 @@ void main() {
     await tester.tap(find.text('Crear categoría'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Ingresá un nombre.'), findsOneWidget,
+    expect(find.text('Ingresar un nombre.'), findsOneWidget,
         reason: 'El validator del field Nombre debe mostrar el mensaje');
   });
 
@@ -120,7 +120,7 @@ void main() {
     await tester.tap(find.text('Crear categoría'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Ya tenés una categoría con ese nombre'),
+    expect(find.textContaining('Ya existe una categoría con ese nombre'),
         findsOneWidget,
         reason: 'Snackbar debe mostrar el mensaje del duplicate_category_name');
   });

@@ -11,7 +11,7 @@ import '../helpers/widget_test_harness.dart';
 /// `flutter-movements-filters-v1`, RF-021).
 ///
 /// El panel se monta vía `Navigator.push` desde `EntriesListScreen`; los
-/// tests acá lo montan directo con `MaterialApp` + `AppDependenciesProvider`
+/// tests aquí lo montan directo con `MaterialApp` + `AppDependenciesProvider`
 /// del harness para aislarlo del flujo del list screen.
 void main() {
   /// Helper para abrir el panel desde el dashboard hidratado por el harness.

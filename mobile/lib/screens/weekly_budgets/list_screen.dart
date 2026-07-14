@@ -623,7 +623,7 @@ class _BudgetCard extends StatelessWidget {
                         ),
                         // Badge de plantilla (refactor 2026-07-14): un
                         // budget marcado con `is_template` muestra este
-                        // ícono junto a su label, tanto acá como en el
+                        // ícono junto a su label, tanto aquí como en el
                         // AppBar de `detail_screen.dart`.
                         if (budget.isTemplate) ...[
                           const SizedBox(width: 6),

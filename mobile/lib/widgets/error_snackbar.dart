@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 
 /// Mapeo de códigos de `BackupError` (validaciones del import de respaldos) a
 /// mensajes amigables en español. RF-007 + RN-H01: el switch de
-/// `showErrorSnackbar` rutea `BackupError` acá ANTES del branch `Exception()`
+/// `showErrorSnackbar` rutea `BackupError` aquí ANTES del branch `Exception()`
 /// para que el usuario no vea texto crudo del estilo `"BackupError(invalid_kind)…"`.
 String backupErrorToMessage(BackupError error) {
   switch (error.code) {
@@ -171,7 +171,7 @@ String categoriesDaoErrorToMessage(CategoriesDaoError error) {
 String savedViewsDaoErrorToMessage(SavedViewsDaoError error) {
   switch (error.code) {
     case 'invalid_name':
-      return 'El nombre no es válido. Probá con 1-50 caracteres.';
+      return 'El nombre no es válido. Debe tener entre 1 y 50 caracteres.';
     case 'duplicate_name':
       return 'Ya existe una vista con ese nombre.';
     case 'not_found':
