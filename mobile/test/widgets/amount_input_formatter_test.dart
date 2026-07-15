@@ -78,6 +78,29 @@ void main() {
     });
   });
 
+  group('AmountInputFormatter — regresión bugs 2026-07-15', () {
+    // Bug reportado: tipear el 5to dígito sobre "1,234" era rechazado
+    // porque la coma de miles se leía como decimal (afterComma=4 > 2).
+    test('tipear 5to dígito sobre "1,234" produce "12,345" (no queda 4-dígit locked)', () {
+      expect(_apply('1,234', '1,2345').text, '12,345');
+    });
+
+    test('tipear 6to dígito sobre "12,345" produce "123,456"', () {
+      expect(_apply('12,345', '12,3456').text, '123,456');
+    });
+
+    // Bug reportado: al borrar centavos "6,666.66" → "6,666." → "6,666"
+    // el último paso se rechazaba porque la coma se leía como decimal
+    // con 3 chars después. El cursor quedaba tirado sin poder seguir.
+    test('borrar decimal + punto: "6,666." → "6,666" permite seguir borrando', () {
+      expect(_apply('6,666.', '6,666').text, '6,666');
+    });
+
+    test('borrar continuando: "6,666" → "6,66" produce "666"', () {
+      expect(_apply('6,666', '6,66').text, '666');
+    });
+  });
+
   group('AmountInputFormatter — rechazos y sanitización', () {
     test('"1.2.3" (dos puntos) — el último punto es decimal, primero se ignora', () {
       // Comportamiento: "1.2" es el entero (con separador ignorado) y ".3" es decimal

@@ -849,10 +849,12 @@ class _KindChipHeader extends StatelessWidget {
     final color = KindPicker.kindColor(kind);
     final icon = KindPicker.kindIcon(kind);
 
+    // Hotfix 2026-07-15: chip más compacto por feedback (padding
+    // reducido, icon 16, label bodyS, "Cambiar" solo texto sin ícono).
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: kSpaceLg,
-        vertical: kSpaceMd,
+        horizontal: kSpaceMd,
+        vertical: kSpaceSm,
       ),
       decoration: BoxDecoration(
         color: color.withValues(alpha: FincoreColors.alphaTint),
@@ -863,12 +865,12 @@ class _KindChipHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
-          const SizedBox(width: kSpaceSm),
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: kSpaceXs),
           Expanded(
             child: Text(
               kind.label,
-              style: typo.bodyM.copyWith(
+              style: typo.bodyS.copyWith(
                 color: color,
                 fontWeight: FontWeight.w700,
               ),
@@ -880,15 +882,20 @@ class _KindChipHeader extends StatelessWidget {
               style: typo.label.copyWith(color: FincoreColors.textMuted),
             )
           else
-            TextButton.icon(
-              onPressed: saving ? null : onChangePressed,
-              icon: const Icon(Icons.swap_horiz, size: 16),
-              label: const Text('Cambiar'),
-              style: TextButton.styleFrom(
-                foregroundColor: color,
+            InkWell(
+              onTap: saving ? null : onChangePressed,
+              borderRadius: BorderRadius.circular(kRadiusSm),
+              child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: kSpaceMd,
-                  vertical: kSpaceXs,
+                  horizontal: kSpaceSm,
+                  vertical: kSpace2xs,
+                ),
+                child: Text(
+                  'Cambiar',
+                  style: typo.label.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),

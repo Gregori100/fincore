@@ -27,29 +27,56 @@ class AmountInputFormatter extends TextInputFormatter {
     if (newValue.text.isEmpty) return newValue;
 
     // Sanitizar: solo dígitos, `.` y `,`.
-    final sanitized = newValue.text.replaceAll(RegExp(r'[^\d.,]'), '');
+    var sanitized = newValue.text.replaceAll(RegExp(r'[^\d.,]'), '');
     if (sanitized.isEmpty) return const TextEditingValue();
 
-    // Detectar el separador decimal: el ÚLTIMO `.` o `,` que aparezca.
-    final lastComma = sanitized.lastIndexOf(',');
+    // Interpretación de la coma (2026-07-15 hotfix):
+    // Sin este bloque, al tipear el 5to dígito `12345` (que viene
+    // formateado como `1,2345`), el formatter interpretaba la coma como
+    // decimal con 4 chars y rechazaba el cambio → aparente límite de
+    // 4 dígitos. Igual, al borrar decimales de `6,666.66` → `6,666.` →
+    // `6,666`, la coma se re-leía como decimal con 3 chars → cursor
+    // tirado sin poder seguir borrando.
+    //
+    // Heurística:
+    // - Si `oldValue.text` ya tenía comas como separador de miles
+    //   (matches `^\d{1,3}(,\d{3})+$` o tiene coma + punto), asumimos que
+    //   TODAS las comas del newValue son miles → eliminar.
+    // - En otro caso, si hay UNA coma con 1-2 dígitos después y sin
+    //   puntos, la coma es decimal MX (`1,50` → 1.50) → normalizar a punto.
+    // - En cualquier otro caso, coma de miles → eliminar.
+    final commaCount = ','.allMatches(sanitized).length;
+    final dotCount = '.'.allMatches(sanitized).length;
+    final oldHasThousands = RegExp(r'^\d{1,3}(,\d{3})+(\.\d*)?$')
+        .hasMatch(oldValue.text.trim());
+    if (oldHasThousands || commaCount > 1 || dotCount > 0) {
+      // Coma(s) son de miles → eliminar todas.
+      sanitized = sanitized.replaceAll(',', '');
+    } else if (commaCount == 1) {
+      final commaIdx = sanitized.indexOf(',');
+      final afterComma = sanitized.length - commaIdx - 1;
+      if (afterComma >= 1 && afterComma <= 2) {
+        // Coma decimal MX → normalizar a punto.
+        sanitized = sanitized.replaceFirst(',', '.');
+      } else {
+        // Coma sin contexto decimal → miles.
+        sanitized = sanitized.replaceAll(',', '');
+      }
+    }
+
+    // Ahora el único separador posible es `.` (decimal).
     final lastDot = sanitized.lastIndexOf('.');
     String integerPart;
     String decimalPart;
     bool hasDecimalIndicator;
 
-    if (lastComma > lastDot) {
-      // Coma es decimal.
-      integerPart = sanitized.substring(0, lastComma).replaceAll(RegExp(r'[,.]'), '');
-      decimalPart = sanitized.substring(lastComma + 1).replaceAll(RegExp(r'[,.]'), '');
-      hasDecimalIndicator = true;
-    } else if (lastDot > lastComma) {
-      // Punto es decimal.
-      integerPart = sanitized.substring(0, lastDot).replaceAll(RegExp(r'[,.]'), '');
-      decimalPart = sanitized.substring(lastDot + 1).replaceAll(RegExp(r'[,.]'), '');
+    if (lastDot >= 0) {
+      // Puntos previos al último se ignoran (edge legacy `1.2.3` → `12.3`).
+      integerPart = sanitized.substring(0, lastDot).replaceAll('.', '');
+      decimalPart = sanitized.substring(lastDot + 1).replaceAll('.', '');
       hasDecimalIndicator = true;
     } else {
-      // Sin separador — entero puro.
-      integerPart = sanitized.replaceAll(RegExp(r'[,.]'), '');
+      integerPart = sanitized;
       decimalPart = '';
       hasDecimalIndicator = false;
     }

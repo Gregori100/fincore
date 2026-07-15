@@ -319,7 +319,16 @@ publish_to: 'none'
 # peligrosa con border rojo tinted (alpha 0.4, width 1.5) para
 # diferenciar visualmente del resto de secciones. Reorden completo
 # de secciones + Ayuda con search: diferidos.
-version: 0.25.3+105
+# 0.25.4+106 — hotfix post-smoke Sprint 3 (2026-07-15). Fix del
+# AmountInputFormatter: al tipear el 5to dígito sobre "1,234" el
+# formatter leía la coma como decimal y rechazaba el input (aparente
+# límite de 4 dígitos); igual al borrar `6,666.66` → `6,666.` → el
+# cursor quedaba tirado. Nueva heurística usa `oldValue` para
+# distinguir coma de miles (residual del format anterior) de coma
+# decimal MX (`1,50`). Chip "Cambiar tipo" del entry form reducido a
+# padding compacto + icon 16 + label bodyS + botón "Cambiar" con
+# InkWell + label token. +4 tests de regresión.
+version: 0.25.4+106
 
 environment:
   sdk: ^3.7.2
