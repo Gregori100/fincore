@@ -282,7 +282,15 @@ publish_to: 'none'
 # textMuted (regla CLAUDE.md: warning es para alertas operativas, no
 # tipos de cuenta). First-run reescrito con Empezar desde cero
 # recomendado (border 2px accent + badge), copy sin jerga (BD/singleton).
-version: 0.23.0+100
+# 0.24.0+101 — sprint flutter-reports-shared-widgets-v1 (Sprint 5,
+# scope acotado). Extrae DeltaChip + helpers (deltaColor, formatDelta)
+# de cashflow_tab.dart a mobile/lib/widgets/delta_chip.dart para
+# reutilizar en drill-downs y otros reports. Crea FincoreEmptyState
+# genérico (icon + title + body + cta) en mobile/lib/widgets/
+# fincore_empty_state.dart, base para reemplazar Text centrados
+# textMuted en próximos sprints. Sin cambio arquitectural (tabs de
+# reports permanecen; hub visual queda para sprint futuro).
+version: 0.24.0+101
 
 environment:
   sdk: ^3.7.2

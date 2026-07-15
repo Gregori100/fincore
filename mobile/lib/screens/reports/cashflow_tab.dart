@@ -3,6 +3,7 @@ import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/constants/date_range_presets.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/reports.dart';
+import 'package:fincore/widgets/delta_chip.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
@@ -821,7 +822,7 @@ class _BreakdownSummary extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                _DeltaChip(
+                DeltaChip(
                   delta: breakdown.deltaIncome,
                   isExpenseSide: false,
                 ),
@@ -851,7 +852,7 @@ class _BreakdownSummary extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                _DeltaChip(
+                DeltaChip(
                   delta: breakdown.deltaExpense,
                   isExpenseSide: true,
                 ),
@@ -881,7 +882,7 @@ class _BreakdownSummary extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 2),
-                _DeltaChip(
+                DeltaChip(
                   // Neto sube = mejor (más plata queda) → coincide con
                   // el lado ingresos (isExpenseSide=false).
                   delta: breakdown.deltaNet,
@@ -981,7 +982,7 @@ class _CategoryFlowRow extends StatelessWidget {
               const SizedBox(width: 6),
               SizedBox(
                 width: 66,
-                child: _DeltaChip(
+                child: DeltaChip(
                   delta: flow.delta,
                   isExpenseSide: isExpenseSide,
                 ),
@@ -1034,114 +1035,9 @@ class _ShareBar extends StatelessWidget {
   }
 }
 
-/// Color del chip delta según la semántica "impacto en bolsillo"
-/// (RN-CP07). Sprint `flutter-cashflow-breakdown-prev-comparison-v1`.
-///
-/// - Ingresos (`isExpenseSide=false`): `up → positive`, `down → negative`.
-/// - Gastos (`isExpenseSide=true`): `up → negative`, `down → positive`.
-/// - `flat` → siempre `textMuted`.
-Color _deltaColor(DeltaDirection direction, {required bool isExpenseSide}) {
-  switch (direction) {
-    case DeltaDirection.flat:
-      return FincoreColors.textMuted;
-    case DeltaDirection.up:
-      return isExpenseSide ? FincoreColors.negative : FincoreColors.positive;
-    case DeltaDirection.down:
-      return isExpenseSide ? FincoreColors.positive : FincoreColors.negative;
-  }
-}
-
-/// Formato mezcla del delta (sprint polish 0.18.2+92).
-///
-/// - `flat` → `= 0%`.
-/// - `down` → `-N.N%` (siempre porcentaje; un down grande significa "cayó
-///   mucho" y el % es intuitivo).
-/// - `up` con `percent < 100` → `+N.N%`.
-/// - `up` con `percent ∈ [100, 900)` → `×M.M` donde `M = 1 + percent/100`.
-///   Ej: `percent=100 → ×2`, `percent=340 → ×4.4`.
-/// - `up` con `percent >= 900` → `>×10` (más de 10× es "muchísimo"; el
-///   número exacto no aporta valor).
-String _formatDelta(DeltaPercent d) {
-  switch (d.direction) {
-    case DeltaDirection.flat:
-      return '0%';
-    case DeltaDirection.down:
-      // Cap del down a `-100%` es lo máximo lógico (baja a 0). Cualquier
-      // valor superior sería un artefacto de floating-point o de un edge
-      // legacy; se muestra igual como `-N%` con cap a 100.
-      final p = d.percent > 100 ? 100.0 : d.percent;
-      return '-${p.toStringAsFixed(1)}%';
-    case DeltaDirection.up:
-      if (d.percent < 100) {
-        return '+${d.percent.toStringAsFixed(1)}%';
-      }
-      if (d.percent >= 900) {
-        return '>×10';
-      }
-      // Multiplicador = 1 + percent/100. Ejemplo: percent=340 → 4.4×.
-      final multiplier = 1 + d.percent / 100;
-      return '×${multiplier.toStringAsFixed(1)}';
-  }
-}
-
-/// Chip visual de delta % vs mes anterior. Sprint
-/// `flutter-cashflow-breakdown-prev-comparison-v1`. `delta == null`
-/// (bucket sin mes previo, o total previo == 0) renderea `—` en
-/// `textMuted` sin ícono (RN-CP05).
-class _DeltaChip extends StatelessWidget {
-  final DeltaPercent? delta;
-  final bool isExpenseSide;
-  const _DeltaChip({required this.delta, required this.isExpenseSide});
-
-  @override
-  Widget build(BuildContext context) {
-    final d = delta;
-    if (d == null) {
-      return const Text(
-        '—',
-        textAlign: TextAlign.right,
-        style: TextStyle(color: FincoreColors.textMuted, fontSize: 11),
-      );
-    }
-    final color = _deltaColor(d.direction, isExpenseSide: isExpenseSide);
-    final IconData icon;
-    switch (d.direction) {
-      case DeltaDirection.up:
-        icon = Icons.arrow_upward;
-        break;
-      case DeltaDirection.down:
-        icon = Icons.arrow_downward;
-        break;
-      case DeltaDirection.flat:
-        // `drag_handle` (== visual) diferencia del em-dash `—` que muestra
-        // el bucket sin data previa (RN-CP05). `remove` era muy similar.
-        icon = Icons.drag_handle;
-        break;
-    }
-    // Formato mezcla (sprint polish 0.18.2+92): hasta 100% mostrar como
-    // porcentaje clásico (`+45%`). Sobre 100% cambiar a multiplicador
-    // (`×2.4`) que es cognitivamente más rápido de leer que `+240%`.
-    // Solo aplica para `up` — un `down` con `-100%` significa "cayó a
-    // cero", no tiene sentido convertir a `×`.
-    final displayText = _formatDelta(d);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 2),
-        Flexible(
-          child: Text(
-            displayText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: color, fontSize: 11),
-          ),
-        ),
-      ],
-    );
-  }
-}
+// _DeltaChip + helpers extraídos a `mobile/lib/widgets/delta_chip.dart`
+// en el sprint `flutter-reports-shared-widgets-v1` (2026-07-14) para
+// consumo compartido desde futuros reports y drill-downs.
 
 class _MonthBreakdownLoading extends StatelessWidget {
   const _MonthBreakdownLoading();
