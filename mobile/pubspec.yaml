@@ -328,7 +328,14 @@ publish_to: 'none'
 # decimal MX (`1,50`). Chip "Cambiar tipo" del entry form reducido a
 # padding compacto + icon 16 + label bodyS + botón "Cambiar" con
 # InkWell + label token. +4 tests de regresión.
-version: 0.25.4+106
+# 0.25.5+107 — hotfix chips de fecha post-smoke (2026-07-15).
+# Audit del mobile-designer sobre feedback de Diego confirmó 2
+# problemas: touch target ~30dp (bajo mínimo M3 48dp) y descuadre
+# del Wrap vs AmountHero + AccountPicker full-width. Fix Opción A:
+# Row con 4 chips en Expanded (full-width equal split) + padding
+# vertical kSpaceSm → kSpaceMd + textAlign center. Touch target
+# ~44dp, form simétrico.
+version: 0.25.5+107
 
 environment:
   sdk: ^3.7.2

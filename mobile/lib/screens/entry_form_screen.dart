@@ -1014,29 +1014,43 @@ class _DateQuickPicker extends StatelessWidget {
           style: typo.label.copyWith(color: FincoreColors.textMuted),
         ),
         const SizedBox(height: kSpaceSm),
-        Wrap(
-          spacing: kSpaceSm,
-          runSpacing: kSpaceSm,
+        // Hotfix 2026-07-15 (audit del `mobile-designer` sobre feedback de
+        // Diego): 4 chips en `Row` con `Expanded` para que ocupen todo el
+        // ancho por igual. El `Wrap` previo dejaba un vacío a la derecha
+        // que descuadraba el form contra el `_AmountHero` centrado y los
+        // `AccountPicker` full-width.
+        Row(
           children: [
-            _DateChip(
-              label: 'Hoy',
-              selected: isToday,
-              onTap: enabled ? () => onChanged(today) : null,
+            Expanded(
+              child: _DateChip(
+                label: 'Hoy',
+                selected: isToday,
+                onTap: enabled ? () => onChanged(today) : null,
+              ),
             ),
-            _DateChip(
-              label: 'Ayer',
-              selected: isYesterday,
-              onTap: enabled ? () => onChanged(yesterday) : null,
+            const SizedBox(width: kSpaceSm),
+            Expanded(
+              child: _DateChip(
+                label: 'Ayer',
+                selected: isYesterday,
+                onTap: enabled ? () => onChanged(yesterday) : null,
+              ),
             ),
-            _DateChip(
-              label: 'Anteayer',
-              selected: isDayBefore,
-              onTap: enabled ? () => onChanged(dayBefore) : null,
+            const SizedBox(width: kSpaceSm),
+            Expanded(
+              child: _DateChip(
+                label: 'Anteayer',
+                selected: isDayBefore,
+                onTap: enabled ? () => onChanged(dayBefore) : null,
+              ),
             ),
-            _DateChip(
-              label: 'Otro…',
-              selected: isCustom,
-              onTap: enabled ? openCustomPicker : null,
+            const SizedBox(width: kSpaceSm),
+            Expanded(
+              child: _DateChip(
+                label: 'Otro…',
+                selected: isCustom,
+                onTap: enabled ? openCustomPicker : null,
+              ),
             ),
           ],
         ),
@@ -1076,9 +1090,13 @@ class _DateChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(kRadiusLg),
         child: Container(
+          // Padding vertical subido de kSpaceSm (8) a kSpaceMd (12) para
+          // llevar el touch target de ~30dp a ~44dp — chip más tapeado del
+          // form (audit 2026-07-15). Horizontal se mantiene en kSpaceLg
+          // pero el `Expanded` externo estira igual a los 4 chips.
           padding: const EdgeInsets.symmetric(
-            horizontal: kSpaceLg,
-            vertical: kSpaceSm,
+            horizontal: kSpaceSm,
+            vertical: kSpaceMd,
           ),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(kRadiusLg),
@@ -1089,6 +1107,7 @@ class _DateChip extends StatelessWidget {
           ),
           child: Text(
             label,
+            textAlign: TextAlign.center,
             style: typo.bodyS.copyWith(
               color: selected
                   ? FincoreColors.accent
