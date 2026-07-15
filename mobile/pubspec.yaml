@@ -290,7 +290,15 @@ publish_to: 'none'
 # fincore_empty_state.dart, base para reemplazar Text centrados
 # textMuted en próximos sprints. Sin cambio arquitectural (tabs de
 # reports permanecen; hub visual queda para sprint futuro).
-version: 0.24.0+101
+# 0.25.0+102 — sprint flutter-shared-sheet-helper-v1 (Sprint 6,
+# scope acotado). Nuevo helper `showFincoreBottomSheet<T>` que
+# encapsula la configuración canónica de bottom sheet (surface +
+# radius XL arriba + drag handle + isScrollControlled + useSafeArea +
+# padding con viewInsets + viewPadding para respetar nav bar
+# gestual). Reemplazable en cada showModalBottomSheet directo de
+# la app. Reduce duplicación del pattern de safe area documentado
+# en el bug del sprint weekly-budgets.
+version: 0.25.0+102
 
 environment:
   sdk: ^3.7.2
