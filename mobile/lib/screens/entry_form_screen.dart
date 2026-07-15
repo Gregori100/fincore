@@ -5,8 +5,12 @@ import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
+import 'package:fincore/theme/fincore_typography.dart' as typo;
 import 'package:fincore/widgets/account_balance_hint.dart';
 import 'package:fincore/widgets/account_picker.dart';
+import 'package:fincore/widgets/amount_input_formatter.dart';
 import 'package:fincore/widgets/category_picker.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
@@ -256,7 +260,7 @@ class _EntryFormScreenState extends State<EntryFormScreen>
           _categoryId = null;
         }
         _occurredAt = item.entry.occurredAt;
-        _amountCtrl.text = item.entry.amount.toString();
+        _amountCtrl.text = formatAmountForInput(item.entry.amount);
         _descCtrl.text = item.entry.description ?? '';
       }
     } on EntriesDaoError catch (e) {
@@ -295,7 +299,7 @@ class _EntryFormScreenState extends State<EntryFormScreen>
       context: context,
       initialDate: _occurredAt,
       firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      lastDate: DateTime.now(),
     );
     if (picked != null) {
       setState(() => _occurredAt = DateTime(picked.year, picked.month, picked.day,
@@ -320,8 +324,11 @@ class _EntryFormScreenState extends State<EntryFormScreen>
       return;
     }
 
-    final amount = double.tryParse(_amountCtrl.text);
-    if (amount == null || amount <= 0) return;
+    final amount = parseFormattedAmount(_amountCtrl.text);
+    if (amount == null || amount <= 0) {
+      _showFieldError('El monto no es válido.');
+      return;
+    }
     final description = _descCtrl.text.trim().isEmpty ? null : _descCtrl.text.trim();
 
     setState(() => _saving = true);
@@ -422,9 +429,9 @@ class _EntryFormScreenState extends State<EntryFormScreen>
     final deps = AppDependencies.of(context);
     final confirmed = await showConfirmDialog(
       context,
-      title: 'Cancelar movimiento',
-      message: '¿Cancelar este movimiento? Esta acción es definitiva.',
-      confirmLabel: 'Cancelar movimiento',
+      title: 'Eliminar movimiento',
+      message: '¿Eliminar este movimiento? Esta acción es definitiva.',
+      confirmLabel: 'Eliminar movimiento',
     );
     if (!confirmed) return;
     if (!mounted) return;
@@ -541,12 +548,29 @@ class _EntryFormScreenState extends State<EntryFormScreen>
       child: Scaffold(
         appBar: AppBar(
           title: Text(_isEdit ? 'Editar movimiento' : 'Nuevo movimiento'),
+          actions: [
+            if (_kind != null)
+              TextButton(
+                onPressed: _saving ? null : _submit,
+                style: TextButton.styleFrom(
+                  foregroundColor: FincoreColors.accent,
+                  padding: const EdgeInsets.symmetric(horizontal: kSpaceLg),
+                ),
+                child: Text(
+                  _isEdit ? 'Guardar' : 'Guardar',
+                  style: typo.bodyM.copyWith(
+                    color: FincoreColors.accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
         ),
         body: SafeArea(
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: kEdgeCard,
               children: [
                 if (!_isEdit && _kind == null)
                   KindPicker(value: _kind, onChanged: _selectKind)
@@ -565,36 +589,40 @@ class _EntryFormScreenState extends State<EntryFormScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_isEdit)
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: FincoreColors.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: FincoreColors.border),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, size: 16, color: FincoreColors.textMuted),
-                const SizedBox(width: 8),
-                Text(k.label,
-                    style: const TextStyle(color: FincoreColors.textMuted, fontSize: 12)),
-              ],
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Tooltip(
-              message: 'Cambiar tipo de movimiento',
-              child: TextButton.icon(
-                icon: const Icon(Icons.swap_horiz, size: 16),
-                label: Text('Cambiar tipo (${k.label})'),
-                onPressed: _saving ? null : () => setState(() => _kind = null),
-              ),
-            ),
-          ),
+        // 1. Header con chip del kind + acción "Cambiar" (alta) o pill informativo (edit).
+        _KindChipHeader(
+          kind: k,
+          isEdit: _isEdit,
+          saving: _saving,
+          onChangePressed: _promptChangeKind,
+        ),
+        const SizedBox(height: kSpaceLg),
+
+        // 2. Amount hero.
+        _AmountHero(
+          controller: _amountCtrl,
+          focusNode: _amountFocus,
+          color: _amountColor(k),
+          autofocus: !_isEdit,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) return 'Ingresar el monto.';
+            final n = parseFormattedAmount(v);
+            if (n == null || n <= 0) return 'Debe ser mayor a 0.';
+            return null;
+          },
+        ),
+        const SizedBox(height: kSpaceLg),
+
+        // 3. Fecha con quick chips.
+        _DateQuickPicker(
+          occurredAt: _occurredAt,
+          enabled: !_saving,
+          onChanged: (dt) => setState(() => _occurredAt = dt),
+          openCustomPicker: _pickDate,
+        ),
+        const SizedBox(height: kSpaceXl),
+
+        // 4. Account pickers según kind.
         if (_needsOrigin(k)) ...[
           AccountPicker(
             label: _originLabel(k),
@@ -605,7 +633,7 @@ class _EntryFormScreenState extends State<EntryFormScreen>
             excludeId: k == JournalKind.transfer ? _destId : null,
           ),
           AccountBalanceHint(accountId: _originId, accounts: _accounts),
-          const SizedBox(height: 24),
+          const SizedBox(height: kSpaceXl),
         ],
         if (_needsDestination(k)) ...[
           AccountPicker(
@@ -617,41 +645,10 @@ class _EntryFormScreenState extends State<EntryFormScreen>
             excludeId: k == JournalKind.transfer ? _originId : null,
           ),
           AccountBalanceHint(accountId: _destId, accounts: _accounts),
-          const SizedBox(height: 24),
+          const SizedBox(height: kSpaceXl),
         ],
-        TextFormField(
-          controller: _amountCtrl,
-          focusNode: _amountFocus,
-          decoration: const InputDecoration(
-            labelText: 'Monto',
-            prefixText: r'$ ',
-            helperText: ' ',
-          ),
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) return 'Ingresar el monto.';
-            final n = double.tryParse(v);
-            if (n == null || n <= 0) return 'Debe ser mayor a 0.';
-            return null;
-          },
-        ),
-        const SizedBox(height: 16),
-        InkWell(
-          onTap: _pickDate,
-          borderRadius: BorderRadius.circular(8),
-          child: InputDecorator(
-            decoration: const InputDecoration(
-              labelText: 'Fecha',
-              suffixIcon: Icon(Icons.calendar_today_outlined),
-            ),
-            child: Text(
-              DateFormat('EEEE d MMM y', 'es_MX').format(_occurredAt),
-              style: const TextStyle(color: FincoreColors.textPrimary),
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
+
+        // 5. Descripción.
         TextFormField(
           controller: _descCtrl,
           focusNode: _descFocus,
@@ -660,8 +657,10 @@ class _EntryFormScreenState extends State<EntryFormScreen>
           maxLines: 2,
           maxLength: 200,
         ),
+
+        // 6. Category picker.
         if (k.acceptsCategory) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: kSpaceSm),
           CategoryPicker(
             categories: _categories,
             validAppliesTo: k.validCategoryAppliesTo,
@@ -669,37 +668,91 @@ class _EntryFormScreenState extends State<EntryFormScreen>
             onChanged: _onCategoryPickerChanged,
           ),
           if (_categorySuggested && _categoryId != null) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: kSpaceXs),
             const _SuggestionChip(),
           ],
         ],
-        const SizedBox(height: 32),
+
+        // 7. Footer con Guardar (redundante con el del AppBar) + Cancelar en edit.
+        const SizedBox(height: kSpace2xl),
         FilledButton(
           onPressed: _saving ? null : _submit,
           child: _saving
               ? const SizedBox(
                   height: 20,
                   width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: FincoreColors.canvas),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: FincoreColors.canvas,
+                  ),
                 )
               : Text(_isEdit ? 'Guardar cambios' : 'Registrar movimiento'),
         ),
         if (_isEdit) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: kSpaceMd),
           OutlinedButton.icon(
             onPressed: _saving ? null : _cancel,
             icon: const Icon(Icons.cancel_outlined),
-            label: const Text('Cancelar movimiento'),
+            label: const Text('Eliminar movimiento'),
             style: OutlinedButton.styleFrom(
               foregroundColor: FincoreColors.negative,
               side: const BorderSide(color: FincoreColors.negative),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(vertical: kSpaceMd),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(kRadiusMd),
+              ),
             ),
           ),
         ],
       ],
     );
+  }
+
+  /// Color emocional del amount hero según el kind.
+  /// - income → positive (verde).
+  /// - expense → negative (rojo).
+  /// - creditExpense → warning (aumenta deuda).
+  /// - debtPayment/transfer → accent (movimientos internos, neutrales).
+  Color _amountColor(JournalKind k) => switch (k) {
+        JournalKind.income => FincoreColors.positive,
+        JournalKind.expense => FincoreColors.negative,
+        JournalKind.creditExpense => FincoreColors.warning,
+        JournalKind.debtPayment => FincoreColors.accent,
+        JournalKind.transfer => FincoreColors.accent,
+      };
+
+  /// Handler del botón "Cambiar" del chip del kind. Solo en modo alta.
+  /// Si el form tiene datos, pide confirmación antes de resetear al KindPicker.
+  Future<void> _promptChangeKind() async {
+    if (_saving || _isEdit) return;
+    final hasData = _amountCtrl.text.trim().isNotEmpty ||
+        _originId != null ||
+        _destId != null ||
+        _descCtrl.text.trim().isNotEmpty ||
+        _categoryId != null;
+
+    if (hasData) {
+      final confirmed = await showConfirmDialog(
+        context,
+        title: '¿Cambiar tipo de movimiento?',
+        message: 'Los datos ingresados se perderán.',
+        confirmLabel: 'Cambiar',
+      );
+      if (!confirmed) return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _kind = null;
+      _originId = null;
+      _destId = null;
+      _categoryId = null;
+      _occurredAt = DateTime.now();
+      _amountCtrl.clear();
+      _descCtrl.clear();
+      _formKey.currentState?.reset();
+      _categoryTouched = false;
+      _categorySuggested = false;
+    });
   }
 
   bool _needsOrigin(JournalKind k) => k != JournalKind.income;
@@ -770,6 +823,272 @@ class _SuggestionChip extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Chip prominente al top del form con el kind seleccionado + acción "Cambiar".
+/// En modo edit, renderiza un pill informativo (kind es inmutable por RN-011).
+class _KindChipHeader extends StatelessWidget {
+  final JournalKind kind;
+  final bool isEdit;
+  final bool saving;
+  final Future<void> Function() onChangePressed;
+
+  const _KindChipHeader({
+    required this.kind,
+    required this.isEdit,
+    required this.saving,
+    required this.onChangePressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = KindPicker.kindColor(kind);
+    final icon = KindPicker.kindIcon(kind);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: kSpaceLg,
+        vertical: kSpaceMd,
+      ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: FincoreColors.alphaTint),
+        borderRadius: BorderRadius.circular(kRadiusMd),
+        border: Border.all(
+          color: color.withValues(alpha: FincoreColors.alphaHairline),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: kSpaceSm),
+          Expanded(
+            child: Text(
+              kind.label,
+              style: typo.bodyM.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          if (isEdit)
+            Text(
+              '(no editable)',
+              style: typo.label.copyWith(color: FincoreColors.textMuted),
+            )
+          else
+            TextButton.icon(
+              onPressed: saving ? null : onChangePressed,
+              icon: const Icon(Icons.swap_horiz, size: 16),
+              label: const Text('Cambiar'),
+              style: TextButton.styleFrom(
+                foregroundColor: color,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: kSpaceMd,
+                  vertical: kSpaceXs,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Amount input tratado como hero visual del form.
+/// - fontSize: 36 (token-exception documentada; sin token entre headingL=20
+///   y displayXL=56 que aplique al hero de un solo input).
+/// - Color emocional según kind, con tabular figures para alineación consistente.
+/// - Prefix "$" inline en textMuted.
+/// - autofocus en modo alta para captura rápida.
+class _AmountHero extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final Color color;
+  final bool autofocus;
+  final String? Function(String?) validator;
+
+  const _AmountHero({
+    required this.controller,
+    required this.focusNode,
+    required this.color,
+    required this.autofocus,
+    required this.validator,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextFormField(
+      key: const ValueKey('amount_hero_field'),
+      controller: controller,
+      focusNode: focusNode,
+      autofocus: autofocus,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [AmountInputFormatter()],
+      textAlign: TextAlign.center,
+      // token-exception: 36 es fontSize hero del amount, sin token entre headingL (20) y displayXL (56).
+      style: TextStyle(
+        color: color,
+        fontSize: 36,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.5,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+      decoration: InputDecoration(
+        prefixText: r'$ ',
+        prefixStyle: TextStyle(
+          color: FincoreColors.textMuted,
+          // token-exception: matchea el fontSize del hero del amount.
+          fontSize: 28,
+          fontWeight: FontWeight.w500,
+        ),
+        hintText: '0',
+        hintStyle: TextStyle(
+          color: FincoreColors.textSubtle,
+          // token-exception: matchea el fontSize del hero del amount.
+          fontSize: 36,
+          fontWeight: FontWeight.w700,
+        ),
+        border: InputBorder.none,
+        enabledBorder: InputBorder.none,
+        focusedBorder: InputBorder.none,
+        errorBorder: InputBorder.none,
+        focusedErrorBorder: InputBorder.none,
+        filled: false,
+        contentPadding: const EdgeInsets.symmetric(vertical: kSpaceMd),
+        errorStyle: typo.label.copyWith(color: FincoreColors.negative),
+      ),
+      validator: validator,
+    );
+  }
+}
+
+/// Row de 4 quick chips [Hoy] [Ayer] [Anteayer] [Otro…] + label con la fecha
+/// efectiva formateada en es_MX.
+class _DateQuickPicker extends StatelessWidget {
+  final DateTime occurredAt;
+  final bool enabled;
+  final ValueChanged<DateTime> onChanged;
+  final Future<void> Function() openCustomPicker;
+
+  const _DateQuickPicker({
+    required this.occurredAt,
+    required this.enabled,
+    required this.onChanged,
+    required this.openCustomPicker,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day, 12);
+    final yesterday = today.subtract(const Duration(days: 1));
+    final dayBefore = today.subtract(const Duration(days: 2));
+    final normalized = DateTime(
+      occurredAt.year,
+      occurredAt.month,
+      occurredAt.day,
+      12,
+    );
+
+    final isToday = normalized == today;
+    final isYesterday = normalized == yesterday;
+    final isDayBefore = normalized == dayBefore;
+    final isCustom = !isToday && !isYesterday && !isDayBefore;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Fecha',
+          style: typo.label.copyWith(color: FincoreColors.textMuted),
+        ),
+        const SizedBox(height: kSpaceSm),
+        Wrap(
+          spacing: kSpaceSm,
+          runSpacing: kSpaceSm,
+          children: [
+            _DateChip(
+              label: 'Hoy',
+              selected: isToday,
+              onTap: enabled ? () => onChanged(today) : null,
+            ),
+            _DateChip(
+              label: 'Ayer',
+              selected: isYesterday,
+              onTap: enabled ? () => onChanged(yesterday) : null,
+            ),
+            _DateChip(
+              label: 'Anteayer',
+              selected: isDayBefore,
+              onTap: enabled ? () => onChanged(dayBefore) : null,
+            ),
+            _DateChip(
+              label: 'Otro…',
+              selected: isCustom,
+              onTap: enabled ? openCustomPicker : null,
+            ),
+          ],
+        ),
+        const SizedBox(height: kSpaceSm),
+        Text(
+          _formatDate(normalized),
+          style: typo.bodyS.copyWith(color: FincoreColors.textMuted),
+        ),
+      ],
+    );
+  }
+
+  String _formatDate(DateTime dt) {
+    return DateFormat("EEEE d 'de' MMMM y", 'es_MX').format(dt);
+  }
+}
+
+class _DateChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  const _DateChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? FincoreColors.accent.withValues(alpha: FincoreColors.alphaSelected)
+          : FincoreColors.surfaceElevated,
+      borderRadius: BorderRadius.circular(kRadiusLg),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(kRadiusLg),
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: kSpaceLg,
+            vertical: kSpaceSm,
+          ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(kRadiusLg),
+            border: Border.all(
+              color: selected ? FincoreColors.accent : FincoreColors.border,
+              width: selected ? 1.5 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: typo.bodyS.copyWith(
+              color: selected
+                  ? FincoreColors.accent
+                  : FincoreColors.textPrimary,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
         ),
       ),
     );

@@ -1,3 +1,4 @@
+import 'package:fincore/widgets/account_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -24,14 +25,25 @@ void main() {
     }
 
     Future<void> selectKind(WidgetTester tester, String label) async {
-      // Cada card del KindPicker es un InkWell con un Text de la label.
-      // Tocamos el InkWell para que dispare `onChanged(k)`.
+      // Cada tile del KindPicker (grid post `flutter-entry-form-redesign-v1`)
+      // es un InkWell con un Text de la label. Con 5 tiles en 3 filas el
+      // tile puede quedar parcial/totalmente offscreen en el window 800×600.
+      // Escalamos el test window a 1080×1920 (density devicePixelRatio ~2.6)
+      // para que el KindPicker completo entre sin scroll, evitando el
+      // problema de tap offscreen y matching post-render.
+      await tester.binding.setSurfaceSize(const Size(1080, 1920));
+      addTearDown(() async {
+        await tester.binding.setSurfaceSize(null);
+      });
+      await tester.pumpAndSettle();
+
+      final labelFinder = find.text(label);
       final card = find.ancestor(
-        of: find.text(label),
+        of: labelFinder,
         matching: find.byType(InkWell),
       );
       expect(card, findsWidgets,
-          reason: 'KindPicker card "$label" no encontrada');
+          reason: 'KindPicker tile "$label" no encontrado');
       await tester.tap(card.first);
       await tester.pumpAndSettle();
     }
@@ -66,10 +78,10 @@ void main() {
       await selectKind(tester, 'Ingreso');
 
       // El AccountPicker dest tiene `label: Text('Cuenta destino')`.
-      expect(find.text('Cuenta destino'), findsOneWidget);
-      expect(find.text('Cuenta origen'), findsNothing);
-      expect(find.text('Tarjeta'), findsNothing);
-      expect(find.text('Pago desde'), findsNothing);
+      expect(find.text('Cuenta destino', skipOffstage: false), findsOneWidget);
+      expect(find.text('Cuenta origen', skipOffstage: false), findsNothing);
+      expect(find.text('Tarjeta', skipOffstage: false), findsNothing);
+      expect(find.text('Pago desde', skipOffstage: false), findsNothing);
 
       // RF-019 v1: validar contenido del DropdownMenu. Ingreso solo acepta
       // dest cash/debit → Bolsa + Banamex; Visa (credit) NO debe aparecer.
@@ -90,9 +102,9 @@ void main() {
       await pushNewEntry(tester);
       await selectKind(tester, 'Gasto');
 
-      expect(find.text('Cuenta origen'), findsOneWidget);
-      expect(find.text('Cuenta destino'), findsNothing);
-      expect(find.text('Tarjeta'), findsNothing);
+      expect(find.text('Cuenta origen', skipOffstage: false), findsOneWidget);
+      expect(find.text('Cuenta destino', skipOffstage: false), findsNothing);
+      expect(find.text('Tarjeta', skipOffstage: false), findsNothing);
 
       // RF-019 v1: origen cash/debit → Bolsa + Banamex; Visa NO.
       await openDropdownByLabel(tester, 'Cuenta origen');
@@ -112,9 +124,9 @@ void main() {
       await pushNewEntry(tester);
       await selectKind(tester, 'Gasto a tarjeta');
 
-      expect(find.text('Tarjeta'), findsOneWidget);
-      expect(find.text('Cuenta destino'), findsNothing);
-      expect(find.text('Pago desde'), findsNothing);
+      expect(find.text('Tarjeta', skipOffstage: false), findsOneWidget);
+      expect(find.text('Cuenta destino', skipOffstage: false), findsNothing);
+      expect(find.text('Pago desde', skipOffstage: false), findsNothing);
 
       // RF-019 v1: origen credit → Visa; Bolsa + Banamex NO.
       await openDropdownByLabel(tester, 'Tarjeta');
@@ -133,9 +145,9 @@ void main() {
       await pushNewEntry(tester);
       await selectKind(tester, 'Pago de tarjeta');
 
-      expect(find.text('Pago desde'), findsOneWidget);
-      expect(find.text('Tarjeta a pagar'), findsOneWidget);
-      expect(find.text('Cuenta destino'), findsNothing);
+      expect(find.text('Pago desde', skipOffstage: false), findsOneWidget);
+      expect(find.text('Tarjeta a pagar', skipOffstage: false), findsOneWidget);
+      expect(find.text('Cuenta destino', skipOffstage: false), findsNothing);
 
       // RF-202 v2 cancelado: Material 3 DropdownMenu prerenderea los items
       // de TODOS los DropdownMenu del tree, no solo el actualmente abierto.
@@ -156,9 +168,20 @@ void main() {
       await pushNewEntry(tester);
       await selectKind(tester, 'Transferencia');
 
-      expect(find.text('Cuenta origen'), findsOneWidget);
-      expect(find.text('Cuenta destino'), findsOneWidget);
-      expect(find.text('Tarjeta'), findsNothing);
+      // Tras el tap del kind el ListView del form puede tener scroll residual
+      // del KindPicker (tile Transferencia estaba en la fila 3, offscreen).
+      // Los AccountPickers en el nuevo layout van tras el amount hero y la
+      // fecha, pueden quedar offstage en el window 800×600. Usamos
+      // skipOffstage: false para validar que están en el árbol.
+      expect(
+        find.text('Cuenta origen', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Cuenta destino', skipOffstage: false),
+        findsOneWidget,
+      );
+      expect(find.text('Tarjeta', skipOffstage: false), findsNothing);
 
       await harness.dispose();
     });

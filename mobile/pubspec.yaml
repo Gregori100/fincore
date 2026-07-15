@@ -263,7 +263,19 @@ publish_to: 'none'
 # que bloquea regresión en CI. 5 matchers de integration_test
 # actualizados al copy neutral actual (estaban apuntando a strings
 # ya inexistentes en lib/). Convención documentada en CLAUDE.md.
-version: 0.21.1+98
+# 0.22.0+99 — sprint flutter-entry-form-redesign-v1 (Sprint 3 del
+# roadmap de la auditoría de diseño 2026-07-14). Rediseño del flujo
+# más frecuente (registro de movimientos): amount input como hero
+# (36sp con formato de miles en vivo + color por kind + autofoco),
+# quick-chips de fecha (Hoy/Ayer/Anteayer/Otro), botón Guardar en
+# AppBar, KindPicker en grid 2×3 compacto, CategoryPicker como
+# bottom sheet con search-first + MRU en memoria + agrupación por
+# appliesTo, chip prominente "Cambiar tipo" con confirm dialog.
+# Nuevo widget AmountInputFormatter con 26 tests unitarios; API
+# preservada de KindPicker y CategoryPicker (weekly_budgets sigue
+# funcionando sin cambios). Copy Cancelar → Eliminar (voz + neutral).
+# 707 tests verdes.
+version: 0.22.0+99
 
 environment:
   sdk: ^3.7.2

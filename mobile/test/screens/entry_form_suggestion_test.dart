@@ -1,4 +1,5 @@
 import 'package:fincore/screens/entry_form_screen.dart';
+import 'package:fincore/widgets/category_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -124,22 +125,22 @@ void main() {
       // Chip visible.
       expect(find.text('Sugerida'), findsOneWidget);
 
-      // Cambiar manualmente la categoría. El `CategoryPicker` usa
-      // `DropdownMenu<String?>` (nullable), no `DropdownMenu<String>`,
-      // por eso no se puede reusar `openDropdownByLabel` del harness
-      // (que busca `DropdownMenu<String>`). Tappeamos el field
-      // directamente con el filtro de tipo correcto.
-      final categoryField = find.ancestor(
-        of: find.text('Categoría (opcional)'),
-        matching: find.byType(DropdownMenu<String?>),
+      // Sprint flutter-entry-form-redesign-v1: el CategoryPicker ahora es un
+      // chip que abre un bottom sheet, no un DropdownMenu. Tappeamos el
+      // InkWell interno del CategoryPicker (el widget del field), esperamos
+      // el sheet, y tappeamos la entry "Comida_T" dentro.
+      final categoryField = find.descendant(
+        of: find.byType(CategoryPicker),
+        matching: find.byType(InkWell),
       );
-      expect(categoryField, findsOneWidget,
+      expect(categoryField, findsWidgets,
           reason: 'el CategoryPicker debería estar visible');
-      await tester.ensureVisible(categoryField);
+      await tester.ensureVisible(categoryField.first);
       await tester.pumpAndSettle();
-      await tester.tap(categoryField);
+      await tester.tap(categoryField.first);
       await tester.pumpAndSettle();
-      // Tappear la entry "Comida_T" del menú.
+      // Tappear la entry "Comida_T" dentro del sheet (última coincidencia
+      // porque puede haber más de un widget con ese texto).
       await tester.tap(find.text('Comida_T').last);
       await tester.pumpAndSettle();
 

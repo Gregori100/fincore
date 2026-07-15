@@ -36,20 +36,20 @@ void main() {
           reason: 'EntryFormScreen no se montó tras el push a /edit');
       expect(find.text('Editar movimiento'), findsOneWidget);
 
-      // Tap en el botón outline rojo "Cancelar movimiento". Antes del dialog
+      // Tap en el botón outline rojo "Eliminar movimiento". Antes del dialog
       // hay 1 match; tras el dialog habrá 2 (form + FilledButton del dialog).
       // El form es más alto que el viewport default (800x600); scroll first.
-      final cancelButton = find.text('Cancelar movimiento');
-      await tester.ensureVisible(cancelButton);
+      final cancelButton = find.text('Eliminar movimiento');
+      await tester.ensureVisible(cancelButton.first);
       await tester.pumpAndSettle();
-      await tester.tap(cancelButton);
+      await tester.tap(cancelButton.first);
       await tester.pumpAndSettle();
 
       // Confirmar en el AlertDialog tocando el FilledButton destructivo.
       // Filtramos por descendiente del dialog para no tocar el del form.
       final confirmButton = find.descendant(
         of: find.byType(AlertDialog),
-        matching: find.widgetWithText(FilledButton, 'Cancelar movimiento'),
+        matching: find.widgetWithText(FilledButton, 'Eliminar movimiento'),
       );
       expect(confirmButton, findsOneWidget);
       await tester.tap(confirmButton);
@@ -90,15 +90,11 @@ void main() {
 
       expect(find.byType(EntryFormScreen), findsOneWidget);
 
-      // RF-012 v4 (L1-H4 quality review v3): el monto inicial se busca por
-      // ancestor del label "Monto" en lugar de por el texto del valor
-      // ("150.0"), que dependía del formato textual y se rompía si
-      // AmountFormatter cambiaba la representación.
-      final amountField = find
-          .ancestor(of: find.text('Monto'), matching: find.byType(TextFormField))
-          .first;
+      // Sprint flutter-entry-form-redesign-v1: el amount hero no tiene label
+      // "Monto" (es hero sin label). Se busca por ValueKey estable.
+      final amountField = find.byKey(const ValueKey('amount_hero_field'));
       expect(amountField, findsOneWidget,
-          reason: 'TextFormField con label "Monto" no encontrado');
+          reason: 'TextFormField del amount hero no encontrado');
       await tester.enterText(amountField, '200');
       await tester.pumpAndSettle();
 
@@ -149,8 +145,9 @@ void main() {
       GoRouter.of(ctx).push('/entries/$entryId/edit');
       await tester.pumpAndSettle();
 
-      // Dar focus al TextFormField del monto.
-      final amountField = find.widgetWithText(TextFormField, 'Monto');
+      // Dar focus al TextFormField del monto (buscado por Key estable
+      // desde el refactor `flutter-entry-form-redesign-v1`).
+      final amountField = find.byKey(const ValueKey('amount_hero_field'));
       expect(amountField, findsOneWidget);
       await tester.tap(amountField);
       await tester.pumpAndSettle();
