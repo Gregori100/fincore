@@ -178,7 +178,9 @@ class _AccountRow extends StatelessWidget {
   Color _typeColor(String t) => switch (t) {
         'cash' => FincoreColors.positive,
         'debit' => FincoreColors.accent,
-        'credit' => FincoreColors.warning,
+        // Hotfix 2026-07-15: warning (amarillo) libera su semántico para
+        // alertas operativas reales. categoryPurple para tipo credit.
+        'credit' => FincoreColors.categoryPurple,
         _ => FincoreColors.textMuted,
       };
   IconData _typeIcon(String t) => switch (t) {

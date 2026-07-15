@@ -738,10 +738,11 @@ class _AccountTile extends StatelessWidget {
         'cash' => FincoreColors.positive,
         'debit' => FincoreColors.accent,
         // Regla CLAUDE.md: `warning` reservado para alertas operativas, no
-        // para tipos de cuenta. Sprint flutter-dashboard-clarity-v1 migra
-        // el ícono de tipo credit a color neutral. El monto de la deuda
-        // sigue en `negative` (rojo) que es semántico correcto.
-        'credit' => FincoreColors.textMuted,
+        // para tipos de cuenta. Sprint flutter-dashboard-clarity-v1 migró
+        // a `textMuted` (gris) por conservación; hotfix 2026-07-15 elige
+        // `categoryPurple` por feedback (gris se sentía "simple"). El monto
+        // de la deuda sigue en `negative` (rojo) que es semántico correcto.
+        'credit' => FincoreColors.categoryPurple,
         _ => FincoreColors.textMuted,
       };
 

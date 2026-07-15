@@ -711,12 +711,14 @@ class _EntryFormScreenState extends State<EntryFormScreen>
   /// Color emocional del amount hero según el kind.
   /// - income → positive (verde).
   /// - expense → negative (rojo).
-  /// - creditExpense → warning (aumenta deuda).
+  /// - creditExpense → categoryPurple (consistente con tipo credit,
+  ///   hotfix 2026-07-15: antes warning, se migró para liberar el
+  ///   semántico amarillo y alinear con el nuevo color de tarjetas).
   /// - debtPayment/transfer → accent (movimientos internos, neutrales).
   Color _amountColor(JournalKind k) => switch (k) {
         JournalKind.income => FincoreColors.positive,
         JournalKind.expense => FincoreColors.negative,
-        JournalKind.creditExpense => FincoreColors.warning,
+        JournalKind.creditExpense => FincoreColors.categoryPurple,
         JournalKind.debtPayment => FincoreColors.accent,
         JournalKind.transfer => FincoreColors.accent,
       };

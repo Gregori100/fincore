@@ -335,7 +335,15 @@ publish_to: 'none'
 # Row con 4 chips en Expanded (full-width equal split) + padding
 # vertical kSpaceSm → kSpaceMd + textAlign center. Touch target
 # ~44dp, form simétrico.
-version: 0.25.5+107
+# 0.25.6+108 — hotfix color credit post-smoke Sprint 4 (2026-07-15).
+# Sprint 4 migró el tipo credit de warning (amarillo) a textMuted
+# (gris) SOLO en dashboard_screen; account_picker + accounts_list
+# quedaron en amarillo (miss). Feedback de Diego: gris "se siente
+# simple", quiere otro color. Migración completa a categoryPurple
+# (#B561D6) en 4 sitios: dashboard_screen, account_picker,
+# accounts_list_screen y entry_form_screen amount hero para
+# creditExpense kind. Warning libera su semántico completo.
+version: 0.25.6+108
 
 environment:
   sdk: ^3.7.2
