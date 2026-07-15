@@ -311,7 +311,15 @@ publish_to: 'none'
 # reemplazados por frases completas ("Debe estar entre 1 y 31.",
 # "Debe ser un día distinto al corte."). Lista de cuentas agrupada
 # + credit utilization bar diferidos a sprint dedicado.
-version: 0.25.2+104
+# 0.25.3+105 — sprint flutter-settings-refresh-v1 (Sprint 9, scope
+# acotado). Import de respaldo migrado de showConfirmDialog a
+# showDestructiveDialog (hero icon + chips de impacto: cuentas +
+# categorías + movimientos + vistas guardadas + copy más específico
+# "Reemplazar mi BD" en lugar de "Continuar"). BaseCard de Zona
+# peligrosa con border rojo tinted (alpha 0.4, width 1.5) para
+# diferenciar visualmente del resto de secciones. Reorden completo
+# de secciones + Ayuda con search: diferidos.
+version: 0.25.3+105
 
 environment:
   sdk: ^3.7.2

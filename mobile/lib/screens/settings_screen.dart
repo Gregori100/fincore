@@ -7,6 +7,7 @@ import 'package:fincore/router/app_router.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
+import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -217,26 +218,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_working) return;
     final deps = AppDependencies.of(context);
 
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Importar respaldo',
-      // H3 quality review v1: el JSON v1 no serializa saved_views (son
-      // preferencias de UI, no datos críticos). Avisarle al usuario para
-      // que no sea sorpresa silenciosa post-import.
-      message: 'Esto REEMPLAZA toda la BD actual con el contenido del archivo. '
-          'Tus vistas guardadas se perderán. '
-          'No hay vuelta atrás (a menos que exista otro respaldo guardado).',
-      confirmLabel: 'Continuar',
-    );
-    if (!confirmed) return;
-    if (!mounted) return;
-
+    // Sprint flutter-settings-refresh-v1: migrado de showConfirmDialog
+    // (M2 AlertDialog genérico) a showDestructiveDialog (hero icon +
+    // chips de impacto + badge irreversibilidad). El import reemplaza
+    // toda la BD — merece la fricción visual del destructivo.
+    // Nota: el file picker se ejecuta ANTES del dialog para poder mostrar
+    // el nombre del archivo en el sheet.
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['json'],
       withData: true,
     );
     if (picked == null || picked.files.isEmpty) return;
+    if (!mounted) return;
+
+    final confirmed = await showDestructiveDialog(
+      context,
+      title: 'Reemplazar tu BD',
+      objectName: picked.files.single.name,
+      icon: Icons.sync_alt,
+      impacts: const [
+        DestructiveImpact(
+          icon: Icons.receipt_long,
+          label: 'Cuentas actuales',
+        ),
+        DestructiveImpact(
+          icon: Icons.category_outlined,
+          label: 'Categorías actuales',
+        ),
+        DestructiveImpact(
+          icon: Icons.attach_money,
+          label: 'Movimientos actuales',
+        ),
+        DestructiveImpact(
+          icon: Icons.bookmark_outline,
+          label: 'Vistas guardadas',
+        ),
+      ],
+      description: 'Todo lo actual se sobrescribe con el contenido de este '
+          'archivo. Si no tienes otro respaldo, no hay vuelta atrás.',
+      confirmLabel: 'Reemplazar mi BD',
+    );
+    if (!confirmed) return;
     if (!mounted) return;
 
     setState(() => _working = true);
@@ -424,9 +447,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          // Sprint flutter-settings-refresh-v1: Zona peligrosa con borde
+          // rojo sutil para diferenciarla del resto de secciones (audit
+          // P1.2). El SectionTitle sigue igual — el border tint es
+          // suficiente para telegrafiar "esto es distinto".
           const SectionTitle('Zona peligrosa'),
           const SizedBox(height: 8),
           BaseCard(
+            borderColor: FincoreColors.negative.withValues(alpha: 0.4),
+            borderWidth: 1.5,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
