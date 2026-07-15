@@ -26,6 +26,53 @@ class BudgetTotals {
 /// - `balance == 0` → "En equilibrio" en gris (`FincoreColors.textMuted`).
 /// - Sin dato aún (loading) → mismo layout con `Skeleton` en la barra de
 ///   progreso y en el monto (nunca texto "Calculando…").
+///
+/// Sprint `flutter-weekly-budgets-polish-v1` (audit H2): agrega los 2
+/// totales `Ingresos` + `Gastos` como mini-amounts arriba de la barra,
+/// para eliminar la aritmética mental del audit ("cuánto entra vs cuánto
+/// sale").
+class _MiniAmount extends StatelessWidget {
+  final String label;
+  final double amount;
+  final Color color;
+  final bool alignEnd;
+
+  const _MiniAmount({
+    required this.label,
+    required this.amount,
+    required this.color,
+    this.alignEnd = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: FincoreColors.textSubtle,
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.0,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          formatAmount(amount),
+          style: TextStyle(
+            color: color,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class BalanceFooter extends StatelessWidget {
   final Stream<BudgetTotals> totalsStream;
 
@@ -41,6 +88,9 @@ class BalanceFooter extends StatelessWidget {
         stream: totalsStream,
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
+            // Skeleton state mantiene la estructura de 3 filas para evitar
+            // layout shift al hidratar. Fila 1: 2 mini-amounts + centro.
+            // Fila 2: barra. Fila 3: label + monto grande.
             // `mainAxisSize: MainAxisSize.min` es OBLIGATORIO en ambos
             // `Column` de este builder: este widget vive directo en
             // `Scaffold.bottomNavigationBar` (constraints verticales
@@ -129,6 +179,32 @@ class BalanceFooter extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Fila 1: ingresos + gastos visibles (audit H2 Weekly Budgets
+              // 2026-07-14). Reemplaza el header "GASTOS PLANEADOS" solo.
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _MiniAmount(
+                    label: 'Ingresos',
+                    amount: income,
+                    color: FincoreColors.positive,
+                  ),
+                  Text(
+                    percentLabel,
+                    style: const TextStyle(
+                      color: FincoreColors.textMuted,
+                      fontSize: 10,
+                    ),
+                  ),
+                  _MiniAmount(
+                    label: 'Gastos',
+                    amount: expense,
+                    color: FincoreColors.negative,
+                    alignEnd: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(3),
                 child: LinearProgressIndicator(
@@ -142,29 +218,7 @@ class BalanceFooter extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 6),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'GASTOS PLANEADOS',
-                    style: TextStyle(
-                      color: FincoreColors.textSubtle,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.0,
-                    ),
-                  ),
-                  Text(
-                    percentLabel,
-                    style: const TextStyle(
-                      color: FincoreColors.textMuted,
-                      fontSize: 10,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Icon(icon, size: 24, color: color),

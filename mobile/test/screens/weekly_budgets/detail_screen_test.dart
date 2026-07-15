@@ -69,7 +69,12 @@ void main() {
       // la lista) — ahora hay 2 instancias del texto en pantalla. Ya no hay
       // label "Balance:"; el renglón grande de abajo dice
       // "Sobra"/"Faltan"/"En equilibrio" + monto.
-      expect(find.text('GASTOS PLANEADOS'), findsNWidgets(2));
+      // Sprint flutter-weekly-budgets-polish-v1 (2026-07-14): reemplaza
+      // "GASTOS PLANEADOS" por los 2 mini-amounts INGRESOS + GASTOS.
+      // Buscamos ambos labels en uppercase; aparecen en el footer + en
+      // el header de la sección de items (que reusa el mismo copy).
+      expect(find.text('INGRESOS'), findsWidgets);
+      expect(find.text('GASTOS'), findsWidgets);
       expect(find.text('Sin ingresos planeados'), findsOneWidget);
       expect(find.text('Sin gastos planeados'), findsOneWidget);
       expect(find.text('En equilibrio'), findsOneWidget);
@@ -111,7 +116,9 @@ void main() {
       // Refactor `BalanceFooter` opción C: el footer separa el label
       // ("Sobra") del monto ("$6,500.00") en 2 `Text` — el monto coincide
       // con el del renglón de la card (2 instancias en total).
-      expect(find.text(formatAmount(6500)), findsNWidgets(2));
+      // Sprint flutter-weekly-budgets-polish-v1: el footer agrega los 2
+      // mini-amounts INGRESOS + GASTOS, así que el monto aparece más veces.
+      expect(find.text(formatAmount(6500)), findsWidgets);
       expect(find.text('Sobra'), findsOneWidget);
 
       await harness.dispose();
@@ -143,7 +150,9 @@ void main() {
       // "$6,500.00" — ese mismo monto también aparece en la card del
       // renglón, así que hay 2 instancias del texto exacto.
       expect(find.text('Sobra'), findsOneWidget);
-      expect(find.text(formatAmount(6500)), findsNWidgets(2));
+      // Sprint flutter-weekly-budgets-polish-v1: el footer agrega los 2
+      // mini-amounts INGRESOS + GASTOS, así que el monto aparece más veces.
+      expect(find.text(formatAmount(6500)), findsWidgets);
 
       // QW3: income ya tiene 1 renglón → su sección no muestra ningún
       // "Agregar" (header ahora es ícono sin label, y al no estar vacía no
@@ -159,7 +168,9 @@ void main() {
       await settleAfterWrite(tester);
 
       expect(find.text('Renta'), findsOneWidget);
-      expect(find.text(formatAmount(2000)), findsOneWidget);
+      // Sprint flutter-weekly-budgets-polish-v1: el mini-amount de GASTOS
+      // en el footer duplica la aparición del monto.
+      expect(find.text(formatAmount(2000)), findsWidgets);
       // "$4,500.00" es un monto único (no coincide con ningún renglón) →
       // findsOneWidget sigue siendo válido para el monto del footer.
       expect(find.text('Sobra'), findsOneWidget);
@@ -245,7 +256,9 @@ void main() {
       expect(find.text('Sueldo'), findsOneWidget);
       expect(find.text('Sobra'), findsOneWidget);
       // Monto duplicado (renglón + footer) — ver nota de WT-DS02/03.
-      expect(find.text(formatAmount(6500)), findsNWidgets(2));
+      // Sprint flutter-weekly-budgets-polish-v1: el footer agrega los 2
+      // mini-amounts INGRESOS + GASTOS, así que el monto aparece más veces.
+      expect(find.text(formatAmount(6500)), findsWidgets);
 
       await tester.tap(find.byTooltip('Eliminar'));
       await tester.pumpAndSettle();

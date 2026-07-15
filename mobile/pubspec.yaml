@@ -298,7 +298,13 @@ publish_to: 'none'
 # gestual). Reemplazable en cada showModalBottomSheet directo de
 # la app. Reduce duplicación del pattern de safe area documentado
 # en el bug del sprint weekly-budgets.
-version: 0.25.0+102
+# 0.25.1+103 — sprint flutter-weekly-budgets-polish-v1 (Sprint 7,
+# scope acotado). Rediseña BalanceFooter con 2 mini-amounts INGRESOS
+# + GASTOS visibles arriba de la barra de progreso (audit H2:
+# elimina aritmética mental). Skeleton state mantiene layout de 3
+# filas para evitar shift. "Esta semana" hero card, chip Cambiar
+# label, calendar leyenda: diferidos a sprints polish futuros.
+version: 0.25.1+103
 
 environment:
   sdk: ^3.7.2
