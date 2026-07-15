@@ -304,7 +304,14 @@ publish_to: 'none'
 # elimina aritmética mental). Skeleton state mantiene layout de 3
 # filas para evitar shift. "Esta semana" hero card, chip Cambiar
 # label, calendar leyenda: diferidos a sprints polish futuros.
-version: 0.25.1+103
+# 0.25.2+104 — sprint flutter-accounts-copy-polish-v1 (Sprint 8,
+# scope acotado). Copy fixes en account_form_screen (audit P2):
+# "Metadata de la tarjeta" → "Datos de la tarjeta" (elimina jerga
+# técnica); validators telegráficos "1-31" y "Distinto al corte"
+# reemplazados por frases completas ("Debe estar entre 1 y 31.",
+# "Debe ser un día distinto al corte."). Lista de cuentas agrupada
+# + credit utilization bar diferidos a sprint dedicado.
+version: 0.25.2+104
 
 environment:
   sdk: ^3.7.2

@@ -233,7 +233,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Sección de tarjeta visible.
-      expect(find.text('Metadata de la tarjeta'), findsOneWidget);
+      expect(find.text('Datos de la tarjeta'), findsOneWidget);
       // 5 TextFormFields = Nombre + Descripción + 3 credit-only (Límite,
       // Día corte, Día pago). Los campos de tasa, minPct% y los parámetros
       // del pago mínimo se removieron cuando se eliminó "Pago mínimo

@@ -275,7 +275,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                 const SizedBox(height: 8),
                 const Divider(),
                 const SizedBox(height: 16),
-                const Text('Metadata de la tarjeta',
+                const Text('Datos de la tarjeta',
                     style: TextStyle(
                       color: FincoreColors.textMuted,
                       fontSize: 13,
@@ -320,7 +320,7 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Requerido.';
                           final n = int.tryParse(v);
-                          if (n == null || n < 1 || n > 31) return '1-31';
+                          if (n == null || n < 1 || n > 31) return 'Debe estar entre 1 y 31.';
                           return null;
                         },
                       ),
@@ -338,10 +338,10 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
                         validator: (v) {
                           if (v == null || v.trim().isEmpty) return 'Requerido.';
                           final n = int.tryParse(v);
-                          if (n == null || n < 1 || n > 31) return '1-31';
+                          if (n == null || n < 1 || n > 31) return 'Debe estar entre 1 y 31.';
                           if (_closingDayCtrl.text.isNotEmpty &&
                               n == int.tryParse(_closingDayCtrl.text)) {
-                            return 'Distinto al corte';
+                            return 'Debe ser un día distinto al corte.';
                           }
                           return null;
                         },
