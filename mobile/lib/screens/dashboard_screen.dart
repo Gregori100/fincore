@@ -188,30 +188,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Expanded(
                 child: _TotalCard(
-                  label: 'BO',
+                  label: 'Bolsa + Débito',
+                  code: 'BO',
                   stream: _boStream!,
                   color: FincoreColors.positive,
-                  hint: 'Bolsa + Débito',
                   sparklineStream: _boSparkStream,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _TotalCard(
-                  label: 'DE',
+                  label: 'Deuda',
+                  code: 'DE',
                   stream: _deStream!,
                   color: FincoreColors.negative,
-                  hint: 'Deuda Crédito',
                   sparklineStream: _deSparkStream,
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _TotalCard(
-                  label: 'CR',
+                  label: 'Disponible',
+                  code: 'CR',
                   stream: _crStream!,
                   color: FincoreColors.accent,
-                  hint: 'Crédito disponible',
                   sparklineStream: _crSparkStream,
                 ),
               ),
@@ -316,19 +316,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 class _TotalCard extends StatelessWidget {
+  /// Label descriptivo mostrado en el card (arriba, uppercase).
   final String label;
+
+  /// Código corto (BO/DE/CR) usado solo en `Semantics.label` para
+  /// accesibilidad. No se renderiza visualmente tras la audit 2026-07-14.
+  final String code;
   final Stream<double> stream;
   final Color color;
-  final String hint;
+
   /// Sprint flutter-dashboard-bundle-v1: sparkline opcional del saldo
-  /// diario en los últimos 30 días. Se pinta entre el balance y el hint.
+  /// diario en los últimos 30 días.
   final Stream<List<DailyBalance>>? sparklineStream;
 
   const _TotalCard({
     required this.label,
+    required this.code,
     required this.stream,
     required this.color,
-    required this.hint,
     this.sparklineStream,
   });
 
@@ -339,13 +344,20 @@ class _TotalCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.5,
+          // Label descriptivo arriba (jerarquía invertida post-audit 2026-07-14).
+          // El código BO/DE/CR queda como Semantics label para accesibilidad.
+          Semantics(
+            label: '$code — $label',
+            child: Text(
+              label.toUpperCase(),
+              style: const TextStyle(
+                color: FincoreColors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(height: 6),
@@ -355,15 +367,19 @@ class _TotalCard extends StatelessWidget {
               if (!snap.hasData) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 2),
-                  child: Skeleton(width: 80, height: 16),
+                  child: Skeleton(width: 80, height: 20),
                 );
               }
               return Text(
                 formatAmount(snap.data!),
-                style: const TextStyle(
-                  color: FincoreColors.textPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
+                // token-exception: 18 hero del monto KPI, sin token intermedio
+                // entre headingM (16) y headingL (20). Ligero bump vs 16 previo
+                // para reforzar la lectura del número.
+                style: TextStyle(
+                  color: color,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.3,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -374,13 +390,6 @@ class _TotalCard extends StatelessWidget {
             const SizedBox(height: 6),
             _Sparkline(stream: sparklineStream!, color: color),
           ],
-          const SizedBox(height: 2),
-          Text(
-            hint,
-            style: const TextStyle(color: FincoreColors.textSubtle, fontSize: 10),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
         ],
       ),
     );
@@ -728,7 +737,11 @@ class _AccountTile extends StatelessWidget {
   Color _typeColor(String t) => switch (t) {
         'cash' => FincoreColors.positive,
         'debit' => FincoreColors.accent,
-        'credit' => FincoreColors.warning,
+        // Regla CLAUDE.md: `warning` reservado para alertas operativas, no
+        // para tipos de cuenta. Sprint flutter-dashboard-clarity-v1 migra
+        // el ícono de tipo credit a color neutral. El monto de la deuda
+        // sigue en `negative` (rojo) que es semántico correcto.
+        'credit' => FincoreColors.textMuted,
         _ => FincoreColors.textMuted,
       };
 

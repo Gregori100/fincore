@@ -129,27 +129,35 @@ class _FirstRunScreenState extends State<FirstRunScreen> {
                   const FincoreLogo(fontSize: 72),
                   const SizedBox(height: 32),
                   const Text(
-                    'Para comenzar, elegir una opción:',
+                    '¿Cómo quieres empezar?',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: FincoreColors.textMuted, fontSize: 14),
+                    style: TextStyle(
+                      color: FincoreColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 24),
+                  // Post audit 2026-07-14: "Arrancar limpio" es el flujo
+                  // recomendado (95% de testers no tiene un JSON previo).
+                  // Va primero y con highlight visual.
+                  _OptionCard(
+                    icon: Icons.fiber_new_outlined,
+                    title: 'Empezar desde cero',
+                    description:
+                        'Crea tu Bolsa y 10 categorías listas. Puedes agregar cuentas y ajustar todo después.',
+                    enabled: !_working,
+                    recommended: true,
+                    onTap: _startFresh,
+                  ),
+                  const SizedBox(height: 12),
                   _OptionCard(
                     icon: Icons.cloud_download_outlined,
                     title: 'Importar respaldo',
                     description:
-                        'Restaurar un archivo JSON exportado previamente desde Configuración.',
+                        '¿Ya usaste FinCore antes? Restaura tu archivo .json exportado.',
                     enabled: !_working,
                     onTap: _importBackup,
-                  ),
-                  const SizedBox(height: 12),
-                  _OptionCard(
-                    icon: Icons.fiber_new_outlined,
-                    title: 'Arrancar limpio',
-                    description:
-                        'Crea una BD vacía con la Bolsa singleton y 10 categorías por defecto.',
-                    enabled: !_working,
-                    onTap: _startFresh,
                   ),
                   if (_working) ...[
                     const SizedBox(height: 24),
@@ -170,6 +178,7 @@ class _OptionCard extends StatelessWidget {
   final String title;
   final String description;
   final bool enabled;
+  final bool recommended;
   final VoidCallback onTap;
 
   const _OptionCard({
@@ -178,6 +187,7 @@ class _OptionCard extends StatelessWidget {
     required this.description,
     required this.enabled,
     required this.onTap,
+    this.recommended = false,
   });
 
   @override
@@ -192,7 +202,12 @@ class _OptionCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: FincoreColors.border),
+            border: Border.all(
+              color: recommended
+                  ? FincoreColors.accent
+                  : FincoreColors.border,
+              width: recommended ? 2 : 1,
+            ),
           ),
           child: Row(
             children: [
@@ -210,13 +225,43 @@ class _OptionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: FincoreColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: FincoreColors.textPrimary,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (recommended) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: FincoreColors.accent
+                                  .withValues(alpha: 0.18),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'Recomendado',
+                              style: TextStyle(
+                                color: FincoreColors.accent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(

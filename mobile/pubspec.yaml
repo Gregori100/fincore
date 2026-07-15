@@ -275,7 +275,14 @@ publish_to: 'none'
 # preservada de KindPicker y CategoryPicker (weekly_budgets sigue
 # funcionando sin cambios). Copy Cancelar → Eliminar (voz + neutral).
 # 707 tests verdes.
-version: 0.22.0+99
+# 0.23.0+100 — sprint flutter-dashboard-clarity-v1 (Sprint 4). Invierte
+# jerarquía de KPIs BO/DE/CR: label descriptivo arriba (BOLSA + DÉBITO,
+# DEUDA, DISPONIBLE), monto grande con color emocional, código sólo en
+# Semantics.label. Icono de credit type migra de warning (amarillo) a
+# textMuted (regla CLAUDE.md: warning es para alertas operativas, no
+# tipos de cuenta). First-run reescrito con Empezar desde cero
+# recomendado (border 2px accent + badge), copy sin jerga (BD/singleton).
+version: 0.23.0+100
 
 environment:
   sdk: ^3.7.2

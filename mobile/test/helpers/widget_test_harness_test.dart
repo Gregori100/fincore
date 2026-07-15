@@ -15,9 +15,9 @@ void main() {
 // "Bolsa" ahora aparece 3 veces. Cambio a findsAtLeast(2).
 expect(find.text('Bolsa'), findsAtLeastNWidgets(2));
       // Las cards BO / DE / CR del dashboard.
-      expect(find.text('BO'), findsOneWidget);
-      expect(find.text('DE'), findsOneWidget);
-      expect(find.text('CR'), findsOneWidget);
+      expect(find.text('BOLSA + DÉBITO'), findsOneWidget);
+      expect(find.text('DEUDA'), findsOneWidget);
+      expect(find.text('DISPONIBLE'), findsOneWidget);
 
       await harness.dispose();
     });
@@ -51,7 +51,7 @@ expect(find.text('Bolsa'), findsAtLeastNWidgets(2));
       );
 
       // FirstRunScreen muestra estos dos botones.
-      expect(find.textContaining('Arrancar limpio'), findsWidgets);
+      expect(find.textContaining('Empezar desde cero'), findsWidgets);
       expect(find.textContaining('Importar respaldo'), findsWidgets);
 
       await harness.dispose();

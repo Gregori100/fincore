@@ -61,7 +61,7 @@ void main() {
           reason: 'El form sigue montado tras cancel; posible regresión gray screen');
       expect(find.text('Editar movimiento'), findsNothing);
       // Sanity: el dashboard volvió a estar visible.
-      expect(find.text('BO'), findsOneWidget);
+      expect(find.text('BOLSA + DÉBITO'), findsOneWidget);
 
       await harness.dispose();
     });
@@ -110,7 +110,7 @@ void main() {
       expect(find.byType(EntryFormScreen), findsNothing,
           reason: 'El form sigue montado tras guardar; posible regresión gray screen');
       expect(find.text('Editar movimiento'), findsNothing);
-      expect(find.text('BO'), findsOneWidget);
+      expect(find.text('BOLSA + DÉBITO'), findsOneWidget);
 
       // Verificación de persistencia: el monto en la BD ahora es 200.
       final entry = await harness.deps.entriesDao.findById(entryId);

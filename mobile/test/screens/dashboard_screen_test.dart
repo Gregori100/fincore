@@ -16,9 +16,11 @@ void main() {
       // label + chip filtro). Aserción actualizada a findsAtLeast(2).
       expect(find.text('Bolsa'), findsAtLeastNWidgets(2));
       // Cards de totales.
-      expect(find.text('BO'), findsOneWidget);
-      expect(find.text('DE'), findsOneWidget);
-      expect(find.text('CR'), findsOneWidget);
+      expect(find.text('BOLSA + DÉBITO'), findsOneWidget);
+      // El sprint dashboard-clarity elimina "DE"/"CR" del display principal
+      // (solo quedan en Semantics.label). Cambio esperado.
+      expect(find.text('DEUDA'), findsOneWidget);
+      expect(find.text('DISPONIBLE'), findsOneWidget);
       // Sin movimientos: el placeholder textual del tile vacío.
       expect(
         find.textContaining('Aún no hay movimientos'),
