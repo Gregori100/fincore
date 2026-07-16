@@ -55,6 +55,7 @@ class MovementRow extends StatelessWidget {
       kind.label,
     ];
     final hasCategory = item.category != null;
+    final hasArchivedAccount = entryHasArchivedAccount(item);
 
     return BaseCard(
       onTap: () => context.push('/entries/${entry.id}/edit'),
@@ -103,7 +104,12 @@ class MovementRow extends StatelessWidget {
                 const SizedBox(height: kSpaceXs),
                 Text(
                   subtitleParts.join(' · '),
-                  style: overline,
+                  style: hasArchivedAccount
+                      ? overline.copyWith(
+                          fontStyle: FontStyle.italic,
+                          color: FincoreColors.textSubtle,
+                        )
+                      : overline,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

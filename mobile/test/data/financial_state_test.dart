@@ -139,7 +139,7 @@ void main() {
     // Primer subscribe: cache vacío, el primer evento viene de drift (300).
     expect(await state.watchBo().first, 300);
     // Archive ahora cancela el income en cascada, sin precondición de saldo.
-    await accountsDao.archive(debit);
+    await accountsDao.deleteAccount(debit);
     // RF-007 v4: replay-1 puede entregar el valor cacheado (300). Esperar 0.
     expect(await state.watchBo().firstWhere((v) => v == 0).timeout(const Duration(seconds: 5)), 0);
   });
@@ -161,7 +161,7 @@ void main() {
   });
 
   test('CR cuando no hay credit accounts es 0', () async {
-    await accountsDao.archive(credit); // archive en cascada
+    await accountsDao.deleteAccount(credit); // archive en cascada
     // RF-007 v4: si watchCr() ya emitió antes (50000 inicial), el replay-1
     // entrega ese valor. Esperar a que llegue 0 vía firstWhere.
     expect(await state.watchCr().firstWhere((v) => v == 0).timeout(const Duration(seconds: 5)), 0);
@@ -180,7 +180,7 @@ void main() {
     // RF-007 v4: con replay-1, esperar el valor esperado vía firstWhere para
     // no recibir un valor cacheado intermedio. `.timeout(5s)` defensivo (M1 v4).
     expect(await state.watchCr().firstWhere((v) => v == 80000).timeout(const Duration(seconds: 5)), 80000);
-    await accountsDao.archive(id);
+    await accountsDao.deleteAccount(id);
     expect(await state.watchCr().firstWhere((v) => v == 50000).timeout(const Duration(seconds: 5)), 50000);
   });
 
@@ -230,7 +230,7 @@ void main() {
 
   test('cache: archive(id) invalida automáticamente la cuenta archivada', () async {
     final sDebit1 = state.watchAccountBalance(debit, 'debit');
-    await accountsDao.archive(debit, state);
+    await accountsDao.deleteAccount(debit, state);
     final sDebit2 = state.watchAccountBalance(debit, 'debit');
     expect(identical(sDebit1, sDebit2), isFalse);
   });

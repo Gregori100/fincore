@@ -113,7 +113,7 @@ void main() {
 
     test('archive sin movimientos asociados OK y oculta de listAll', () async {
       final id = await accountsDao.create(name: 'X', type: 'debit');
-      await accountsDao.archive(id);
+      await accountsDao.deleteAccount(id);
       final all = await accountsDao.listAll();
       expect(all, isEmpty);
     });
@@ -149,7 +149,7 @@ void main() {
       expect(await accountsDao.countAssociatedEntries(debit), 3);
       expect((await entriesDao.watchPage().first).length, 4);
 
-      await accountsDao.archive(debit);
+      await accountsDao.deleteAccount(debit);
 
       // Cuenta archivada + movimientos asociados cancelados (3).
       expect(await accountsDao.listAll(), hasLength(2)); // Bolsa + credit
@@ -161,7 +161,7 @@ void main() {
     test('archive de Bolsa rechaza con protected_account', () async {
       final bolsaId = await accountsDao.createBolsa();
       expect(
-        () => accountsDao.archive(bolsaId),
+        () => accountsDao.deleteAccount(bolsaId),
         throwsA(isA<AccountsDaoError>()
             .having((e) => e.code, 'code', 'protected_account')),
       );
@@ -175,7 +175,7 @@ void main() {
         occurredAt: DateTime.now(),
       );
       // El archive NO rechaza: cancela el income y archiva la cuenta.
-      await accountsDao.archive(debitId);
+      await accountsDao.deleteAccount(debitId);
       expect(await accountsDao.listAll(), isEmpty);
       expect(await entriesDao.watchPage().first, isEmpty);
     });

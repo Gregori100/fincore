@@ -63,7 +63,7 @@ void main() {
 
   test('Crear movimiento con cuenta archivada como origin rechaza', () async {
     // Archivar debit (sin movimientos, saldo 0).
-    await accounts.archive(debit);
+    await accounts.deleteAccount(debit);
     expect(
       () => entries.registerExpense(
         accountOriginId: debit,
@@ -151,7 +151,7 @@ void main() {
     );
     // Otra cuenta debit para archivar.
     final other = await accounts.create(name: 'Santander', type: 'debit');
-    await accounts.archive(other);
+    await accounts.deleteAccount(other);
     expect(
       () => entries.updateEntry(id: id, accountOriginId: other),
       throwsA(isA<EntriesDaoError>()

@@ -15,6 +15,13 @@ class AccountPicker extends StatelessWidget {
   final ValueChanged<String?> onChanged;
   final String? excludeId;
 
+  /// Sprint flutter-accounts-archive-v1: cuando true, incluye cuentas
+  /// archivadas (`archived_at != null`) en el listado con sufijo
+  /// "· archivada" y estilo `textSubtle`. Default false — pickers de alta de
+  /// movimientos NO deben ofrecerlas. Filtros de /entries y pickers de
+  /// pantallas read-only sí las incluyen para poder navegar el histórico.
+  final bool includeArchived;
+
   const AccountPicker({
     super.key,
     required this.label,
@@ -23,12 +30,14 @@ class AccountPicker extends StatelessWidget {
     required this.selectedId,
     required this.onChanged,
     this.excludeId,
+    this.includeArchived = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final visible = accounts.where((a) {
       if (a.deletedAt != null) return false;
+      if (a.archivedAt != null && !includeArchived) return false;
       if (!allowedTypes.contains(a.type)) return false;
       if (excludeId != null && a.id == excludeId) return false;
       return true;
@@ -73,12 +82,21 @@ class AccountPicker extends StatelessWidget {
           ),
           onSelected: onChanged,
           dropdownMenuEntries: visible.map((a) {
+            final isArchived = a.archivedAt != null;
+            final baseLabel = '${a.name}  ·  ${_typeLabel(a.type)}';
+            final label = isArchived ? '$baseLabel  ·  archivada' : baseLabel;
+            final iconColor = isArchived
+                ? FincoreColors.textSubtle
+                : _typeColor(a.type);
+            final textColor = isArchived
+                ? FincoreColors.textSubtle
+                : FincoreColors.textPrimary;
             return DropdownMenuEntry<String>(
               value: a.id,
-              label: '${a.name}  ·  ${_typeLabel(a.type)}',
-              leadingIcon: Icon(_typeIcon(a.type), color: _typeColor(a.type), size: 18),
+              label: label,
+              leadingIcon: Icon(_typeIcon(a.type), color: iconColor, size: 18),
               style: ButtonStyle(
-                foregroundColor: WidgetStateProperty.all(FincoreColors.textPrimary),
+                foregroundColor: WidgetStateProperty.all(textColor),
               ),
             );
           }).toList(),

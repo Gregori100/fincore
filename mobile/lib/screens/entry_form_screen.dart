@@ -74,6 +74,28 @@ class _EntryFormScreenState extends State<EntryFormScreen>
 
   bool get _isEdit => widget.entryId != null;
 
+  /// Sprint flutter-accounts-archive-v1: si el movimiento en edición tiene
+  /// origen o destino apuntando a una cuenta archivada (`archived_at != null`
+  /// y `deleted_at IS NULL`), el form entero pasa a read-only. Sólo se puede
+  /// eliminar el movimiento. Detección basada en los ids del entry contra la
+  /// lista de cuentas cargada con `includeArchived: true` en modo edit.
+  bool get _lockedByArchivedAccount {
+    if (!_isEdit) return false;
+    Account? findById(String? id) {
+      if (id == null) return null;
+      for (final a in _accounts) {
+        if (a.id == id) return a;
+      }
+      return null;
+    }
+
+    final origin = findById(_originId);
+    final dest = findById(_destId);
+    if (origin?.archivedAt != null) return true;
+    if (dest?.archivedAt != null) return true;
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -232,7 +254,11 @@ class _EntryFormScreenState extends State<EntryFormScreen>
     if (!mounted) return;
     final deps = AppDependencies.of(context);
     try {
-      final accounts = await deps.accountsDao.listAll();
+      // Sprint flutter-accounts-archive-v1: en modo edit incluir archivadas
+      // para poder renderizar movimientos cuya cuenta pasó a archivada. El
+      // alta nunca las ofrece (pickers filtran `includeArchived: false`).
+      final accounts =
+          await deps.accountsDao.listAll(includeArchived: _isEdit);
       final categories = await deps.categoriesDao.listAll();
       if (!mounted) return;
       _accounts = accounts;
@@ -547,9 +573,13 @@ class _EntryFormScreenState extends State<EntryFormScreen>
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(_isEdit ? 'Editar movimiento' : 'Nuevo movimiento'),
+          title: Text(_isEdit
+              ? (_lockedByArchivedAccount
+                  ? 'Movimiento archivado'
+                  : 'Editar movimiento')
+              : 'Nuevo movimiento'),
           actions: [
-            if (_kind != null)
+            if (_kind != null && !_lockedByArchivedAccount)
               TextButton(
                 onPressed: _saving ? null : _submit,
                 style: TextButton.styleFrom(
@@ -586,37 +616,49 @@ class _EntryFormScreenState extends State<EntryFormScreen>
 
   Widget _buildForm() {
     final k = _kind!;
+    final locked = _lockedByArchivedAccount;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (locked) ...[
+          const _ArchivedEntryBanner(),
+          const SizedBox(height: kSpaceLg),
+        ],
+
         // 1. Header con chip del kind + acción "Cambiar" (alta) o pill informativo (edit).
         _KindChipHeader(
           kind: k,
           isEdit: _isEdit,
-          saving: _saving,
+          saving: _saving || locked,
           onChangePressed: _promptChangeKind,
         ),
         const SizedBox(height: kSpaceLg),
 
         // 2. Amount hero.
-        _AmountHero(
-          controller: _amountCtrl,
-          focusNode: _amountFocus,
-          color: _amountColor(k),
-          autofocus: !_isEdit,
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) return 'Ingresar el monto.';
-            final n = parseFormattedAmount(v);
-            if (n == null || n <= 0) return 'Debe ser mayor a 0.';
-            return null;
-          },
+        AbsorbPointer(
+          absorbing: locked,
+          child: Opacity(
+            opacity: locked ? 0.6 : 1.0,
+            child: _AmountHero(
+              controller: _amountCtrl,
+              focusNode: _amountFocus,
+              color: _amountColor(k),
+              autofocus: !_isEdit && !locked,
+              validator: (v) {
+                if (v == null || v.trim().isEmpty) return 'Ingresar el monto.';
+                final n = parseFormattedAmount(v);
+                if (n == null || n <= 0) return 'Debe ser mayor a 0.';
+                return null;
+              },
+            ),
+          ),
         ),
         const SizedBox(height: kSpaceLg),
 
         // 3. Fecha con quick chips.
         _DateQuickPicker(
           occurredAt: _occurredAt,
-          enabled: !_saving,
+          enabled: !_saving && !locked,
           onChanged: (dt) => setState(() => _occurredAt = dt),
           openCustomPicker: _pickDate,
         ),
@@ -624,25 +666,39 @@ class _EntryFormScreenState extends State<EntryFormScreen>
 
         // 4. Account pickers según kind.
         if (_needsOrigin(k)) ...[
-          AccountPicker(
-            label: _originLabel(k),
-            accounts: _accounts,
-            allowedTypes: _originTypes(k),
-            selectedId: _originId,
-            onChanged: (v) => setState(() => _originId = v),
-            excludeId: k == JournalKind.transfer ? _destId : null,
+          AbsorbPointer(
+            absorbing: locked,
+            child: Opacity(
+              opacity: locked ? 0.75 : 1.0,
+              child: AccountPicker(
+                label: _originLabel(k),
+                accounts: _accounts,
+                allowedTypes: _originTypes(k),
+                selectedId: _originId,
+                onChanged: (v) => setState(() => _originId = v),
+                excludeId: k == JournalKind.transfer ? _destId : null,
+                includeArchived: _isEdit,
+              ),
+            ),
           ),
           AccountBalanceHint(accountId: _originId, accounts: _accounts),
           const SizedBox(height: kSpaceXl),
         ],
         if (_needsDestination(k)) ...[
-          AccountPicker(
-            label: _destLabel(k),
-            accounts: _accounts,
-            allowedTypes: _destTypes(k),
-            selectedId: _destId,
-            onChanged: (v) => setState(() => _destId = v),
-            excludeId: k == JournalKind.transfer ? _originId : null,
+          AbsorbPointer(
+            absorbing: locked,
+            child: Opacity(
+              opacity: locked ? 0.75 : 1.0,
+              child: AccountPicker(
+                label: _destLabel(k),
+                accounts: _accounts,
+                allowedTypes: _destTypes(k),
+                selectedId: _destId,
+                onChanged: (v) => setState(() => _destId = v),
+                excludeId: k == JournalKind.transfer ? _originId : null,
+                includeArchived: _isEdit,
+              ),
+            ),
           ),
           AccountBalanceHint(accountId: _destId, accounts: _accounts),
           const SizedBox(height: kSpaceXl),
@@ -652,6 +708,7 @@ class _EntryFormScreenState extends State<EntryFormScreen>
         TextFormField(
           controller: _descCtrl,
           focusNode: _descFocus,
+          enabled: !locked,
           decoration: const InputDecoration(labelText: 'Descripción (opcional)'),
           textCapitalization: TextCapitalization.sentences,
           maxLines: 2,
@@ -661,13 +718,19 @@ class _EntryFormScreenState extends State<EntryFormScreen>
         // 6. Category picker.
         if (k.acceptsCategory) ...[
           const SizedBox(height: kSpaceSm),
-          CategoryPicker(
-            categories: _categories,
-            validAppliesTo: k.validCategoryAppliesTo,
-            selectedId: _categoryId,
-            onChanged: _onCategoryPickerChanged,
+          AbsorbPointer(
+            absorbing: locked,
+            child: Opacity(
+              opacity: locked ? 0.75 : 1.0,
+              child: CategoryPicker(
+                categories: _categories,
+                validAppliesTo: k.validCategoryAppliesTo,
+                selectedId: _categoryId,
+                onChanged: _onCategoryPickerChanged,
+              ),
+            ),
           ),
-          if (_categorySuggested && _categoryId != null) ...[
+          if (_categorySuggested && _categoryId != null && !locked) ...[
             const SizedBox(height: kSpaceXs),
             const _SuggestionChip(),
           ],
@@ -675,19 +738,20 @@ class _EntryFormScreenState extends State<EntryFormScreen>
 
         // 7. Footer con Guardar (redundante con el del AppBar) + Cancelar en edit.
         const SizedBox(height: kSpace2xl),
-        FilledButton(
-          onPressed: _saving ? null : _submit,
-          child: _saving
-              ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: FincoreColors.canvas,
-                  ),
-                )
-              : Text(_isEdit ? 'Guardar cambios' : 'Registrar movimiento'),
-        ),
+        if (!locked)
+          FilledButton(
+            onPressed: _saving ? null : _submit,
+            child: _saving
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: FincoreColors.canvas,
+                    ),
+                  )
+                : Text(_isEdit ? 'Guardar cambios' : 'Registrar movimiento'),
+          ),
         if (_isEdit) ...[
           const SizedBox(height: kSpaceMd),
           OutlinedButton.icon(
@@ -1118,6 +1182,61 @@ class _DateChip extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Banner de "movimiento archivado". Se muestra arriba del form cuando el
+/// entry en edición apunta a una cuenta con `archived_at != null`. Toda la
+/// edición queda bloqueada: sólo puede eliminarse el movimiento.
+class _ArchivedEntryBanner extends StatelessWidget {
+  const _ArchivedEntryBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: kSpaceLg, vertical: kSpaceMd),
+      decoration: BoxDecoration(
+        color: FincoreColors.categoryPurple
+            .withValues(alpha: FincoreColors.alphaTint),
+        borderRadius: BorderRadius.circular(kRadiusMd),
+        border: Border.all(
+          color: FincoreColors.categoryPurple
+              .withValues(alpha: FincoreColors.alphaHairline),
+        ),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.archive_outlined,
+              color: FincoreColors.categoryPurple, size: 20),
+          SizedBox(width: kSpaceMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Movimiento con cuenta archivada',
+                  style: TextStyle(
+                    color: FincoreColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: kSpace2xs),
+                Text(
+                  'Sólo se puede eliminar. Para editar de nuevo, desarchiva '
+                  'la cuenta involucrada.',
+                  style: TextStyle(
+                    color: FincoreColors.textSubtle,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

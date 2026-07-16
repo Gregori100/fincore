@@ -1783,7 +1783,7 @@ void main() {
         amount: 1000,
         occurredAt: DateTime(2024, 6, 1, 12),
       );
-      await accountsDao.archive(tempDebit);
+      await accountsDao.deleteAccount(tempDebit);
       final points = await reports
           .watchDailyBalance30d(kind: 'bo', now: anchor)
           .first;
@@ -2727,14 +2727,14 @@ void main() {
     test('UT-05: BD sin cuentas credit activas → lista vacía', () async {
       // El seed ya creó Bolsa (cash) + Visa (credit) en el setUp default.
       // Archivamos la Visa para dejar 0 credit activas.
-      await accountsDao.archive(credit);
+      await accountsDao.deleteAccount(credit);
       final list = await reports.watchCreditCards(now: refDate).first;
       expect(list, isEmpty);
     });
 
     test('UT-06: tarjeta sin metadata → nextClosingDate/etc en null', () async {
       // Archivar Visa del setUp para dejar solo la nueva.
-      await accountsDao.archive(credit);
+      await accountsDao.deleteAccount(credit);
       final id = await accountsDao.create(
         name: 'SinMeta',
         type: 'credit',
@@ -2766,7 +2766,7 @@ void main() {
         closingDay: 10,
         paymentDay: 20,
       );
-      await accountsDao.archive(archivedId);
+      await accountsDao.deleteAccount(archivedId);
       final list = await reports.watchCreditCards(now: refDate).first;
       // Debe estar solo Visa del setUp (activa).
       expect(list, hasLength(1));
@@ -2776,7 +2776,7 @@ void main() {
     test(
         'UT-08: orden RN-CC09 — proximidad pago asc con deuda; alfabético al final sin deuda',
         () async {
-      await accountsDao.archive(credit);
+      await accountsDao.deleteAccount(credit);
       final visaProxima = await accountsDao.create(
         name: 'ProximaPago',
         type: 'credit',
@@ -2829,7 +2829,7 @@ void main() {
 
     test('UT-09: usedPct correcto para deuda 5000 / límite 10000 → 50%',
         () async {
-      await accountsDao.archive(credit);
+      await accountsDao.deleteAccount(credit);
       final id = await accountsDao.create(
         name: 'Mitad',
         type: 'credit',
@@ -2849,7 +2849,7 @@ void main() {
     });
 
     test('UT-10: usedPct = null cuando credit_limit = 0 (CB-D19)', () async {
-      await accountsDao.archive(credit);
+      await accountsDao.deleteAccount(credit);
       final id = await accountsDao.create(
         name: 'SinLimite',
         type: 'credit',
@@ -2869,7 +2869,7 @@ void main() {
 
     test('UT-11: isOverdue = true cuando debt > credit_limit (CB-D17)',
         () async {
-      await accountsDao.archive(credit);
+      await accountsDao.deleteAccount(credit);
       final id = await accountsDao.create(
         name: 'Excedida',
         type: 'credit',
@@ -2919,7 +2919,7 @@ void main() {
 
     test('CB-D18: debt=0 con minimumPaymentPct → isDebtFree',
         () async {
-      await accountsDao.archive(credit);
+      await accountsDao.deleteAccount(credit);
       final id = await accountsDao.create(
         name: 'SinDeudaConPct',
         type: 'credit',

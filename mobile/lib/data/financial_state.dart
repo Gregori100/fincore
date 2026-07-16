@@ -82,7 +82,7 @@ class FinancialStateService {
   }
 
   /// Limpia todas las entradas del cache asociadas a una cuenta específica.
-  /// Llamada desde `AccountsDao.archive(id)` para liberar referencias al stream
+  /// Llamada desde `AccountsDao.deleteAccount(id)` para liberar referencias al stream
   /// de una cuenta que dejó de aparecer en el listado activo.
   void invalidateAccount(String accountId) {
     final keysToRemove = _balanceCache.keys

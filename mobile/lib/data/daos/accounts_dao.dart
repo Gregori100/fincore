@@ -21,11 +21,15 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
     with _$AccountsDaoMixin {
   AccountsDao(super.db);
 
-  /// Cuentas activas (no archivadas), ordenadas por tipo y luego por nombre.
-  /// Stream reactivo: se reemite cuando algo cambia en la tabla accounts.
+  /// Cuentas activas (no archivadas y no eliminadas), ordenadas por tipo y
+  /// nombre. Stream reactivo: se reemite cuando algo cambia en `accounts`.
+  ///
+  /// Sprint flutter-accounts-archive-v1: además de `deleted_at IS NULL`, exige
+  /// `archived_at IS NULL` para excluir cuentas archivadas de los pickers de
+  /// nuevo movimiento y de la vista principal de /accounts.
   Stream<List<Account>> watchActive() {
     return (select(accounts)
-          ..where((a) => a.deletedAt.isNull())
+          ..where((a) => a.deletedAt.isNull() & a.archivedAt.isNull())
           ..orderBy([
             (a) => OrderingTerm(expression: a.type),
             (a) => OrderingTerm(expression: a.name),
@@ -33,11 +37,26 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
         .watch();
   }
 
-  /// Todas las cuentas, incluyendo archivadas si se solicita.
+  /// Cuentas archivadas (soft-archive, reversible). Stream reactivo. Preserva
+  /// el histórico contable: los movimientos donde figuran siguen intactos y
+  /// aparecen en reportes.
+  Stream<List<Account>> watchArchived() {
+    return (select(accounts)
+          ..where((a) => a.deletedAt.isNull() & a.archivedAt.isNotNull())
+          ..orderBy([
+            (a) => OrderingTerm(expression: a.type),
+            (a) => OrderingTerm(expression: a.name),
+          ]))
+        .watch();
+  }
+
+  /// Todas las cuentas no eliminadas. Cuando `includeArchived` es false
+  /// (default) sólo devuelve activas; cuando true incluye también las
+  /// archivadas. Las eliminadas (`deleted_at IS NOT NULL`) nunca se devuelven.
   Future<List<Account>> listAll({bool includeArchived = false}) {
-    final query = select(accounts);
+    final query = select(accounts)..where((a) => a.deletedAt.isNull());
     if (!includeArchived) {
-      query.where((a) => a.deletedAt.isNull());
+      query.where((a) => a.archivedAt.isNull());
     }
     query.orderBy([
       (a) => OrderingTerm(expression: a.type),
@@ -48,6 +67,15 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
 
   Future<Account?> findById(String id) {
     return (select(accounts)..where((a) => a.id.equals(id))).getSingleOrNull();
+  }
+
+  /// Busca una cuenta por id incluyendo archivadas (pero no eliminadas). Útil
+  /// para pantallas read-only (edición bloqueada de entries con cuenta
+  /// archivada, badges en /entries).
+  Future<Account?> findActiveOrArchivedById(String id) {
+    return (select(accounts)
+          ..where((a) => a.id.equals(id) & a.deletedAt.isNull()))
+        .getSingleOrNull();
   }
 
   /// Crea cuenta debit o credit. La Bolsa (cash) se crea solo via createBolsa.
@@ -201,14 +229,15 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
     );
   }
 
-  /// Archivar (soft delete) en cascada: cancela en bloque todos los movimientos
-  /// donde la cuenta aparezca como origin o destination (sin importar el kind,
-  /// incluidos pagos a tarjeta y transferencias) y después marca la cuenta como
-  /// archivada. Es definitivo: ni la cuenta ni los movimientos se reactivan.
+  /// Archivar (soft-archive reversible): marca la cuenta como archivada. NO
+  /// toca los movimientos. La cuenta desaparece de pickers de alta y del
+  /// segmento "Activas" de /accounts, pero sigue apareciendo en /entries,
+  /// filtros con `includeArchived`, reportes y KPIs (BO/DE/CR).
   ///
-  /// El stateService quedó como parámetro opcional para compatibilidad de
-  /// callers; ya no se usa para validar saldo (libreta libre completa).
-  Future<void> archive(String id, [FinancialStateService? stateService]) async {
+  /// Es reversible via `unarchive`. Idempotente: llamar sobre una cuenta ya
+  /// archivada sobrescribe `archived_at` con el nuevo timestamp sin lanzar
+  /// error. Rechaza la Bolsa (`is_protected=true`).
+  Future<void> archive(String id) async {
     final existing = await findById(id);
     if (existing == null) {
       throw const AccountsDaoError('not_found', 'La cuenta no existe.');
@@ -216,7 +245,66 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
     if (existing.isProtected) {
       throw const AccountsDaoError(
         'protected_account',
-        'La Bolsa no se puede modificar ni eliminar.',
+        'La Bolsa no se puede archivar.',
+      );
+    }
+    final now = DateTime.now();
+    await (update(accounts)..where((a) => a.id.equals(id))).write(
+      AccountsCompanion(
+        archivedAt: Value(now),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  /// Desarchivar: devuelve la cuenta al estado Activa. Idempotente sobre
+  /// cuentas que ya estén activas (no-op silencioso). Rechaza la Bolsa por
+  /// consistencia (nunca debería estar archivada, pero si por algún motivo
+  /// llega ahí, el DAO se resiste).
+  Future<void> unarchive(String id) async {
+    final existing = await findById(id);
+    if (existing == null) {
+      throw const AccountsDaoError('not_found', 'La cuenta no existe.');
+    }
+    if (existing.isProtected) {
+      throw const AccountsDaoError(
+        'protected_account',
+        'La Bolsa no se puede desarchivar.',
+      );
+    }
+    final now = DateTime.now();
+    await (update(accounts)..where((a) => a.id.equals(id))).write(
+      AccountsCompanion(
+        archivedAt: const Value(null),
+        updatedAt: Value(now),
+      ),
+    );
+  }
+
+  /// Eliminar en cascada (destructivo): cancela en bloque todos los
+  /// movimientos donde la cuenta aparezca como origin o destination (sin
+  /// importar el kind, incluidos pagos a tarjeta y transferencias) y después
+  /// marca la cuenta como eliminada (`deleted_at`). Es definitivo: ni la
+  /// cuenta ni los movimientos se reactivan.
+  ///
+  /// Sprint flutter-accounts-archive-v1: este método reemplaza al antiguo
+  /// `archive` (que hacía justamente esto). El nuevo `archive` es reversible
+  /// y no toca movimientos. Nombrado `deleteAccount` (no `delete`) para no
+  /// chocar con `DatabaseConnectionUser.delete` de drift — mismo patrón que
+  /// `updateAccount`.
+  ///
+  /// El stateService quedó como parámetro opcional para compatibilidad de
+  /// callers; ya no se usa para validar saldo (libreta libre completa).
+  Future<void> deleteAccount(String id,
+      [FinancialStateService? stateService]) async {
+    final existing = await findById(id);
+    if (existing == null) {
+      throw const AccountsDaoError('not_found', 'La cuenta no existe.');
+    }
+    if (existing.isProtected) {
+      throw const AccountsDaoError(
+        'protected_account',
+        'La Bolsa no se puede eliminar.',
       );
     }
     final now = DateTime.now();
@@ -240,9 +328,6 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
         ),
       );
     });
-    // Invalidar cache de streams del FinancialStateService DESPUÉS de la
-    // transacción (RF-012). El stream de saldo de esta cuenta ya no se
-    // necesita; los listeners del Dashboard se desmontan por watchActive.
     stateService?.invalidateAccount(id);
   }
 

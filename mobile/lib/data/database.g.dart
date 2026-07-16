@@ -176,6 +176,17 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _archivedAtMeta = const VerificationMeta(
+    'archivedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> archivedAt = GeneratedColumn<DateTime>(
+    'archived_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -193,6 +204,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     createdAt,
     updatedAt,
     deletedAt,
+    archivedAt,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -324,6 +336,12 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
       );
     }
+    if (data.containsKey('archived_at')) {
+      context.handle(
+        _archivedAtMeta,
+        archivedAt.isAcceptableOrUnknown(data['archived_at']!, _archivedAtMeta),
+      );
+    }
     return context;
   }
 
@@ -402,6 +420,10 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}deleted_at'],
       ),
+      archivedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}archived_at'],
+      ),
     );
   }
 
@@ -427,6 +449,7 @@ class Account extends DataClass implements Insertable<Account> {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
+  final DateTime? archivedAt;
   const Account({
     required this.id,
     required this.name,
@@ -443,6 +466,7 @@ class Account extends DataClass implements Insertable<Account> {
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
+    this.archivedAt,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -473,6 +497,9 @@ class Account extends DataClass implements Insertable<Account> {
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
       map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    if (!nullToAbsent || archivedAt != null) {
+      map['archived_at'] = Variable<DateTime>(archivedAt);
     }
     return map;
   }
@@ -512,6 +539,10 @@ class Account extends DataClass implements Insertable<Account> {
           deletedAt == null && nullToAbsent
               ? const Value.absent()
               : Value(deletedAt),
+      archivedAt:
+          archivedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(archivedAt),
     );
   }
 
@@ -538,6 +569,7 @@ class Account extends DataClass implements Insertable<Account> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      archivedAt: serializer.fromJson<DateTime?>(json['archivedAt']),
     );
   }
   @override
@@ -559,6 +591,7 @@ class Account extends DataClass implements Insertable<Account> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'archivedAt': serializer.toJson<DateTime?>(archivedAt),
     };
   }
 
@@ -578,6 +611,7 @@ class Account extends DataClass implements Insertable<Account> {
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
+    Value<DateTime?> archivedAt = const Value.absent(),
   }) => Account(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -597,6 +631,7 @@ class Account extends DataClass implements Insertable<Account> {
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    archivedAt: archivedAt.present ? archivedAt.value : this.archivedAt,
   );
   Account copyWithCompanion(AccountsCompanion data) {
     return Account(
@@ -632,6 +667,8 @@ class Account extends DataClass implements Insertable<Account> {
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      archivedAt:
+          data.archivedAt.present ? data.archivedAt.value : this.archivedAt,
     );
   }
 
@@ -652,7 +689,8 @@ class Account extends DataClass implements Insertable<Account> {
           ..write('minimumFloor: $minimumFloor, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('archivedAt: $archivedAt')
           ..write(')'))
         .toString();
   }
@@ -674,6 +712,7 @@ class Account extends DataClass implements Insertable<Account> {
     createdAt,
     updatedAt,
     deletedAt,
+    archivedAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -693,7 +732,8 @@ class Account extends DataClass implements Insertable<Account> {
           other.minimumFloor == this.minimumFloor &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
-          other.deletedAt == this.deletedAt);
+          other.deletedAt == this.deletedAt &&
+          other.archivedAt == this.archivedAt);
 }
 
 class AccountsCompanion extends UpdateCompanion<Account> {
@@ -712,6 +752,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<DateTime?> archivedAt;
   final Value<int> rowid;
   const AccountsCompanion({
     this.id = const Value.absent(),
@@ -729,6 +770,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.archivedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   AccountsCompanion.insert({
@@ -747,6 +789,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     required DateTime createdAt,
     required DateTime updatedAt,
     this.deletedAt = const Value.absent(),
+    this.archivedAt = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        name = Value(name),
@@ -769,6 +812,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<DateTime>? archivedAt,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -787,6 +831,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (archivedAt != null) 'archived_at': archivedAt,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -807,6 +852,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<DateTime?>? archivedAt,
     Value<int>? rowid,
   }) {
     return AccountsCompanion(
@@ -825,6 +871,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      archivedAt: archivedAt ?? this.archivedAt,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -877,6 +924,9 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
+    if (archivedAt.present) {
+      map['archived_at'] = Variable<DateTime>(archivedAt.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -901,6 +951,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
+          ..write('archivedAt: $archivedAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3768,6 +3819,7 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
+      Value<DateTime?> archivedAt,
       Value<int> rowid,
     });
 typedef $$AccountsTableUpdateCompanionBuilder =
@@ -3787,6 +3839,7 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<DateTime?> archivedAt,
       Value<int> rowid,
     });
 
@@ -3871,6 +3924,11 @@ class $$AccountsTableFilterComposer
 
   ColumnFilters<DateTime> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -3958,6 +4016,11 @@ class $$AccountsTableOrderingComposer
     column: $table.deletedAt,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$AccountsTableAnnotationComposer
@@ -4031,6 +4094,11 @@ class $$AccountsTableAnnotationComposer
 
   GeneratedColumn<DateTime> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get archivedAt => $composableBuilder(
+    column: $table.archivedAt,
+    builder: (column) => column,
+  );
 }
 
 class $$AccountsTableTableManager
@@ -4076,6 +4144,7 @@ class $$AccountsTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AccountsCompanion(
                 id: id,
@@ -4093,6 +4162,7 @@ class $$AccountsTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                archivedAt: archivedAt,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -4112,6 +4182,7 @@ class $$AccountsTableTableManager
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<DateTime?> archivedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => AccountsCompanion.insert(
                 id: id,
@@ -4129,6 +4200,7 @@ class $$AccountsTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                archivedAt: archivedAt,
                 rowid: rowid,
               ),
           withReferenceMapper:

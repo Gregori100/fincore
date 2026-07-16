@@ -51,6 +51,12 @@ class Accounts extends Table {
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get deletedAt => dateTime().nullable()();
+  // Sprint flutter-accounts-archive-v1 (schemaVersion 9): archived_at separa
+  // "archivada" (reversible, preserva histórico y reportes) de deleted_at
+  // (destructivo, cascada de journal_entries). Una cuenta con
+  // archived_at != null desaparece de pickers de alta pero sigue apareciendo
+  // en /entries, reportes y KPIs.
+  DateTimeColumn get archivedAt => dateTime().nullable()();
 
   @override
   Set<Column> get primaryKey => {id};
@@ -266,7 +272,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -598,6 +604,80 @@ class FincoreDatabase extends _$FincoreDatabase {
             await customStatement(
               'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
               'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            return;
+          }
+          // Migración 8 → 9 (sprint flutter-accounts-archive-v1): agrega
+          // columna `archived_at` a `accounts` para separar archivado
+          // reversible del soft-delete cascada. Aditiva, no destructiva.
+          if (from == 8 && to == 9) {
+            await customStatement(
+              'ALTER TABLE accounts ADD COLUMN archived_at TEXT',
+            );
+            return;
+          }
+          // Migración 7 → 9 (defensiva): combina 7→8 + 8→9.
+          if (from == 7 && to == 9) {
+            await customStatement(
+              'ALTER TABLE weekly_budgets ADD COLUMN is_template '
+              'INTEGER NOT NULL DEFAULT 0 '
+              'CHECK (is_template IN (0, 1))',
+            );
+            await customStatement(
+              'DROP TABLE IF EXISTS budget_template_items',
+            );
+            await customStatement('DROP TABLE IF EXISTS budget_templates');
+            await customStatement(
+              'DROP INDEX IF EXISTS idx_bt_items_template_sort',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            await customStatement(
+              'ALTER TABLE accounts ADD COLUMN archived_at TEXT',
+            );
+            return;
+          }
+          // Migración 6 → 9 (defensiva): combina 6→8 + 8→9.
+          if (from == 6 && to == 9) {
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS weekly_budgets ('
+              'id TEXT NOT NULL, '
+              'week_start_date TEXT NOT NULL, '
+              'label TEXT NOT NULL, '
+              'is_template INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1)), '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS weekly_budget_items ('
+              'id TEXT NOT NULL, '
+              'budget_id TEXT NOT NULL REFERENCES weekly_budgets (id), '
+              'name TEXT NOT NULL, '
+              'category_id TEXT NULL REFERENCES categories (id), '
+              'amount REAL NOT NULL, '
+              'kind TEXT NOT NULL, '
+              'sort_order INTEGER NOT NULL, '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_start '
+              'ON weekly_budgets(week_start_date)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_wb_items_budget_sort '
+              'ON weekly_budget_items(budget_id, sort_order)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            await customStatement(
+              'ALTER TABLE accounts ADD COLUMN archived_at TEXT',
             );
             return;
           }
