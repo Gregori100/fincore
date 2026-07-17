@@ -187,6 +187,17 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     });
   }
 
+  /// Sprint flutter-entries-bulk-recategorize-v1: fetch por lista de ids.
+  /// Devuelve solo las columnas `JournalEntry` (sin joins). Filtra los
+  /// soft-deleted. Sirve para saber los `kind`s del batch antes de abrir
+  /// el sheet de asignar categoría.
+  Future<List<JournalEntry>> findByIds(List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    return await (select(journalEntries)
+          ..where((e) => e.id.isIn(ids) & e.deletedAt.isNull()))
+        .get();
+  }
+
   Future<EntryWithRelations?> findById(String id) async {
     final origin = alias(accounts, 'origin');
     final dest = alias(accounts, 'dest');
@@ -869,6 +880,69 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         updatedAt: Value(DateTime.now()),
       ),
     );
+  }
+
+  /// Sprint flutter-entries-bulk-recategorize-v1: reasigna la categoría de
+  /// varios movimientos en una sola transacción. Cada entry se valida con
+  /// `_validateCategoryForKind` (misma lógica que `updateEntry`). Al primer
+  /// conflicto la transacción aborta y nada se persiste.
+  ///
+  /// - `entryIds`: journal_entries.id a actualizar. Deben existir y NO
+  ///   estar soft-deleted; caso contrario, `not_found` global.
+  /// - `categoryId`: nueva categoría (activa, compatible con TODOS los
+  ///   kinds del batch) o `null` para desasignar (limpieza universal —
+  ///   cualquier kind admite null).
+  ///
+  /// Errores tipados posibles:
+  /// - `not_found` — algún id no existe o está soft-deleted.
+  /// - `immutable_loan_payment` — algún entry pertenece a un préstamo.
+  /// - `invalid_category_applies_to` — la categoría no aplica a algún
+  ///   kind del batch, o el batch contiene entries de kind no-categorizable
+  ///   (`transfer`/`debt_payment`/`loan_payment`) con `categoryId != null`.
+  ///
+  /// Retorna el número de filas actualizadas.
+  Future<int> bulkUpdateCategory({
+    required List<String> entryIds,
+    required String? categoryId,
+  }) async {
+    if (entryIds.isEmpty) return 0;
+    return await transaction(() async {
+      final rows = await (select(journalEntries)
+            ..where((e) => e.id.isIn(entryIds) & e.deletedAt.isNull()))
+          .get();
+      if (rows.length != entryIds.toSet().length) {
+        throw const EntriesDaoError(
+          'not_found',
+          'Uno o más movimientos no existen o están cancelados.',
+        );
+      }
+      // Defensa idéntica a `updateEntry`/`cancel`: entries ligados a un
+      // préstamo se administran solo desde /loans. Bloquear el bulk aunque
+      // el usuario los haya seleccionado por accidente.
+      for (final row in rows) {
+        if (row.loanId != null) {
+          throw const EntriesDaoError(
+            'immutable_loan_payment',
+            'Uno o más movimientos pertenecen a un préstamo y no pueden '
+                're-categorizarse desde acá.',
+          );
+        }
+      }
+      // categoryId == null → desasignación universal, cualquier kind lo
+      // admite (incluidos transfer/debt_payment que ya deberían tener null).
+      if (categoryId != null) {
+        for (final row in rows) {
+          await _validateCategoryForKind(row.kind, categoryId);
+        }
+      }
+      await (update(journalEntries)..where((e) => e.id.isIn(entryIds))).write(
+        JournalEntriesCompanion(
+          categoryId: Value(categoryId),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      return rows.length;
+    });
   }
 
   /// Cancelar (soft delete). Terminal — sin reactivación.
