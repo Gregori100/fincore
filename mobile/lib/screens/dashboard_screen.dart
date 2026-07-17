@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/database.dart' as db;
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
@@ -375,16 +376,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 /// Calcula cuántos días faltan para el próximo `paymentDay` (1-28) desde
-/// `DateTime.now()`. Si hoy es día 25 y payment_day = 5, retorna días
-/// restantes al 5 del mes siguiente. Nunca retorna negativo.
-int _daysUntilPayment(int paymentDay) {
-  final now = DateTime.now();
-  DateTime target = DateTime(now.year, now.month, paymentDay);
-  if (target.isBefore(DateTime(now.year, now.month, now.day))) {
-    target = DateTime(now.year, now.month + 1, paymentDay);
-  }
-  return target.difference(DateTime(now.year, now.month, now.day)).inDays;
-}
+/// Hotfix quality-review M5: delega en `LoansDao.daysUntilNextPaymentDay`
+/// (canonical). Este wrapper queda por conveniencia local para no reescribir
+/// todos los call sites; los tests unitarios viven en `loans_dao_test.dart`.
+int _daysUntilPayment(int paymentDay) =>
+    LoansDao.daysUntilNextPaymentDay(paymentDay);
 
 /// KPI naranja "PRÉSTAMO" full-width. Se renderiza sólo cuando el total > 0
 /// (RN-L20). Tap → `/loans`.
@@ -529,33 +525,39 @@ class _ChipShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => context.push('/loans/$loanId'),
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: FincoreColors.alphaTint),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: color.withValues(alpha: FincoreColors.alphaHairline),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(
-                color: FincoreColors.textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
+    // Hotfix quality-review M8: minHeight 44dp para respetar el mínimo
+    // táctil de Material. Antes el chip quedaba ~30dp y fallaba touch en
+    // uso mobile real.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: InkWell(
+        onTap: () => context.push('/loans/$loanId'),
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: FincoreColors.alphaTint),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: color.withValues(alpha: FincoreColors.alphaHairline),
             ),
-          ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: FincoreColors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

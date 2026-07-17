@@ -548,6 +548,32 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         paymentDay: paymentDay,
       );
 
+  /// Hotfix quality-review B5: cap sanitario para evitar SqliteException
+  /// "too many SQL variables". Con `SQLITE_MAX_VARIABLE_NUMBER = 999` en
+  /// sqlite <3.32, un préstamo con `contract_date` remoto (ej. legacy o
+  /// backup manipulado con 1900-01-01) generaría cientos de meses en el
+  /// `IN (?,?,?...)` de `watchMonthsOverdue`. Recortar a los últimos 60
+  /// meses cubre el uso real (más de 5 años atrasados no aporta info
+  /// distinta al usuario) sin perder correctitud.
+  static const int _maxOverdueMonthsWindow = 60;
+
+  /// Hotfix quality-review M5: expone el cálculo de "días hasta el próximo
+  /// `paymentDay`" (con roll al mes siguiente si ya pasó) como API pública
+  /// del DAO. Antes vivía en `dashboard_screen._daysUntilPayment`, sin
+  /// test unitario.
+  static int daysUntilNextPaymentDay(int paymentDay, {DateTime? now}) {
+    final actualNow = now ?? DateTime.now();
+    DateTime target =
+        DateTime(actualNow.year, actualNow.month, paymentDay);
+    final today =
+        DateTime(actualNow.year, actualNow.month, actualNow.day);
+    if (target.isBefore(today)) {
+      target = DateTime(actualNow.year, actualNow.month + 1, paymentDay);
+    }
+    final diff = target.difference(today).inDays;
+    return diff < 0 ? 0 : diff;
+  }
+
   static List<String> _expectedPaymentMonths({
     required DateTime contractDate,
     required DateTime today,
@@ -580,6 +606,12 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         '${cursor.month.toString().padLeft(2, '0')}',
       );
       cursor = DateTime(cursor.year, cursor.month + 1, 1);
+    }
+    // Hotfix quality-review B5: recorta al windows de los últimos 60 meses.
+    // El count de "meses atrasados" queda saturado a 60 para contract_dates
+    // extremos, que es lo esperado (chip UI corta en 12+ igual).
+    if (months.length > _maxOverdueMonthsWindow) {
+      return months.sublist(months.length - _maxOverdueMonthsWindow);
     }
     return months;
   }

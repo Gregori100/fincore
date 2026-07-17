@@ -341,7 +341,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -411,6 +411,19 @@ class FincoreDatabase extends _$FincoreDatabase {
           await customStatement(
             'CREATE INDEX IF NOT EXISTS idx_entries_loan '
             'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
+          );
+          // Hotfix quality-review B20 (schemaVersion 12): índices parciales
+          // en la tabla `loans` para consistencia con el resto del schema
+          // (todas las FKs y todos los deleted_at ya estaban indexados).
+          // Impacto real bajo en single-user (<100 préstamos) pero cierra
+          // deuda de patrón.
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_loans_deleted '
+            'ON loans(deleted_at)',
+          );
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_loans_dest_account '
+            'ON loans(destination_account_id) WHERE deleted_at IS NULL',
           );
         },
         onUpgrade: (m, from, to) async {
@@ -909,6 +922,117 @@ class FincoreDatabase extends _$FincoreDatabase {
             );
             return;
           }
+          // Hotfix quality-review M4: ramas defensivas 5→11, 6→11, 7→11.
+          // Antes crasheaban con `UnimplementedError` (guardrail RN-H02).
+          // Componen las transiciones intermedias con customStatement en
+          // lugar de recursión para preservar la política aditiva.
+          if (from == 5 && to == 11) {
+            // 5→6: minimum_capital_pct + minimum_floor (idempotente).
+            await _maybeAddColumn('accounts', 'minimum_capital_pct',
+                'REAL NOT NULL DEFAULT 0.015');
+            await _maybeAddColumn(
+                'accounts', 'minimum_floor', 'REAL NOT NULL DEFAULT 150');
+            // 6→9 (skip 7→8 porque nunca hubo templates en v5).
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            // 9→11: loans schema (ya idempotente).
+            await _createLoansSchema();
+            return;
+          }
+          if (from == 6 && to == 11) {
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            return;
+          }
+          if (from == 7 && to == 11) {
+            // 7→8: is_template + drop templates + índice (idempotente).
+            await _maybeAddColumn('weekly_budgets', 'is_template',
+                'INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1))');
+            await customStatement(
+              'DROP TABLE IF EXISTS budget_template_items',
+            );
+            await customStatement('DROP TABLE IF EXISTS budget_templates');
+            await customStatement(
+              'DROP INDEX IF EXISTS idx_bt_items_template_sort',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            return;
+          }
+          // Hotfix quality-review B20: migración 11→12 agrega índices en la
+          // tabla `loans` (deleted_at, destination_account_id). Aditiva.
+          if (from == 11 && to == 12) {
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_loans_deleted '
+              'ON loans(deleted_at)',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_loans_dest_account '
+              'ON loans(destination_account_id) WHERE deleted_at IS NULL',
+            );
+            return;
+          }
+          // Ramas defensivas 8→12, 9→12, 10→12: componer las de 8/9/10→11 +
+          // los índices nuevos de 11→12.
+          if (from == 10 && to == 12) {
+            await _maybeAddColumn(
+                'journal_entries',
+                'is_monthly_payment',
+                'INTEGER NOT NULL DEFAULT 0 CHECK (is_monthly_payment IN (0, 1))');
+            await _createLoansIndexes();
+            return;
+          }
+          if (from == 9 && to == 12) {
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            return;
+          }
+          if (from == 8 && to == 12) {
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            return;
+          }
+          if (from == 7 && to == 12) {
+            await _maybeAddColumn('weekly_budgets', 'is_template',
+                'INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1))');
+            await customStatement(
+                'DROP TABLE IF EXISTS budget_template_items');
+            await customStatement('DROP TABLE IF EXISTS budget_templates');
+            await customStatement(
+                'DROP INDEX IF EXISTS idx_bt_items_template_sort');
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            return;
+          }
+          if (from == 6 && to == 12) {
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            return;
+          }
+          if (from == 5 && to == 12) {
+            await _maybeAddColumn('accounts', 'minimum_capital_pct',
+                'REAL NOT NULL DEFAULT 0.015');
+            await _maybeAddColumn(
+                'accounts', 'minimum_floor', 'REAL NOT NULL DEFAULT 150');
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            return;
+          }
           // Migración 8 → 11 (defensiva): combina 8→9 (archived_at) +
           // 9→11.
           if (from == 8 && to == 11) {
@@ -970,4 +1094,112 @@ class FincoreDatabase extends _$FincoreDatabase {
           await customStatement('PRAGMA foreign_keys = ON');
         },
       );
+
+  /// Hotfix quality-review M4: `ALTER TABLE ADD COLUMN` no acepta `IF NOT
+  /// EXISTS` en SQLite. Probamos primero contra `pragma_table_info` para
+  /// que las migraciones defensivas sean idempotentes bajo reintento
+  /// parcial y contra BDs de test recreadas.
+  Future<void> _maybeAddColumn(
+    String table,
+    String column,
+    String spec,
+  ) async {
+    final probe = await customSelect(
+      "SELECT COUNT(*) AS c FROM pragma_table_info('$table') WHERE name = ?",
+      variables: [Variable.withString(column)],
+    ).getSingle();
+    if (probe.read<int>('c') == 0) {
+      await customStatement('ALTER TABLE $table ADD COLUMN $column $spec');
+    }
+  }
+
+  /// Hotfix quality-review M4: helper compartido para las migraciones
+  /// defensivas que aterrizan en v11 desde versiones anteriores a 8. Crea
+  /// las tablas `weekly_budgets`/`weekly_budget_items` post-refactor
+  /// (sin `budget_templates`) y sus índices. Idempotente vía IF NOT EXISTS.
+  Future<void> _createWeeklyBudgetTablesRefactored() async {
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS weekly_budgets ('
+      'id TEXT NOT NULL, '
+      'week_start_date TEXT NOT NULL, '
+      'label TEXT NOT NULL, '
+      'is_template INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1)), '
+      'created_at TEXT NOT NULL, '
+      'updated_at TEXT NOT NULL, '
+      'PRIMARY KEY (id))',
+    );
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS weekly_budget_items ('
+      'id TEXT NOT NULL, '
+      'budget_id TEXT NOT NULL REFERENCES weekly_budgets (id), '
+      'name TEXT NOT NULL, '
+      'category_id TEXT NULL REFERENCES categories (id), '
+      'amount REAL NOT NULL, '
+      'kind TEXT NOT NULL, '
+      'sort_order INTEGER NOT NULL, '
+      'created_at TEXT NOT NULL, '
+      'updated_at TEXT NOT NULL, '
+      'PRIMARY KEY (id))',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_start '
+      'ON weekly_budgets(week_start_date)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_wb_items_budget_sort '
+      'ON weekly_budget_items(budget_id, sort_order)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+      'ON weekly_budgets(is_template) WHERE is_template = 1',
+    );
+  }
+
+  /// Hotfix quality-review M4: helper compartido para el schema de préstamos
+  /// (tabla `loans` + 4 columnas en `journal_entries` + índice parcial).
+  /// Idempotente vía IF NOT EXISTS. Sólo agrega `is_monthly_payment` si
+  /// aún no existe (defensa contra bump inline previo).
+  Future<void> _createLoansSchema() async {
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS loans ('
+      'id TEXT NOT NULL, '
+      'name TEXT NOT NULL, '
+      'principal_amount REAL NOT NULL, '
+      'monthly_payment REAL NOT NULL, '
+      'initial_duration_months INTEGER NOT NULL, '
+      'current_duration_months INTEGER NOT NULL, '
+      'payment_day INTEGER NOT NULL, '
+      'contract_date TEXT NOT NULL, '
+      'destination_account_id TEXT NOT NULL REFERENCES accounts (id), '
+      'closed_at TEXT NULL, '
+      'close_reason TEXT NULL, '
+      'created_at TEXT NOT NULL, '
+      'updated_at TEXT NOT NULL, '
+      'deleted_at TEXT NULL, '
+      'PRIMARY KEY (id))',
+    );
+    // `ALTER TABLE ADD COLUMN` NO acepta IF NOT EXISTS en SQLite. Reusamos
+    // `_maybeAddColumn` para probar antes de agregar.
+    await _maybeAddColumn(
+        'journal_entries', 'loan_id', 'TEXT REFERENCES loans (id)');
+    await _maybeAddColumn('journal_entries', 'principal_amount', 'REAL');
+    await _maybeAddColumn('journal_entries', 'interest_amount', 'REAL');
+    await _maybeAddColumn('journal_entries', 'is_monthly_payment',
+        'INTEGER NOT NULL DEFAULT 0 CHECK (is_monthly_payment IN (0, 1))');
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_loan '
+      'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
+    );
+  }
+
+  /// Hotfix quality-review B20: índices en la tabla `loans` (11→12).
+  Future<void> _createLoansIndexes() async {
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_loans_deleted ON loans(deleted_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_loans_dest_account '
+      'ON loans(destination_account_id) WHERE deleted_at IS NULL',
+    );
+  }
 }

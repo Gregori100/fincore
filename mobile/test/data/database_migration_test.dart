@@ -402,6 +402,48 @@ void main() {
   });
 
   test(
+      'MG-QR-M4: 5→11, 6→11 y 7→11 crean loans + columnas + índice '
+      '(hotfix quality-review — ramas defensivas)', () async {
+    for (final from in [5, 6, 7]) {
+      final db = FincoreDatabase(NativeDatabase.memory());
+      await db.accountsDao.listAll(); // fuerza open y schema real (v11).
+      final migrator = db.createMigrator();
+      // No debe crashear con UnimplementedError.
+      await db.migration.onUpgrade(migrator, from, 11);
+      // La tabla `loans` existe.
+      final loansTable = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='loans'",
+            readsFrom: const {},
+          )
+          .get();
+      expect(loansTable, hasLength(1),
+          reason: 'ruta $from→11 debe crear la tabla loans');
+      // La columna `is_monthly_payment` existe en journal_entries.
+      final colProbe = await db
+          .customSelect(
+            "SELECT COUNT(*) AS c FROM pragma_table_info('journal_entries') "
+            "WHERE name = 'is_monthly_payment'",
+            readsFrom: const {},
+          )
+          .getSingle();
+      expect(colProbe.read<int>('c'), 1,
+          reason: 'ruta $from→11 debe agregar is_monthly_payment');
+      // Índice parcial de loans en entries.
+      final idxProbe = await db
+          .customSelect(
+            "SELECT name FROM sqlite_master WHERE type='index' "
+            "AND name='idx_entries_loan'",
+            readsFrom: const {},
+          )
+          .get();
+      expect(idxProbe, hasLength(1),
+          reason: 'ruta $from→11 debe crear idx_entries_loan');
+      await db.close();
+    }
+  });
+
+  test(
       'MG-04: guardrail UnimplementedError sigue activo para un upgrade no '
       'implementado (from=99, to=100)', () async {
     final db = FincoreDatabase(NativeDatabase.memory());

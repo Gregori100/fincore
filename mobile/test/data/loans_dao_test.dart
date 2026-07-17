@@ -544,6 +544,47 @@ void main() {
     });
   });
 
+  group('daysUntilNextPaymentDay (hotfix quality-review M5)', () {
+    test('hoy < paymentDay del mes → días positivos hasta ese día', () {
+      final days = LoansDao.daysUntilNextPaymentDay(15,
+          now: DateTime.utc(2026, 7, 10));
+      expect(days, 5);
+    });
+
+    test('hoy == paymentDay → 0 días', () {
+      final days = LoansDao.daysUntilNextPaymentDay(15,
+          now: DateTime.utc(2026, 7, 15));
+      expect(days, 0);
+    });
+
+    test('hoy > paymentDay → roll al mes siguiente', () {
+      // 17 julio con paymentDay=15 → target = 15 agosto → 29 días.
+      final days = LoansDao.daysUntilNextPaymentDay(15,
+          now: DateTime.utc(2026, 7, 17));
+      expect(days, 29);
+    });
+
+    test('paymentDay=1 con hoy > 1 → primer del mes siguiente', () {
+      final days = LoansDao.daysUntilNextPaymentDay(1,
+          now: DateTime.utc(2026, 7, 17));
+      expect(days, 15); // 1 agosto - 17 julio.
+    });
+  });
+
+  group('_maxOverdueMonthsWindow cap (hotfix quality-review B5)', () {
+    test('contract remoto (>60 meses atrás) recorta a los últimos 60', () {
+      // Contract en 2010 con hoy 2026 = 192 meses. Debe recortar.
+      final months = LoansDao.expectedPaymentMonths(
+        contractDate: DateTime.utc(2010, 1, 1),
+        today: DateTime.utc(2026, 7, 17),
+        paymentDay: 5,
+      );
+      expect(months.length, 60);
+      // Debe cubrir el rango de los últimos 60 meses hasta 2026-07.
+      expect(months.last, '2026-07');
+    });
+  });
+
   group('watchMonthsOverdue (hotfix smoke Diego v4)', () {
     test('sin pagos, un mes esperado → overdue = 1', () async {
       final loanId = await loansDao.create(
@@ -595,6 +636,21 @@ void main() {
           )
           .first;
       expect(overdue, 0);
+    });
+
+    test(
+        'hoy dentro del mes de contrato pero contract_day > paymentDay → '
+        'esperados vacío (hotfix quality-review B11)', () async {
+      // contract 20/mayo, paymentDay 5, hoy 25/mayo:
+      // - Mes de contrato SÍ empezó pero contract_day > paymentDay →
+      //   primer mes esperado es junio, no mayo.
+      // - Hoy no llegó a junio → esperados = [].
+      final months = LoansDao.expectedPaymentMonths(
+        contractDate: DateTime.utc(2026, 5, 20),
+        today: DateTime.utc(2026, 5, 25),
+        paymentDay: 5,
+      );
+      expect(months, isEmpty);
     });
 
     test('dos meses sin pagar → overdue = 2', () async {
