@@ -359,7 +359,10 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
               _BalanceBanner(
                 balance: _balance,
                 principal: _principal,
+                // Hotfix quality-review B12: siempre mostramos el botón
+                // Saldar; con balance=0 lo dejamos disabled + tooltip.
                 onSaldar: _balance > 0 ? _onSaldarPressed : null,
+                balanceZero: _balance <= 0.005,
               ),
               const SizedBox(height: kSpaceLg),
               // En modo edit, la cuenta origen es inmutable (preservada
@@ -653,14 +656,17 @@ class _SplitSlider extends StatelessWidget {
 /// Banner del saldo pendiente del préstamo. Muestra cuánto queda por pagar
 /// y cuánto quedaría tras aplicar el capital actual del pago. Botón
 /// "Saldar" para llegar exacto al balance.
+// ignore: unused_element
 class _BalanceBanner extends StatelessWidget {
   final double balance;
   final double principal;
   final VoidCallback? onSaldar;
+  final bool balanceZero;
   const _BalanceBanner({
     required this.balance,
     required this.principal,
     required this.onSaldar,
+    this.balanceZero = false,
   });
 
   @override
@@ -715,19 +721,25 @@ class _BalanceBanner extends StatelessWidget {
               ],
             ),
           ),
-          if (onSaldar != null)
-            OutlinedButton.icon(
+          // Hotfix quality-review B12: siempre visible; disabled cuando el
+          // saldo ya está en 0. Antes desaparecía y el usuario no sabía si
+          // era bug o si estaba saldado.
+          Tooltip(
+            message: balanceZero
+                ? 'El préstamo ya está saldado'
+                : 'Autocompleta capital = saldo pendiente',
+            child: OutlinedButton.icon(
               onPressed: onSaldar,
               icon: const Icon(Icons.done_all, size: 16),
               label: const Text('Saldar'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: FincoreColors.accent,
-                side:
-                    const BorderSide(color: FincoreColors.accent),
+                side: const BorderSide(color: FincoreColors.accent),
                 padding: const EdgeInsets.symmetric(
                     horizontal: kSpaceMd, vertical: kSpaceSm),
               ),
             ),
+          ),
         ],
       ),
     );

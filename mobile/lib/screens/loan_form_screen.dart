@@ -5,12 +5,10 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_picker.dart';
-import 'package:fincore/widgets/confirm_dialog.dart';
-import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
+import 'package:fincore/widgets/loan_actions_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 class LoanFormScreen extends StatefulWidget {
@@ -31,6 +29,9 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
 
   DateTime _contractDate = DateTime.now();
   String? _destinationAccountId;
+  // Hotfix quality-review B14: flag para señalar el picker como inválido
+  // cuando el submit intenta correr sin destino seleccionado.
+  bool _destinationInvalid = false;
   List<Account> _accounts = const [];
 
   bool _loading = false;
@@ -106,10 +107,16 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
 
   Future<void> _submit() async {
     if (_saving) return;
-    if (!_formKey.currentState!.validate()) return;
-    if (_destinationAccountId == null) {
-      showErrorSnackbar(
-          context, 'Selecciona la cuenta destino del préstamo.');
+    final formOk = _formKey.currentState!.validate();
+    final destOk = _destinationAccountId != null;
+    if (!destOk) {
+      setState(() => _destinationInvalid = true);
+    }
+    if (!formOk || !destOk) {
+      if (!destOk && formOk) {
+        showErrorSnackbar(
+            context, 'Selecciona la cuenta destino del préstamo.');
+      }
       return;
     }
     final deps = AppDependencies.of(context);
@@ -149,209 +156,6 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
     }
   }
 
-  Future<void> _confirmCloseManual() async {
-    final ok = await showConfirmDialog(
-      context,
-      title: 'Cerrar préstamo manualmente',
-      message:
-          'Marca "${_existing!.name}" como cerrado. Úsalo si el banco te lo condonó, '
-          'si es un registro de prueba o si ya no vas a llevar más su seguimiento. '
-          'Puedes reabrirlo cuando quieras.',
-      confirmLabel: 'Cerrar préstamo',
-      destructive: false,
-    );
-    if (!ok || !mounted) return;
-    setState(() => _saving = true);
-    try {
-      await AppDependencies.of(context)
-          .loansDao
-          .closeManual(widget.loanId!);
-      if (mounted) {
-        showSuccessSnackbar(context, 'Préstamo cerrado.');
-        Navigator.of(context).maybePop();
-      }
-    } on LoansDaoError catch (e) {
-      if (mounted) showErrorSnackbar(context, e);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _confirmReopen() async {
-    final ok = await showConfirmDialog(
-      context,
-      title: 'Reabrir préstamo',
-      message:
-          '"${_existing!.name}" vuelve a estar activo y acepta nuevos pagos.',
-      confirmLabel: 'Reabrir',
-      destructive: false,
-    );
-    if (!ok || !mounted) return;
-    setState(() => _saving = true);
-    try {
-      await AppDependencies.of(context).loansDao.reopen(widget.loanId!);
-      if (mounted) {
-        showSuccessSnackbar(context, 'Préstamo reabierto.');
-        Navigator.of(context).maybePop();
-      }
-    } on LoansDaoError catch (e) {
-      if (mounted) showErrorSnackbar(context, e);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  Future<void> _confirmDelete() async {
-    final deps = AppDependencies.of(context);
-    setState(() => _saving = true);
-    final int payments;
-    try {
-      payments = await deps.loansDao.countActivePayments(widget.loanId!);
-    } catch (e) {
-      if (mounted) {
-        showErrorSnackbar(context, e);
-        setState(() => _saving = false);
-      }
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _saving = false);
-
-    final destAccount = _accounts.firstWhere(
-      (a) => a.id == _existing!.destinationAccountId,
-      orElse: () => _accounts.first,
-    );
-    final impacts = <DestructiveImpact>[
-      DestructiveImpact(
-        icon: Icons.receipt_long_outlined,
-        label: payments == 0
-            ? 'Sin pagos registrados'
-            : '$payments ${payments == 1 ? "pago" : "pagos"} '
-                '${payments == 1 ? "se cancelará" : "se cancelarán"}',
-      ),
-      DestructiveImpact(
-        icon: Icons.account_balance_wallet_outlined,
-        label:
-            'El ingreso inicial de ${_existing!.principalAmount.toStringAsFixed(0)} '
-            'en ${destAccount.name} se cancela',
-      ),
-      const DestructiveImpact(
-        icon: Icons.history_toggle_off,
-        label: 'No se puede deshacer',
-      ),
-    ];
-    final confirmed = await showDestructiveDialog(
-      context,
-      title: 'Eliminar préstamo',
-      objectName: _existing!.name,
-      icon: Icons.delete_forever_outlined,
-      impacts: impacts,
-      description:
-          'Se borran el contrato, el ingreso inicial y todos los pagos registrados. '
-          'El balance de la cuenta destino se ajusta.',
-      confirmLabel: 'Eliminar préstamo',
-    );
-    if (!confirmed || !mounted) return;
-    setState(() => _saving = true);
-    try {
-      await deps.loansDao.deleteLoan(widget.loanId!);
-      if (mounted) {
-        showSuccessSnackbar(context, 'Préstamo eliminado.');
-        // Hotfix smoke Diego v3: nav a /dashboard (raíz) — dejaba /loans
-        // como única entrada del stack y el back del teléfono sacaba de
-        // la app en vez de volver al dashboard.
-        context.go('/dashboard');
-      }
-    } on LoansDaoError catch (e) {
-      if (mounted) showErrorSnackbar(context, e);
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  List<PopupMenuEntry<_LoanFormAction>> _buildMenuItems() {
-    if (_isPaid) {
-      return const [
-        PopupMenuItem(
-          value: _LoanFormAction.delete,
-          child: ListTile(
-            leading:
-                Icon(Icons.delete_outline, color: FincoreColors.negative),
-            title: Text('Eliminar',
-                style: TextStyle(color: FincoreColors.negative)),
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-      ];
-    }
-    if (_isClosed) {
-      // manual
-      return const [
-        PopupMenuItem(
-          value: _LoanFormAction.reopen,
-          child: ListTile(
-            leading: Icon(Icons.lock_open_outlined,
-                color: FincoreColors.accent),
-            title: Text('Reabrir'),
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: _LoanFormAction.delete,
-          child: ListTile(
-            leading:
-                Icon(Icons.delete_outline, color: FincoreColors.negative),
-            title: Text('Eliminar',
-                style: TextStyle(color: FincoreColors.negative)),
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-      ];
-    }
-    return const [
-      PopupMenuItem(
-        value: _LoanFormAction.closeManual,
-        child: ListTile(
-          leading:
-              Icon(Icons.lock_outline, color: FincoreColors.textPrimary),
-          title: Text('Cerrar manualmente'),
-          contentPadding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-        ),
-      ),
-      PopupMenuDivider(),
-      PopupMenuItem(
-        value: _LoanFormAction.delete,
-        child: ListTile(
-          leading:
-              Icon(Icons.delete_outline, color: FincoreColors.negative),
-          title: Text('Eliminar',
-              style: TextStyle(color: FincoreColors.negative)),
-          contentPadding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-        ),
-      ),
-    ];
-  }
-
-  void _handleMenuAction(_LoanFormAction action) {
-    switch (action) {
-      case _LoanFormAction.closeManual:
-        _confirmCloseManual();
-        return;
-      case _LoanFormAction.reopen:
-        _confirmReopen();
-        return;
-      case _LoanFormAction.delete:
-        _confirmDelete();
-        return;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -374,12 +178,7 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
         ),
         actions: [
           if (_isEdit)
-            PopupMenuButton<_LoanFormAction>(
-              icon: const Icon(Icons.more_vert),
-              color: FincoreColors.surfaceElevated,
-              onSelected: _handleMenuAction,
-              itemBuilder: (_) => _buildMenuItems(),
-            ),
+            LoanActionsMenu(loan: _existing!, accounts: _accounts),
         ],
       ),
       body: SafeArea(
@@ -518,16 +317,37 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
                 absorbing: _isEdit,
                 child: Opacity(
                   opacity: _isEdit ? 0.6 : 1.0,
-                  child: AccountPicker(
-                    label: _isEdit
-                        ? 'Cuenta destino (no editable)'
-                        : 'Cuenta destino del préstamo',
-                    accounts: _accounts,
-                    allowedTypes: const ['cash', 'debit'],
-                    selectedId: _destinationAccountId,
-                    onChanged: (v) =>
-                        setState(() => _destinationAccountId = v),
-                    includeArchived: _isEdit,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AccountPicker(
+                        label: _isEdit
+                            ? 'Cuenta destino (no editable)'
+                            : 'Cuenta destino del préstamo',
+                        accounts: _accounts,
+                        allowedTypes: const ['cash', 'debit'],
+                        selectedId: _destinationAccountId,
+                        onChanged: (v) => setState(() {
+                          _destinationAccountId = v;
+                          _destinationInvalid = false;
+                        }),
+                        includeArchived: _isEdit,
+                      ),
+                      // Hotfix quality-review B14: mensaje de error visible
+                      // bajo el picker (patrón de TextFormField.validator)
+                      // en vez de sólo un snackbar transitorio.
+                      if (_destinationInvalid && !_isEdit)
+                        const Padding(
+                          padding: EdgeInsets.only(top: kSpaceXs, left: 12),
+                          child: Text(
+                            'Selecciona la cuenta destino del préstamo.',
+                            style: TextStyle(
+                              color: FincoreColors.negative,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -554,8 +374,6 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
     );
   }
 }
-
-enum _LoanFormAction { closeManual, reopen, delete }
 
 class _DateField extends StatelessWidget {
   final String label;

@@ -1,6 +1,5 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
-import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
@@ -11,6 +10,7 @@ import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
+import 'package:fincore/widgets/loan_actions_menu.dart';
 import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -140,215 +140,6 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     }
   }
 
-  Future<void> _confirmCloseManual(Loan loan) async {
-    final ok = await showConfirmDialog(
-      context,
-      title: 'Cerrar préstamo manualmente',
-      message:
-          'Marca "${loan.name}" como cerrado. Úsalo si el banco te lo condonó, '
-          'si es un registro de prueba o si ya no vas a llevar más su seguimiento. '
-          'Puedes reabrirlo cuando quieras.',
-      confirmLabel: 'Cerrar préstamo',
-      destructive: false,
-    );
-    if (!ok || !mounted) return;
-    try {
-      await AppDependencies.of(context)
-          .loansDao
-          .closeManual(widget.loanId);
-      if (mounted) showSuccessSnackbar(context, 'Préstamo cerrado.');
-    } on LoansDaoError catch (e) {
-      if (mounted) showErrorSnackbar(context, e);
-    }
-  }
-
-  Future<void> _confirmReopen(Loan loan) async {
-    final ok = await showConfirmDialog(
-      context,
-      title: 'Reabrir préstamo',
-      message:
-          '"${loan.name}" vuelve a estar activo y acepta nuevos pagos.',
-      confirmLabel: 'Reabrir',
-      destructive: false,
-    );
-    if (!ok || !mounted) return;
-    try {
-      await AppDependencies.of(context).loansDao.reopen(widget.loanId);
-      if (mounted) showSuccessSnackbar(context, 'Préstamo reabierto.');
-    } on LoansDaoError catch (e) {
-      if (mounted) showErrorSnackbar(context, e);
-    }
-  }
-
-  Future<void> _confirmDelete(Loan loan) async {
-    final deps = AppDependencies.of(context);
-    final int payments;
-    try {
-      payments =
-          await deps.loansDao.countActivePayments(widget.loanId);
-    } catch (e) {
-      if (mounted) showErrorSnackbar(context, e);
-      return;
-    }
-    if (!mounted) return;
-    final destAccount = _accounts.firstWhere(
-      (a) => a.id == loan.destinationAccountId,
-      orElse: () => _accounts.first,
-    );
-    final impacts = <DestructiveImpact>[
-      DestructiveImpact(
-        icon: Icons.receipt_long_outlined,
-        label: payments == 0
-            ? 'Sin pagos registrados'
-            : '$payments ${payments == 1 ? "pago" : "pagos"} '
-                '${payments == 1 ? "se cancelará" : "se cancelarán"}',
-      ),
-      DestructiveImpact(
-        icon: Icons.account_balance_wallet_outlined,
-        label:
-            'El ingreso inicial de ${loan.principalAmount.toStringAsFixed(0)} '
-            'en ${destAccount.name} se cancela',
-      ),
-      const DestructiveImpact(
-        icon: Icons.history_toggle_off,
-        label: 'No se puede deshacer',
-      ),
-    ];
-    final confirmed = await showDestructiveDialog(
-      context,
-      title: 'Eliminar préstamo',
-      objectName: loan.name,
-      icon: Icons.delete_forever_outlined,
-      impacts: impacts,
-      description:
-          'Se borran el contrato, el ingreso inicial y todos los pagos registrados. '
-          'El balance de la cuenta destino se ajusta.',
-      confirmLabel: 'Eliminar préstamo',
-    );
-    if (!confirmed || !mounted) return;
-    try {
-      await deps.loansDao.deleteLoan(widget.loanId);
-      if (mounted) {
-        showSuccessSnackbar(context, 'Préstamo eliminado.');
-        // Hotfix smoke Diego v3: nav a /dashboard (raíz) para evitar el
-        // bug de "back sale de la app" que ocurría al dejar /loans como
-        // única entrada del stack tras eliminar.
-        context.go('/dashboard');
-      }
-    } on LoansDaoError catch (e) {
-      if (mounted) showErrorSnackbar(context, e);
-    }
-  }
-
-  List<PopupMenuEntry<_LoanDetailAction>> _buildMenuItems(Loan loan) {
-    final isPaid = loan.closeReason == 'paid';
-    final isClosed = loan.closedAt != null;
-    if (isPaid) {
-      return const [
-        PopupMenuItem(
-          value: _LoanDetailAction.delete,
-          child: ListTile(
-            leading:
-                Icon(Icons.delete_outline, color: FincoreColors.negative),
-            title: Text('Eliminar',
-                style: TextStyle(color: FincoreColors.negative)),
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-      ];
-    }
-    if (isClosed) {
-      // manual
-      return const [
-        PopupMenuItem(
-          value: _LoanDetailAction.edit,
-          child: ListTile(
-            leading: Icon(Icons.edit_outlined,
-                color: FincoreColors.textPrimary),
-            title: Text('Editar contrato'),
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-        PopupMenuItem(
-          value: _LoanDetailAction.reopen,
-          child: ListTile(
-            leading:
-                Icon(Icons.lock_open_outlined, color: FincoreColors.accent),
-            title: Text('Reabrir'),
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: _LoanDetailAction.delete,
-          child: ListTile(
-            leading:
-                Icon(Icons.delete_outline, color: FincoreColors.negative),
-            title: Text('Eliminar',
-                style: TextStyle(color: FincoreColors.negative)),
-            contentPadding: EdgeInsets.zero,
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-      ];
-    }
-    // Activo.
-    return const [
-      PopupMenuItem(
-        value: _LoanDetailAction.edit,
-        child: ListTile(
-          leading:
-              Icon(Icons.edit_outlined, color: FincoreColors.textPrimary),
-          title: Text('Editar contrato'),
-          contentPadding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-        ),
-      ),
-      PopupMenuItem(
-        value: _LoanDetailAction.closeManual,
-        child: ListTile(
-          leading:
-              Icon(Icons.lock_outline, color: FincoreColors.textPrimary),
-          title: Text('Cerrar manualmente'),
-          contentPadding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-        ),
-      ),
-      PopupMenuDivider(),
-      PopupMenuItem(
-        value: _LoanDetailAction.delete,
-        child: ListTile(
-          leading:
-              Icon(Icons.delete_outline, color: FincoreColors.negative),
-          title: Text('Eliminar',
-              style: TextStyle(color: FincoreColors.negative)),
-          contentPadding: EdgeInsets.zero,
-          visualDensity: VisualDensity.compact,
-        ),
-      ),
-    ];
-  }
-
-  void _handleMenuAction(_LoanDetailAction action, Loan loan) {
-    switch (action) {
-      case _LoanDetailAction.edit:
-        context.push('/loans/${widget.loanId}/edit');
-        return;
-      case _LoanDetailAction.closeManual:
-        _confirmCloseManual(loan);
-        return;
-      case _LoanDetailAction.reopen:
-        _confirmReopen(loan);
-        return;
-      case _LoanDetailAction.delete:
-        _confirmDelete(loan);
-        return;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_loading || _loanStream == null) {
@@ -360,8 +151,31 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     return StreamBuilder<Loan?>(
       stream: _loanStream,
       builder: (context, snap) {
-        final loan = snap.data;
-        if (loan == null) {
+        // Hotfix quality-review M10: distinguir cargando / no-existe /
+        // error. Antes cualquier `null` mostraba spinner eterno (bug post
+        // delete y deep-link a préstamo inexistente).
+        if (snap.hasError) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Préstamo'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(kSpaceLg),
+                child: Text(
+                  'No se pudo cargar el préstamo.\n${snap.error}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: FincoreColors.textMuted),
+                ),
+              ),
+            ),
+          );
+        }
+        if (!snap.hasData) {
           return Scaffold(
             appBar: AppBar(
               title: const Text('Préstamo'),
@@ -371,6 +185,41 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               ),
             ),
             body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+        final loan = snap.data;
+        if (loan == null) {
+          // El préstamo fue eliminado o el id no existe.
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Préstamo'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+            ),
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(kSpaceLg),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.help_outline,
+                        color: FincoreColors.textMuted, size: 48),
+                    const SizedBox(height: kSpaceMd),
+                    const Text(
+                      'Este préstamo ya no existe.',
+                      style: TextStyle(color: FincoreColors.textMuted),
+                    ),
+                    const SizedBox(height: kSpaceLg),
+                    FilledButton.tonal(
+                      onPressed: () => context.go('/dashboard'),
+                      child: const Text('Volver al inicio'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           );
         }
         final isClosed = loan.closedAt != null;
@@ -386,11 +235,10 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
               onPressed: () => Navigator.of(context).maybePop(),
             ),
             actions: [
-              PopupMenuButton<_LoanDetailAction>(
-                icon: const Icon(Icons.more_vert),
-                color: FincoreColors.surfaceElevated,
-                onSelected: (a) => _handleMenuAction(a, loan),
-                itemBuilder: (_) => _buildMenuItems(loan),
+              LoanActionsMenu(
+                loan: loan,
+                accounts: _accounts,
+                onEdit: () => context.push('/loans/${widget.loanId}/edit'),
               ),
             ],
           ),
@@ -491,7 +339,6 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
   }
 }
 
-enum _LoanDetailAction { edit, closeManual, reopen, delete }
 
 class _Header extends StatelessWidget {
   final Loan loan;
@@ -779,9 +626,10 @@ class _PaymentRow extends StatelessWidget {
     // en vez del proxy `interest > 0`. Un pago del mes puede legítimamente
     // tener interés = 0 (mes de gracia) y sigue siendo del mes.
     final isMonthly = payment.isMonthlyPayment;
-    return BaseCard(
-      // Tap abre el form de edición correspondiente al tipo real —
-      // salvo en préstamos cerrados (read-only).
+    // Hotfix quality-review M9: en modo read-only (préstamo cerrado
+    // manualmente) atenuamos el card + agregamos ícono lock para señalizar
+    // por qué no responde al tap. Antes el usuario tocaba y no pasaba nada.
+    final card = BaseCard(
       onTap: readOnly
           ? null
           : () {
@@ -799,6 +647,11 @@ class _PaymentRow extends StatelessWidget {
               children: [
                 Row(
                   children: [
+                    if (readOnly) ...[
+                      const Icon(Icons.lock_outline,
+                          size: 12, color: FincoreColors.textMuted),
+                      const SizedBox(width: kSpaceXs),
+                    ],
                     Text(
                       fmt.format(payment.occurredAt),
                       style: const TextStyle(
@@ -861,6 +714,7 @@ class _PaymentRow extends StatelessWidget {
         ],
       ),
     );
+    return readOnly ? Opacity(opacity: 0.6, child: card) : card;
   }
 }
 

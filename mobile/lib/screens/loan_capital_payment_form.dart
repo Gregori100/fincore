@@ -364,8 +364,13 @@ class _CapitalBalanceBanner extends StatelessWidget {
               ],
             ),
           ),
-          if (onSaldar != null)
-            OutlinedButton.icon(
+          // Hotfix quality-review B12: siempre visible con tooltip cuando
+          // el saldo está en 0 (préstamo saldado).
+          Tooltip(
+            message: onSaldar == null
+                ? 'El préstamo ya está saldado'
+                : 'Autocompleta monto = saldo pendiente',
+            child: OutlinedButton.icon(
               onPressed: onSaldar,
               icon: const Icon(Icons.done_all, size: 16),
               label: const Text('Saldar'),
@@ -376,6 +381,7 @@ class _CapitalBalanceBanner extends StatelessWidget {
                     horizontal: kSpaceMd, vertical: kSpaceSm),
               ),
             ),
+          ),
         ],
       ),
     );
