@@ -437,14 +437,16 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
                       decoration: InputDecoration(
                         labelText: 'Capital',
                         prefixText: r'$ ',
+                        // F-DES-3: par capital/interés = categoryBlue/categoryOrange.
                         labelStyle: const TextStyle(
-                            color: FincoreColors.accent),
+                            color: FincoreColors.categoryBlue),
                         border: const OutlineInputBorder(
-                          borderSide: BorderSide(color: FincoreColors.accent),
+                          borderSide:
+                              BorderSide(color: FincoreColors.categoryBlue),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderSide: BorderSide(
-                            color: FincoreColors.accent.withValues(
+                            color: FincoreColors.categoryBlue.withValues(
                                 alpha: FincoreColors.alphaTint),
                           ),
                         ),
@@ -472,13 +474,14 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
                         labelText: 'Intereses',
                         prefixText: r'$ ',
                         labelStyle: const TextStyle(
-                            color: FincoreColors.warning),
+                            color: FincoreColors.categoryOrange),
                         border: const OutlineInputBorder(
-                          borderSide: BorderSide(color: FincoreColors.warning),
+                          borderSide:
+                              BorderSide(color: FincoreColors.categoryOrange),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderSide: BorderSide(
-                            color: FincoreColors.warning.withValues(
+                            color: FincoreColors.categoryOrange.withValues(
                                 alpha: FincoreColors.alphaTint),
                           ),
                         ),
@@ -594,7 +597,8 @@ class _SplitSlider extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: const BoxDecoration(
-                    color: FincoreColors.accent,
+                    // F-DES-3: par capital/interés = categoryBlue/categoryOrange.
+                    color: FincoreColors.categoryBlue,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -625,7 +629,7 @@ class _SplitSlider extends StatelessWidget {
                   width: 10,
                   height: 10,
                   decoration: const BoxDecoration(
-                    color: FincoreColors.warning,
+                    color: FincoreColors.categoryOrange,
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -636,10 +640,10 @@ class _SplitSlider extends StatelessWidget {
         const SizedBox(height: kSpaceSm),
         SliderTheme(
           data: SliderThemeData(
-            activeTrackColor: FincoreColors.accent,
-            inactiveTrackColor: FincoreColors.warning,
+            activeTrackColor: FincoreColors.categoryBlue,
+            inactiveTrackColor: FincoreColors.categoryOrange,
             thumbColor: FincoreColors.textPrimary,
-            overlayColor: FincoreColors.accent
+            overlayColor: FincoreColors.categoryBlue
                 .withValues(alpha: FincoreColors.alphaHover),
             trackHeight: 6,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),

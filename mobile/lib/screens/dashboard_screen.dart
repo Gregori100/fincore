@@ -399,13 +399,16 @@ class _LoanTotalCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: FincoreColors.warning.withValues(
+              // F-DES-2: KPI Préstamo con categoryOrange (marca del módulo),
+              // no warning. warning queda reservado para el chip de "próximo
+              // pago" que sigue siendo alerta real justo abajo.
+              color: FincoreColors.categoryOrange.withValues(
                 alpha: FincoreColors.alphaTint,
               ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(Icons.request_quote_outlined,
-                color: FincoreColors.warning),
+                color: FincoreColors.categoryOrange),
           ),
           const SizedBox(width: 12),
           const Expanded(
@@ -437,7 +440,7 @@ class _LoanTotalCard extends StatelessWidget {
           Text(
             formatAmount(total),
             style: const TextStyle(
-              color: FincoreColors.warning,
+              color: FincoreColors.categoryOrange,
               fontWeight: FontWeight.w700,
               fontSize: 18,
             ),

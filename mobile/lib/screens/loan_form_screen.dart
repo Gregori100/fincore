@@ -434,7 +434,8 @@ class _ClosedManualBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _StatusBanner(
-      color: FincoreColors.warning,
+      // F-DES-2: estado del préstamo con categoryOrange (marca del módulo).
+      color: FincoreColors.categoryOrange,
       icon: Icons.lock_outline,
       title: 'Préstamo cerrado manualmente',
       body:

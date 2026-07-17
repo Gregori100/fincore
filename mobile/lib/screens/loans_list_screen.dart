@@ -147,7 +147,8 @@ class _LoanRow extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: FincoreColors.warning.withValues(
+              // F-DES-2: identidad del módulo con categoryOrange, no warning.
+              color: FincoreColors.categoryOrange.withValues(
                 alpha: isClosed
                     ? FincoreColors.alphaHover
                     : FincoreColors.alphaTint,
@@ -158,7 +159,7 @@ class _LoanRow extends StatelessWidget {
               Icons.request_quote_outlined,
               color: isClosed
                   ? FincoreColors.textSubtle
-                  : FincoreColors.warning,
+                  : FincoreColors.categoryOrange,
             ),
           ),
           const SizedBox(width: kSpaceMd),
@@ -241,7 +242,9 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isPaid = reason == 'paid';
-    final color = isPaid ? FincoreColors.positive : FincoreColors.warning;
+    // F-DES-2: badge "Cerrado" con categoryOrange (estado, no alerta).
+    final color =
+        isPaid ? FincoreColors.positive : FincoreColors.categoryOrange;
     final label = isPaid ? 'Pagado' : 'Cerrado';
     return Container(
       padding: const EdgeInsets.symmetric(

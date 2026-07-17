@@ -268,7 +268,8 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   const SizedBox(height: kSpaceLg),
                   const _StateChipRow(
                     icon: Icons.lock_outline,
-                    color: FincoreColors.warning,
+                    // F-DES-2: estado, no alerta activa.
+                    color: FincoreColors.categoryOrange,
                     label: 'Cerrado manualmente · sin pagos permitidos',
                   ),
                 ],
@@ -397,7 +398,12 @@ class _Header extends StatelessWidget {
                 children: [
                   Expanded(
                     child: _AcumMetric(
-                      color: FincoreColors.accent,
+                      // F-DES-2+3: capital=categoryBlue, interés=categoryOrange
+                      // como par de taxonomía consistente con el drill-down
+                      // en reports. accent queda reservado para affordance
+                      // (FAB, links) y warning para alertas reales (chip
+                      // "cerrado manualmente", chip "próximo pago").
+                      color: FincoreColors.categoryBlue,
                       label: 'Capital pagado',
                       value: formatAmount(paidPrincipal),
                     ),
@@ -405,7 +411,7 @@ class _Header extends StatelessWidget {
                   const SizedBox(width: kSpaceSm),
                   Expanded(
                     child: _AcumMetric(
-                      color: FincoreColors.warning,
+                      color: FincoreColors.categoryOrange,
                       label: 'Intereses pagados',
                       value: formatAmount(paidInterest),
                     ),
@@ -683,7 +689,8 @@ class _PaymentRow extends StatelessWidget {
                     // Badge del tipo real (persistido en BD).
                     _TypeBadge(isMonthly: isMonthly),
                     _SplitPill(
-                      color: FincoreColors.accent,
+                      // F-DES-3: par capital/interés unificado a categoryX.
+                      color: FincoreColors.categoryBlue,
                       label: 'Capital',
                       value: formatAmount(principal),
                     ),
@@ -692,7 +699,7 @@ class _PaymentRow extends StatelessWidget {
                     // se omite (por definición no llevan intereses).
                     if (isMonthly)
                       _SplitPill(
-                        color: FincoreColors.warning,
+                        color: FincoreColors.categoryOrange,
                         label: 'Intereses',
                         value: formatAmount(interest),
                       ),
@@ -732,8 +739,11 @@ class _TypeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        isMonthly ? FincoreColors.warning : FincoreColors.textSubtle;
+    // F-DES-2: badge de taxonomía; categoryOrange en vez de warning para
+    // no competir con las alertas reales (chip próximo pago / atrasado).
+    final color = isMonthly
+        ? FincoreColors.categoryOrange
+        : FincoreColors.textSubtle;
     final label = isMonthly ? 'Pago del mes' : 'Abono a capital';
     return Container(
       padding: const EdgeInsets.symmetric(

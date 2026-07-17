@@ -144,9 +144,9 @@ class MovementRow extends StatelessWidget {
         JournalKind.debtPayment ||
         JournalKind.transfer =>
           FincoreColors.accent,
-        // Sprint flutter-loans-v1: pago de préstamo pinta naranja como el
-        // resto del módulo (KPI, chip · préstamo, iconografía).
-        JournalKind.loanPayment => FincoreColors.warning,
+        // F-DES-2: pago de préstamo con categoryOrange (marca del módulo).
+        // warning queda reservado para alertas reales (chip próximo pago).
+        JournalKind.loanPayment => FincoreColors.categoryOrange,
       };
 
   IconData _kindIcon(JournalKind k) => switch (k) {
@@ -183,8 +183,8 @@ class MovementRow extends StatelessWidget {
 }
 
 /// Chip pequeño naranja para el subtítulo de un movimiento ligado a préstamo.
-/// Sprint flutter-loans-v1: señal visual de que el entry se administra desde
-/// /loans y NO es editable desde entry_form_screen.
+/// F-DES-2: usa `categoryOrange` (marca del módulo) en vez de `warning`
+/// (reservado para alertas reales — chip próximo pago del dashboard).
 class _LoanChip extends StatelessWidget {
   const _LoanChip();
 
@@ -194,20 +194,20 @@ class _LoanChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(
           horizontal: kSpaceSm, vertical: kSpace2xs),
       decoration: BoxDecoration(
-        color:
-            FincoreColors.warning.withValues(alpha: FincoreColors.alphaTint),
+        color: FincoreColors.categoryOrange
+            .withValues(alpha: FincoreColors.alphaTint),
         borderRadius: BorderRadius.circular(kRadiusSm),
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.request_quote_outlined,
-              size: 11, color: FincoreColors.warning),
+              size: 11, color: FincoreColors.categoryOrange),
           SizedBox(width: kSpace2xs),
           Text(
             'préstamo',
             style: TextStyle(
-              color: FincoreColors.warning,
+              color: FincoreColors.categoryOrange,
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
