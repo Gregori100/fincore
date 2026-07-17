@@ -398,6 +398,24 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
           final incomeItems = items.where((i) => i.kind == 'income').toList();
           final expenseItems = items.where((i) => i.kind == 'expense').toList();
 
+          // Sprint flutter-budgets-running-balance-v1: cascada del saldo.
+          // Reorder cambia `sort_order` en la BD → el stream emite lista
+          // reordenada → `withCumulativeCascade` recalcula. isDone NO
+          // afecta el running: representa el plan, no lo realizado.
+          BudgetItemDisplay toDisplay(WeeklyBudgetItemRow r) => BudgetItemDisplay(
+                id: r.id,
+                name: r.name,
+                categoryId: r.categoryId,
+                amount: r.amount,
+                isDone: r.isDone,
+              );
+          final cascade = withCumulativeCascade(
+            income: incomeItems.map(toDisplay).toList(),
+            expense: expenseItems.map(toDisplay).toList(),
+          );
+          final incomeDisplays = cascade.income;
+          final expenseDisplays = cascade.expense;
+
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             child: Column(
@@ -406,16 +424,7 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
                 ItemsSection(
                   title: 'Ingresos esperados',
                   kind: 'income',
-                  items: [
-                    for (final i in incomeItems)
-                      BudgetItemDisplay(
-                        id: i.id,
-                        name: i.name,
-                        categoryId: i.categoryId,
-                        amount: i.amount,
-                        isDone: i.isDone,
-                      ),
-                  ],
+                  items: incomeDisplays,
                   onTapItem: (itemId) {
                     final item = items.firstWhere((i) => i.id == itemId);
                     _openItemForm(item: item);
@@ -433,16 +442,7 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
                 ItemsSection(
                   title: 'Gastos planeados',
                   kind: 'expense',
-                  items: [
-                    for (final i in expenseItems)
-                      BudgetItemDisplay(
-                        id: i.id,
-                        name: i.name,
-                        categoryId: i.categoryId,
-                        amount: i.amount,
-                        isDone: i.isDone,
-                      ),
-                  ],
+                  items: expenseDisplays,
                   onTapItem: (itemId) {
                     final item = items.firstWhere((i) => i.id == itemId);
                     _openItemForm(item: item);
