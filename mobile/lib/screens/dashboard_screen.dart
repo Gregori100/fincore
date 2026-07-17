@@ -6,6 +6,7 @@ import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/database.dart' as db;
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_motion.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/movement_row.dart';
@@ -479,35 +480,62 @@ class _LoanStatusChip extends StatelessWidget {
       ),
       builder: (context, overdueSnap) {
         final overdue = overdueSnap.data ?? 0;
-        if (overdue >= 1) {
-          return _ChipShell(
-            loanId: loan.id,
-            color: FincoreColors.negative,
-            icon: Icons.priority_high,
-            label:
-                '${loan.name} · $overdue ${overdue == 1 ? "mes atrasado" : "meses atrasados"}',
-          );
+        // F-DES-12: AnimatedSize + AnimatedSwitcher para que el chip aparezca
+        // y desaparezca con transición suave (kMotionFast). Antes cambiaba
+        // de golpe cuando el stream reemitía tras registrar un pago —
+        // costaba percibir la causalidad ("pagué → el chip se fue").
+        return AnimatedSize(
+          duration: kMotionFast,
+          curve: kCurveStandard,
+          alignment: Alignment.centerLeft,
+          child: AnimatedSwitcher(
+            duration: kMotionFast,
+            switchInCurve: kCurveStandard,
+            switchOutCurve: kCurveExit,
+            child: _buildChip(context, deps, now, overdue),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildChip(
+    BuildContext context,
+    AppDependencies deps,
+    DateTime now,
+    int overdue,
+  ) {
+    if (overdue >= 1) {
+      return _ChipShell(
+        key: ValueKey('overdue-${loan.id}'),
+        loanId: loan.id,
+        color: FincoreColors.negative,
+        icon: Icons.priority_high,
+        label:
+            '${loan.name} · $overdue ${overdue == 1 ? "mes atrasado" : "meses atrasados"}',
+      );
+    }
+    final days = _daysUntilPayment(loan.paymentDay);
+    if (days > 5) {
+      return const SizedBox.shrink(key: ValueKey('empty'));
+    }
+    return StreamBuilder<bool>(
+      key: ValueKey('upcoming-${loan.id}'),
+      stream: deps.loansDao
+          .watchHasMonthlyPaymentIn(loan.id, now.year, now.month),
+      builder: (context, paidSnap) {
+        final alreadyPaid = paidSnap.data ?? false;
+        if (alreadyPaid) {
+          return const SizedBox.shrink(key: ValueKey('paid'));
         }
-        // Sin atrasos: reusar el flujo naranja original (upcoming ≤ 5 días
-        // y mes actual no pagado).
-        final days = _daysUntilPayment(loan.paymentDay);
-        if (days > 5) return const SizedBox.shrink();
-        return StreamBuilder<bool>(
-          stream: deps.loansDao
-              .watchHasMonthlyPaymentIn(loan.id, now.year, now.month),
-          builder: (context, paidSnap) {
-            final alreadyPaid = paidSnap.data ?? false;
-            if (alreadyPaid) return const SizedBox.shrink();
-            final label = days == 0
-                ? 'hoy'
-                : (days == 1 ? 'mañana' : 'en $days días');
-            return _ChipShell(
-              loanId: loan.id,
-              color: FincoreColors.warning,
-              icon: Icons.schedule_outlined,
-              label: '${loan.name} · $label',
-            );
-          },
+        final label = days == 0
+            ? 'hoy'
+            : (days == 1 ? 'mañana' : 'en $days días');
+        return _ChipShell(
+          loanId: loan.id,
+          color: FincoreColors.warning,
+          icon: Icons.schedule_outlined,
+          label: '${loan.name} · $label',
         );
       },
     );
@@ -520,6 +548,7 @@ class _ChipShell extends StatelessWidget {
   final IconData icon;
   final String label;
   const _ChipShell({
+    super.key,
     required this.loanId,
     required this.color,
     required this.icon,

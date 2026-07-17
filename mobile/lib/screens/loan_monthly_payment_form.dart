@@ -3,6 +3,7 @@ import 'package:fincore/data/daos/entries_dao.dart';
 import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_motion.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_balance_hint.dart';
@@ -51,6 +52,9 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
   double _principal = 0;
   double _interest = 0;
   bool _syncing = false;
+  // F-DES-12: flag para el flash de fondo en el campo Capital al aplicar
+  // "Saldar". Se activa por kMotionMedium y vuelve a false.
+  bool _saldarFlash = false;
   // Hotfix smoke Diego v3: saldo pendiente actual del préstamo (para
   // indicador visual y botón "Saldar"). En modo edit, se preserva el
   // capital del propio entry (para que Diego pueda editarlo sin que su
@@ -219,7 +223,12 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
     // Preservar el interés que Diego ya declaró; ajustar amount.
     _amount = _principal + _interest;
     _writeControllers();
-    setState(() {});
+    setState(() => _saldarFlash = true);
+    // F-DES-12: flash breve para que el usuario perciba que "Saldar"
+    // acaba de reescribir el campo Capital, aún si no miraba ahí.
+    Future.delayed(kMotionMedium, () {
+      if (mounted) setState(() => _saldarFlash = false);
+    });
   }
 
   Future<void> _pickDate() async {
@@ -432,7 +441,20 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
               Row(
                 children: [
                   Expanded(
-                    child: TextFormField(
+                    // F-DES-12: AnimatedContainer con flash al aplicar Saldar
+                    // (categoryBlue con alphaTint por kMotionMedium) para que
+                    // el usuario perciba el cambio aún si no miraba el campo.
+                    child: AnimatedContainer(
+                      duration: kMotionFast,
+                      curve: kCurveStandard,
+                      decoration: BoxDecoration(
+                        color: _saldarFlash
+                            ? FincoreColors.categoryBlue
+                                .withValues(alpha: FincoreColors.alphaTint)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(kRadiusSm),
+                      ),
+                      child: TextFormField(
                       controller: _principalCtrl,
                       decoration: InputDecoration(
                         labelText: 'Capital',
@@ -464,6 +486,7 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
                         }
                         return null;
                       },
+                    ),
                     ),
                   ),
                   const SizedBox(width: kSpaceMd),
