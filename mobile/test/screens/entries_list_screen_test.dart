@@ -186,4 +186,88 @@ void main() {
       await harness.dispose();
     });
   });
+
+  group('Modo selección múltiple (flutter-entries-bulk-recategorize-v1)', () {
+    Future<void> seedTwoEntries(dynamic db, dynamic deps) async {
+      final bolsa = (await deps.accountsDao.listAll())
+          .firstWhere((a) => a.type == 'cash');
+      final now = DateTime.now();
+      final day = DateTime(now.year, now.month, 5, 10);
+      await deps.entriesDao.registerExpense(
+        accountOriginId: bolsa.id,
+        amount: 50.0,
+        occurredAt: day,
+        description: 'Gasto uno',
+      );
+      await deps.entriesDao.registerExpense(
+        accountOriginId: bolsa.id,
+        amount: 80.0,
+        occurredAt: day.add(const Duration(hours: 1)),
+        description: 'Gasto dos',
+      );
+    }
+
+    Future<void> pushEntries(WidgetTester tester) async {
+      final ctx = tester.element(find.byType(Scaffold));
+      GoRouter.of(ctx).push('/entries');
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'WT-BULK-UI-01: long-press activa modo selección + AppBar contextual '
+        'con contador "1 seleccionado"', (tester) async {
+      final harness = await pumpFincoreApp(tester, seed: seedTwoEntries);
+      await pushEntries(tester);
+
+      // Entrada al modo: long-press sobre "Gasto uno".
+      await tester.longPress(find.text('Gasto uno'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 seleccionado'), findsOneWidget,
+          reason: 'AppBar contextual debe mostrar contador');
+      // FAB desaparece en modo selección — el AppBar propio lo suplanta.
+      expect(find.byType(FloatingActionButton), findsNothing);
+      // Botón "Asignar categoría" presente.
+      expect(find.byTooltip('Asignar categoría'), findsOneWidget);
+      // Botón "Salir de selección" también.
+      expect(find.byTooltip('Salir de selección'), findsOneWidget);
+
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-BULK-UI-02: tap en segundo entry suma al contador '
+        '(2 seleccionados)', (tester) async {
+      final harness = await pumpFincoreApp(tester, seed: seedTwoEntries);
+      await pushEntries(tester);
+
+      await tester.longPress(find.text('Gasto uno'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Gasto dos'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('2 seleccionados'), findsOneWidget);
+      await harness.dispose();
+    });
+
+    testWidgets(
+        'WT-BULK-UI-03: "Salir de selección" desmarca todo y restaura AppBar '
+        'default + FAB', (tester) async {
+      final harness = await pumpFincoreApp(tester, seed: seedTwoEntries);
+      await pushEntries(tester);
+
+      await tester.longPress(find.text('Gasto uno'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 seleccionado'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Salir de selección'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 seleccionado'), findsNothing);
+      expect(find.text('Movimientos'), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+
+      await harness.dispose();
+    });
+  });
 }

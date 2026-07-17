@@ -789,6 +789,244 @@ void main() {
       expect(cat!.monthlyLimit, 0);
     });
 
+    test(
+        'UT-BULK-01: bulkUpdateCategory sobre 3 gastos con categoría expense '
+        '→ 3 filas updated (sprint flutter-entries-bulk-recategorize-v1)',
+        () async {
+      final bolsaId = await accountsDao.createBolsa();
+      final catComida = await categoriesDao.create(
+        name: 'Comida_BULK1',
+        appliesTo: 'expense',
+        colorSlug: 'orange',
+        iconSlug: 'shopping-cart',
+      );
+      final ids = [
+        await entriesDao.registerExpense(
+          accountOriginId: bolsaId,
+          amount: 100,
+          occurredAt: DateTime.now(),
+        ),
+        await entriesDao.registerExpense(
+          accountOriginId: bolsaId,
+          amount: 200,
+          occurredAt: DateTime.now(),
+        ),
+        await entriesDao.registerExpense(
+          accountOriginId: bolsaId,
+          amount: 300,
+          occurredAt: DateTime.now(),
+        ),
+      ];
+
+      final updated = await entriesDao.bulkUpdateCategory(
+        entryIds: ids,
+        categoryId: catComida,
+      );
+
+      expect(updated, 3);
+      final all = await entriesDao.watchPage().first;
+      final expenses = all.where((e) => e.entry.kind == 'expense');
+      expect(expenses.every((e) => e.entry.categoryId == catComida), isTrue);
+    });
+
+    test(
+        'UT-BULK-02: bulkUpdateCategory con batch mixto y categoría both '
+        '→ ok', () async {
+      final bolsaId = await accountsDao.createBolsa();
+      final catBoth = await categoriesDao.create(
+        name: 'Fiesta_BULK2',
+        appliesTo: 'both',
+        colorSlug: 'purple',
+        iconSlug: 'star',
+      );
+      final e1 = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 500,
+        occurredAt: DateTime.now(),
+      );
+      final e2 = await entriesDao.registerExpense(
+        accountOriginId: bolsaId,
+        amount: 200,
+        occurredAt: DateTime.now(),
+      );
+
+      final updated = await entriesDao.bulkUpdateCategory(
+        entryIds: [e1, e2],
+        categoryId: catBoth,
+      );
+
+      expect(updated, 2);
+    });
+
+    test(
+        'UT-BULK-03: bulkUpdateCategory con batch mixto y categoría solo '
+        'income → invalid_category_applies_to en el primer gasto', () async {
+      final bolsaId = await accountsDao.createBolsa();
+      final catSueldoOnly = await categoriesDao.create(
+        name: 'Sueldo_BULK3',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'banknotes',
+      );
+      final e1 = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 500,
+        occurredAt: DateTime.now(),
+      );
+      final e2 = await entriesDao.registerExpense(
+        accountOriginId: bolsaId,
+        amount: 200,
+        occurredAt: DateTime.now(),
+      );
+
+      await expectLater(
+        entriesDao.bulkUpdateCategory(
+          entryIds: [e1, e2],
+          categoryId: catSueldoOnly,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_category_applies_to')),
+      );
+
+      // Nada persistió (transacción rolled back).
+      final all = await entriesDao.watchPage().first;
+      expect(
+        all.every((e) => e.entry.categoryId == null),
+        isTrue,
+        reason: 'batch inválido NO debe persistir ninguna asignación parcial',
+      );
+    });
+
+    test(
+        'UT-BULK-04: bulkUpdateCategory con categoryId=null desasigna en '
+        'cualquier kind', () async {
+      final bolsaId = await accountsDao.createBolsa();
+      final debitId = await accountsDao.create(
+        name: 'Bank_BULK4',
+        type: 'debit',
+      );
+      final catSueldo = await categoriesDao.create(
+        name: 'Sueldo_BULK4',
+        appliesTo: 'income',
+        colorSlug: 'green',
+        iconSlug: 'banknotes',
+      );
+      final e1 = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 500,
+        occurredAt: DateTime.now(),
+        categoryId: catSueldo,
+      );
+      // Un transfer nunca acepta categoría — bulkUpdateCategory con null
+      // igual debe funcionar (idempotente).
+      final e2 = await entriesDao.registerTransfer(
+        accountOriginId: bolsaId,
+        accountDestinationId: debitId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+      );
+
+      final updated = await entriesDao.bulkUpdateCategory(
+        entryIds: [e1, e2],
+        categoryId: null,
+      );
+
+      expect(updated, 2);
+      final all = await entriesDao.watchPage().first;
+      expect(all.every((e) => e.entry.categoryId == null), isTrue);
+    });
+
+    test('UT-BULK-05: bulkUpdateCategory con id inexistente lanza not_found',
+        () async {
+      final bolsaId = await accountsDao.createBolsa();
+      final e1 = await entriesDao.registerIncome(
+        accountDestinationId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+      );
+      await expectLater(
+        entriesDao.bulkUpdateCategory(
+          entryIds: [e1, 'uuid-que-no-existe'],
+          categoryId: null,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'not_found')),
+      );
+    });
+
+    test(
+        'UT-BULK-06: bulkUpdateCategory con batch vacío retorna 0 sin '
+        'tocar nada', () async {
+      final result = await entriesDao.bulkUpdateCategory(
+        entryIds: const [],
+        categoryId: null,
+      );
+      expect(result, 0);
+    });
+
+    test(
+        'UT-BULK-07: bulkUpdateCategory sobre entry con categoría archivada '
+        'sigue el flujo del filtro server-side (lanza applies_to al fallar)',
+        () async {
+      // Categoría archivada NO se puede asignar aunque exista en la BD:
+      // `_validateCategoryForKind` la detecta como archivada y rechaza.
+      final bolsaId = await accountsDao.createBolsa();
+      final catArchivada = await categoriesDao.create(
+        name: 'Vieja_BULK7',
+        appliesTo: 'expense',
+        colorSlug: 'gray',
+        iconSlug: 'tag',
+      );
+      await categoriesDao.archive(catArchivada);
+      final e1 = await entriesDao.registerExpense(
+        accountOriginId: bolsaId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+      );
+
+      await expectLater(
+        entriesDao.bulkUpdateCategory(
+          entryIds: [e1],
+          categoryId: catArchivada,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_category_applies_to')),
+      );
+    });
+
+    test(
+        'UT-BULK-08: bulkUpdateCategory sobre entry ligado a préstamo lanza '
+        'immutable_loan_payment', () async {
+      // Setup: crear préstamo con income inicial + 1 loan_payment; ambos
+      // tienen loan_id, por lo que el bulk no debe permitir tocarlos.
+      final bolsaId = await accountsDao.createBolsa();
+      final loansDao = db.loansDao;
+      final loanId = await loansDao.create(
+        name: 'Préstamo test',
+        principalAmount: 12000,
+        monthlyPayment: 1100,
+        initialDurationMonths: 12,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 1, 1),
+        destinationAccountId: bolsaId,
+      );
+      // El income inicial se creó como parte de createLoan; encontrarlo.
+      final all = await entriesDao.watchPage().first;
+      final loanIncome = all
+          .firstWhere((e) => e.entry.loanId == loanId && e.entry.kind == 'income')
+          .entry
+          .id;
+
+      await expectLater(
+        entriesDao.bulkUpdateCategory(
+          entryIds: [loanIncome],
+          categoryId: null,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'immutable_loan_payment')),
+      );
+    });
+
     test('UT-19: onUpgrade(4→5) sobre BD limpia es idempotente', () async {
       // La BD in-memory ya está en v5. Correr onUpgrade otra vez no debe
       // romper (backfill sin nulls + alterTable sobre schema actual + CREATE
