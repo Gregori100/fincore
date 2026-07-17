@@ -92,6 +92,12 @@ class BudgetItemDisplay {
 /// reconstruya con el nuevo orden apenas el `sort_order` se persiste. En
 /// SQLite in-memory/local ese round-trip es virtualmente instantáneo, así
 /// que no hay parpadeo perceptible por no optimista-actualizar localmente.
+///
+/// Sprint flutter-budgets-polish-v1 (P1a): el borrado dejó de vivir como
+/// botón X inline y pasó a swipe-to-delete (`Dismissible`). Libera ~44dp
+/// de ancho por row y usa un patrón nativo Android. El `Dismissible`
+/// captura horizontal drag; el `ReorderableDragStartListener` sigue con
+/// vertical drag por el handle — ejes ortogonales, sin conflicto.
 class ItemsSection extends StatelessWidget {
   /// "Ingresos esperados" | "Gastos planeados".
   final String title;
@@ -197,17 +203,37 @@ class ItemsSection extends StatelessWidget {
             onReorder: _handleReorder,
             children: [
               for (var i = 0; i < items.length; i++)
-                _ItemRow(
+                // P1a: Dismissible como wrapper — su `key` es la que
+                // `ReorderableListView` observa para identificar el hijo. El
+                // `_ItemRow` interno ya no necesita key. `confirmDismiss`
+                // delega en el caller: `onDeleteItem` muestra el ConfirmDialog
+                // y devuelve un bool que se propaga. Si el usuario cancela,
+                // el swipe se revierte y no se llama al DAO.
+                Dismissible(
                   key: ValueKey(items[i].id),
-                  index: i,
-                  item: items[i],
-                  amountColor: amountColor,
-                  onTap: () => onTapItem(items[i].id),
-                  onDelete: () => onDeleteItem(items[i].id),
-                  onToggleDone: onToggleDone == null
-                      ? null
-                      : () => onToggleDone!(items[i].id),
-                  categoryBadgeBuilder: categoryBadgeBuilder,
+                  direction: DismissDirection.endToStart,
+                  background: const _DismissBackground(),
+                  confirmDismiss: (_) async {
+                    onDeleteItem(items[i].id);
+                    // Retornamos false para que Dismissible NO remueva la
+                    // fila de la UI: el caller ya ejecuta `deleteItem` en el
+                    // DAO que dispara la re-emisión del stream, y la fila
+                    // desaparece "por sí sola" cuando el nuevo snapshot llega.
+                    // Devolver true acá causaría un flicker: el widget se
+                    // quita optimistamente + luego el stream re-emite lo
+                    // mismo + se vuelve a montar durante 1 frame.
+                    return false;
+                  },
+                  child: _ItemRow(
+                    index: i,
+                    item: items[i],
+                    amountColor: amountColor,
+                    onTap: () => onTapItem(items[i].id),
+                    onToggleDone: onToggleDone == null
+                        ? null
+                        : () => onToggleDone!(items[i].id),
+                    categoryBadgeBuilder: categoryBadgeBuilder,
+                  ),
                 ),
             ],
           ),
@@ -221,17 +247,14 @@ class _ItemRow extends StatelessWidget {
   final BudgetItemDisplay item;
   final Color amountColor;
   final VoidCallback onTap;
-  final VoidCallback onDelete;
   final VoidCallback? onToggleDone;
   final Widget Function(String? categoryId)? categoryBadgeBuilder;
 
   const _ItemRow({
-    required super.key,
     required this.index,
     required this.item,
     required this.amountColor,
     required this.onTap,
-    required this.onDelete,
     required this.onToggleDone,
     required this.categoryBadgeBuilder,
   });
@@ -242,12 +265,18 @@ class _ItemRow extends StatelessWidget {
     // stripe lateral y el monto se atenúan y el nombre queda tachado.
     // El drag handle y el checkbox mantienen contraste completo — siguen
     // siendo affordances tapables.
+    //
+    // Sprint flutter-budgets-polish-v1 (P2a): stripe + monto + badge
+    // comparten `alphaMuted` (0.45) en vez de 3 valores distintos. Fija
+    // una "atenuación única" para el estado `done` que se lee coherente.
     final done = item.isDone;
     final effectiveAmountColor = done
-        ? amountColor.withValues(alpha: 0.45)
+        ? amountColor.withValues(alpha: FincoreColors.alphaMuted)
         : amountColor;
     final nameColor = done ? FincoreColors.textMuted : FincoreColors.textPrimary;
-    final stripeColor = done ? amountColor.withValues(alpha: 0.35) : amountColor;
+    final stripeColor = done
+        ? amountColor.withValues(alpha: FincoreColors.alphaMuted)
+        : amountColor;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -284,6 +313,12 @@ class _ItemRow extends StatelessWidget {
                   // propio tamaño), así que el `GestureDetector` con
                   // `HitTestBehavior.opaque` es el que realmente extiende
                   // el área táctil a los 44x44 completos.
+                  //
+                  // P1b (polish-v1): handle subordinado al checkbox. Ícono
+                  // 20sp (era 24) + `textSubtle` a alpha 0.55 permanente.
+                  // Mantiene el touch target 44x44 pero deja el checkbox
+                  // como affordance dominante — dejan de leerse como dos
+                  // botones "gemelos" grises.
                   ReorderableDragStartListener(
                     index: index,
                     child: SizedBox(
@@ -291,11 +326,12 @@ class _ItemRow extends StatelessWidget {
                       height: 44,
                       child: GestureDetector(
                         behavior: HitTestBehavior.opaque,
-                        child: const Center(
+                        child: Center(
                           child: Icon(
                             Icons.drag_indicator,
-                            size: 24,
-                            color: FincoreColors.textSubtle,
+                            size: 20,
+                            color: FincoreColors.textSubtle
+                                .withValues(alpha: 0.55),
                           ),
                         ),
                       ),
@@ -306,6 +342,12 @@ class _ItemRow extends StatelessWidget {
                     // Rechazamos `Checkbox` desnudo — el touch target de M3
                     // ya es 40x40, pero el ícono se ve chico y sin borde en
                     // dark theme. Envolvemos en un contenedor 44x44 tapable.
+                    //
+                    // P3a (polish-v1): `check_circle_outline` en lugar de
+                    // `radio_button_unchecked` para el estado no-marcado.
+                    // Mismo family que `check_circle` → sin salto de peso
+                    // óptico en el AnimatedSwitcher y metáfora correcta
+                    // (tarea completada, no selección única).
                     Semantics(
                       button: true,
                       checked: done,
@@ -326,7 +368,7 @@ class _ItemRow extends StatelessWidget {
                               child: Icon(
                                 done
                                     ? Icons.check_circle
-                                    : Icons.radio_button_unchecked,
+                                    : Icons.check_circle_outline,
                                 key: ValueKey(done),
                                 size: 22,
                                 color: done
@@ -372,8 +414,13 @@ class _ItemRow extends StatelessWidget {
                                   ),
                                   if (categoryBadgeBuilder != null) ...[
                                     const SizedBox(height: 4),
+                                    // P2a (polish-v1): badge también en
+                                    // alphaMuted cuando done. Antes 0.5,
+                                    // ahora 0.45 igual que stripe/monto.
                                     Opacity(
-                                      opacity: done ? 0.5 : 1.0,
+                                      opacity: done
+                                          ? FincoreColors.alphaMuted
+                                          : 1.0,
                                       child: categoryBadgeBuilder!(
                                           item.categoryId),
                                     ),
@@ -389,53 +436,125 @@ class _ItemRow extends StatelessWidget {
                             // lo atenuamos por `isDone` porque el saldo
                             // sigue siendo real; el tachado ya comunica el
                             // estado del renglón.
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                AnimatedDefaultTextStyle(
-                                  duration: kMotionFast,
-                                  curve: kCurveStandard,
-                                  style: TextStyle(
-                                    color: effectiveAmountColor,
-                                    fontWeight: FontWeight.w600,
-                                    decoration: done
-                                        ? TextDecoration.lineThrough
-                                        : TextDecoration.none,
-                                    decorationColor: FincoreColors.textMuted,
-                                    decorationThickness: 2,
-                                  ),
-                                  child: Text(formatAmount(item.amount)),
-                                ),
-                                if (item.cumulativeAfter != null) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '= ${formatAmount(item.cumulativeAfter!)}',
-                                    style: overline.copyWith(
-                                      color: item.cumulativeAfter! < 0
-                                          ? FincoreColors.negative
-                                          : FincoreColors.textMuted,
+                            //
+                            // P1c (polish-v1): hairline 1px de border entre
+                            // monto y subtotal. Corta la lectura de "misma
+                            // unidad de información" cuando el monto está
+                            // apagado (isDone) y el subtotal es rojo
+                            // (negativo) — evita que se lea como "alerta".
+                            //
+                            // P2d (polish-v1): Semantics agrupado sobre la
+                            // Column completa con label descriptivo. Sin
+                            // esto, TalkBack lee 2 nodos con símbolo "="
+                            // literal ("igual, cien pesos").
+                            Semantics(
+                              container: true,
+                              label: item.cumulativeAfter == null
+                                  ? 'Monto ${formatAmount(item.amount)}'
+                                  : 'Monto ${formatAmount(item.amount)}, '
+                                      'saldo acumulado '
+                                      '${formatAmount(item.cumulativeAfter!)}',
+                              excludeSemantics: true,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  AnimatedDefaultTextStyle(
+                                    duration: kMotionFast,
+                                    curve: kCurveStandard,
+                                    style: TextStyle(
+                                      color: effectiveAmountColor,
+                                      fontWeight: FontWeight.w600,
+                                      decoration: done
+                                          ? TextDecoration.lineThrough
+                                          : TextDecoration.none,
+                                      decorationColor: FincoreColors.textMuted,
+                                      decorationThickness: 2,
                                     ),
+                                    child: Text(formatAmount(item.amount)),
                                   ),
+                                  if (item.cumulativeAfter != null) ...[
+                                    const SizedBox(height: 3),
+                                    Container(
+                                      width: 32,
+                                      height: 1,
+                                      color: FincoreColors.border,
+                                    ),
+                                    const SizedBox(height: 3),
+                                    // P2b (polish-v1): `label` en lugar de
+                                    // `overline`. `overline` tiene tracking
+                                    // 1.2 pensado para labels en mayúsculas
+                                    // ("MIS CUENTAS"); aplicado a una cifra
+                                    // deja los dígitos con demasiado aire.
+                                    // `label` (12sp/0.1 tracking) se lee
+                                    // como número, no como etiqueta.
+                                    //
+                                    // P2c (polish-v1): TweenAnimationBuilder
+                                    // sobre el valor. Cuando el reorder
+                                    // cambia la cascada, el número se anima
+                                    // en kMotionFast en vez de saltar de un
+                                    // frame al siguiente. Comunica que "esto
+                                    // se recalculó" como consecuencia del
+                                    // reorder.
+                                    TweenAnimationBuilder<double>(
+                                      tween: Tween<double>(
+                                        end: item.cumulativeAfter!,
+                                      ),
+                                      duration: kMotionFast,
+                                      curve: kCurveStandard,
+                                      builder: (context, value, _) {
+                                        return Text(
+                                          '= ${formatAmount(value)}',
+                                          style: label.copyWith(
+                                            color: value < 0
+                                                ? FincoreColors.negative
+                                                : FincoreColors.textMuted,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 18),
-                    color: FincoreColors.textSubtle,
-                    tooltip: 'Eliminar',
-                    onPressed: onDelete,
-                  ),
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// P1a (polish-v1): background que aparece al hacer swipe hacia la izquierda
+/// sobre un `_ItemRow`. Rojo con ícono `delete_outline` alineado a la
+/// derecha, siguiendo el patrón Material que Diego ya reconoce de Gmail,
+/// Todoist, etc.
+class _DismissBackground extends StatelessWidget {
+  const _DismissBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: FincoreColors.negative.withValues(
+          alpha: FincoreColors.alphaTint,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: const Icon(
+        Icons.delete_outline,
+        color: FincoreColors.negative,
+        size: 24,
       ),
     );
   }
