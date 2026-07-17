@@ -5,6 +5,8 @@ import 'package:fincore/constants/reports_tokens.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/date_field_outlined.dart';
@@ -194,7 +196,7 @@ class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
             ],
           ),
         ],
-        const SizedBox(height: 16),
+        const SizedBox(height: kSpaceLg),
         // Stream del reporte (cacheado en `_reportStream`).
         StreamBuilder<SpendingReport>(
           stream: _reportStream,
@@ -228,9 +230,9 @@ class _SpendingByCategoryTabState extends State<SpendingByCategoryTab> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _TotalCard(report: report),
-                const SizedBox(height: 16),
+                const SizedBox(height: kSpaceLg),
                 for (var i = 0; i < report.buckets.length; i++) ...[
-                  if (i > 0) const SizedBox(height: 8),
+                  if (i > 0) const SizedBox(height: kSpaceSm),
                   _SpendingBucketRow(
                     bucket: report.buckets[i],
                     maxTotal: report.buckets.first.total,
@@ -277,7 +279,7 @@ class _TotalCard extends StatelessWidget {
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: kSpaceXs),
           Text(
             movimientos,
             style: const TextStyle(
@@ -359,8 +361,8 @@ class _SpendingBucketRow extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+                  color: color.withValues(alpha: FincoreColors.alphaTint),
+                  borderRadius: BorderRadius.circular(kRadiusMd),
                 ),
                 child: Icon(icon, size: 18, color: color),
               ),
@@ -436,7 +438,7 @@ class _EmptyState extends StatelessWidget {
             size: 56,
             color: FincoreColors.textMuted,
           ),
-          SizedBox(height: 12),
+          SizedBox(height: kSpaceMd),
           Text(
             'No hay gastos en el rango seleccionado',
             textAlign: TextAlign.center,
@@ -505,7 +507,7 @@ class _ErrorState extends StatelessWidget {
             size: 48,
             color: FincoreColors.negative,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: kSpaceMd),
           const Text(
             'No se pudo cargar el reporte',
             textAlign: TextAlign.center,
@@ -525,7 +527,7 @@ class _ErrorState extends StatelessWidget {
               fontSize: 12,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: kSpaceMd),
           OutlinedButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh, size: 16),

@@ -7,6 +7,8 @@ import 'package:fincore/data/database.dart' as db;
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_motion.dart';
+import 'package:fincore/theme/fincore_radii.dart';
+import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/movement_row.dart';
@@ -171,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Row(
                   children: [
                     Icon(Icons.request_quote_outlined),
-                    SizedBox(width: 8),
+                    SizedBox(width: kSpaceSm),
                     Text('Préstamos'),
                   ],
                 ),
@@ -181,7 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Row(
                   children: [
                     Icon(Icons.label_outline),
-                    SizedBox(width: 8),
+                    SizedBox(width: kSpaceSm),
                     Text('Categorías'),
                   ],
                 ),
@@ -202,7 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
         children: [
           _TodayCard(stream: _todayStream!),
-          const SizedBox(height: 12),
+          const SizedBox(height: kSpaceMd),
           Row(
             children: [
               Expanded(
@@ -214,7 +216,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   sparklineStream: _boSparkStream,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: kSpaceSm),
               Expanded(
                 child: _TotalCard(
                   label: 'Deuda',
@@ -224,7 +226,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   sparklineStream: _deSparkStream,
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: kSpaceSm),
               Expanded(
                 child: _TotalCard(
                   label: 'Disponible',
@@ -270,7 +272,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     children: [
                       for (final l in loans) ...[
                         _LoanStatusChip(loan: l),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: kSpaceSm),
                       ],
                     ],
                   ),
@@ -278,7 +280,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: kSpaceXl),
           SectionTitle(
             'Mis cuentas',
             trailing: TextButton.icon(
@@ -287,7 +289,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: const Text('Ver todas'),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: kSpaceSm),
           StreamBuilder<List<db.Account>>(
             stream: _accountsStream,
             builder: (context, snap) {
@@ -295,9 +297,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return const Column(
                   children: [
                     SkeletonCard(),
-                    SizedBox(height: 8),
+                    SizedBox(height: kSpaceSm),
                     SkeletonCard(),
-                    SizedBox(height: 8),
+                    SizedBox(height: kSpaceSm),
                     SkeletonCard(),
                   ],
                 );
@@ -314,14 +316,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               return Column(
                 children: [
                   for (var i = 0; i < accounts.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 8),
+                    if (i > 0) const SizedBox(height: kSpaceSm),
                     _AccountTile(account: accounts[i]),
                   ],
                 ],
               );
             },
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: kSpaceXl),
           SectionTitle(
             'Últimos movimientos',
             trailing: TextButton.icon(
@@ -330,13 +332,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: const Text('Ver todos'),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: kSpaceSm),
           _AccountFilterChips(
             stream: _accountsStream!,
             selectedId: _selectedAccountId,
             onChanged: _onFilterChanged,
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: kSpaceSm),
           StreamBuilder<List<EntryWithRelations>>(
             stream: _recentEntriesStream,
             builder: (context, snap) {
@@ -344,9 +346,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 return const Column(
                   children: [
                     SkeletonCard(),
-                    SizedBox(height: 8),
+                    SizedBox(height: kSpaceSm),
                     SkeletonCard(),
-                    SizedBox(height: 8),
+                    SizedBox(height: kSpaceSm),
                     SkeletonCard(),
                   ],
                 );
@@ -363,7 +365,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               return Column(
                 children: [
                   for (var i = 0; i < entries.length; i++) ...[
-                    if (i > 0) const SizedBox(height: 8),
+                    if (i > 0) const SizedBox(height: kSpaceSm),
                     MovementRow(item: entries[i], dateFormatPattern: 'd MMM'),
                   ],
                 ],
@@ -415,12 +417,12 @@ class _LoanTotalCard extends StatelessWidget {
               color: FincoreColors.categoryOrange.withValues(
                 alpha: FincoreColors.alphaTint,
               ),
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(kRadiusMd),
             ),
             child: const Icon(Icons.request_quote_outlined,
                 color: FincoreColors.categoryOrange),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: kSpaceMd),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -438,7 +440,7 @@ class _LoanTotalCard extends StatelessWidget {
                     letterSpacing: 1.2,
                   ),
                 ),
-                SizedBox(height: 2),
+                SizedBox(height: kSpace2xs),
                 Text(
                   'Saldo pendiente total',
                   style: TextStyle(
@@ -581,13 +583,13 @@ class _ChipShell extends StatelessWidget {
       constraints: const BoxConstraints(minHeight: 44),
       child: InkWell(
         onTap: () => context.push('/loans/$loanId'),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(kRadiusPill),
         child: Container(
           padding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: color.withValues(alpha: FincoreColors.alphaTint),
-            borderRadius: BorderRadius.circular(999),
+            borderRadius: BorderRadius.circular(kRadiusPill),
             border: Border.all(
               color: color.withValues(alpha: FincoreColors.alphaHairline),
             ),
@@ -1007,12 +1009,12 @@ class _AccountTile extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: _typeColor(account.type).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(8),
+              color: _typeColor(account.type).withValues(alpha: FincoreColors.alphaTint),
+              borderRadius: BorderRadius.circular(kRadiusMd),
             ),
             child: Icon(_typeIcon(account.type), size: 18, color: _typeColor(account.type)),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: kSpaceMd),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
