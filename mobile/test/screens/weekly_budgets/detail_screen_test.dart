@@ -232,8 +232,8 @@ void main() {
     });
 
     testWidgets(
-        'WT-DS05: delete item con confirmación → item desaparece + '
-        'balance recalcula',
+        'WT-DS05: swipe → confirmación → item desaparece + balance recalcula '
+        '(sprint flutter-budgets-polish-v1: P1a swipe-to-delete)',
         (tester) async {
       late String budgetId;
       final harness = await pumpFincoreApp(
@@ -260,7 +260,12 @@ void main() {
       // mini-amounts INGRESOS + GASTOS, así que el monto aparece más veces.
       expect(find.text(formatAmount(6500)), findsWidgets);
 
-      await tester.tap(find.byTooltip('Eliminar'));
+      // Swipe-to-delete: fling horizontal sobre el renglón activa el
+      // Dismissible, que dispara `onDeleteItem` (el caller muestra el
+      // ConfirmDialog). El `Dismissible` retorna `false` en `confirmDismiss`
+      // para no remover optimistamente — el stream reactivo emite el
+      // snapshot sin el ítem y la fila desaparece "sola".
+      await tester.fling(find.text('Sueldo'), const Offset(-500, 0), 1500);
       await tester.pumpAndSettle();
 
       // `ConfirmDialog` — confirmamos con el botón "Eliminar".
