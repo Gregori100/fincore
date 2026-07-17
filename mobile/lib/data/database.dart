@@ -252,6 +252,11 @@ class WeeklyBudgets extends Table {
 // después, el badge desaparece en el render pero el renglón no se rompe.
 // `kind ∈ {income, expense}`. `sort_order` para reorder manual (drag & drop
 // con handle).
+//
+// Sprint flutter-budgets-item-completion-v1: `is_done` marca manual del
+// usuario para "ya pasó / ya cumplí este renglón". Sin vínculo automático
+// a entries del journal — es una check-list operativa. Se resetea a false
+// al duplicar un presupuesto (los items del clon no heredan el estado).
 @DataClassName('WeeklyBudgetItemRow')
 class WeeklyBudgetItems extends Table {
   TextColumn get id => text()();
@@ -262,6 +267,7 @@ class WeeklyBudgetItems extends Table {
   RealColumn get amount => real()();
   TextColumn get kind => text()(); // 'income' | 'expense'
   IntColumn get sortOrder => integer()();
+  BoolColumn get isDone => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
 
@@ -341,7 +347,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -964,6 +970,84 @@ class FincoreDatabase extends _$FincoreDatabase {
             await _createLoansSchema();
             return;
           }
+          // Migración 12 → 13 (sprint flutter-budgets-item-completion-v1):
+          // agrega columna `is_done` a `weekly_budget_items` para marcar
+          // renglones "ya pasó / ya cumplí" desde la lista del presupuesto.
+          // Aditiva, DEFAULT 0 backfillea existentes a "no hecho". Idempotente
+          // vía probe de pragma_table_info.
+          if (from == 12 && to == 13) {
+            await _addIsDoneColumn();
+            return;
+          }
+          // Ramas defensivas X→13: cadena de todo lo que aterriza en v12 +
+          // `_addIsDoneColumn`. Mismo patrón que las X→12 (M4 del quality
+          // review v1 de flutter-loans-v1). Todos los helpers son idempotentes
+          // por probe / IF NOT EXISTS.
+          if (from == 11 && to == 13) {
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            return;
+          }
+          if (from == 10 && to == 13) {
+            await _maybeAddColumn(
+                'journal_entries',
+                'is_monthly_payment',
+                'INTEGER NOT NULL DEFAULT 0 CHECK (is_monthly_payment IN (0, 1))');
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            return;
+          }
+          if (from == 9 && to == 13) {
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            return;
+          }
+          if (from == 8 && to == 13) {
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            return;
+          }
+          if (from == 7 && to == 13) {
+            await _maybeAddColumn('weekly_budgets', 'is_template',
+                'INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1))');
+            await customStatement(
+                'DROP TABLE IF EXISTS budget_template_items');
+            await customStatement('DROP TABLE IF EXISTS budget_templates');
+            await customStatement(
+                'DROP INDEX IF EXISTS idx_bt_items_template_sort');
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            return;
+          }
+          if (from == 6 && to == 13) {
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            return;
+          }
+          if (from == 5 && to == 13) {
+            await _maybeAddColumn('accounts', 'minimum_capital_pct',
+                'REAL NOT NULL DEFAULT 0.015');
+            await _maybeAddColumn(
+                'accounts', 'minimum_floor', 'REAL NOT NULL DEFAULT 150');
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            return;
+          }
           // Hotfix quality-review B20: migración 11→12 agrega índices en la
           // tabla `loans` (deleted_at, destination_account_id). Aditiva.
           if (from == 11 && to == 12) {
@@ -1189,6 +1273,17 @@ class FincoreDatabase extends _$FincoreDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_entries_loan '
       'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
+    );
+  }
+
+  /// Sprint flutter-budgets-item-completion-v1: agrega `is_done` a
+  /// `weekly_budget_items` de forma idempotente (probe pragma_table_info).
+  /// DEFAULT 0 aplica a filas existentes.
+  Future<void> _addIsDoneColumn() async {
+    await _maybeAddColumn(
+      'weekly_budget_items',
+      'is_done',
+      'INTEGER NOT NULL DEFAULT 0 CHECK (is_done IN (0, 1))',
     );
   }
 

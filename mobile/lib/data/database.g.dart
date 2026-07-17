@@ -4360,6 +4360,19 @@ class $WeeklyBudgetItemsTable extends WeeklyBudgetItems
     type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _isDoneMeta = const VerificationMeta('isDone');
+  @override
+  late final GeneratedColumn<bool> isDone = GeneratedColumn<bool>(
+    'is_done',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_done" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -4391,6 +4404,7 @@ class $WeeklyBudgetItemsTable extends WeeklyBudgetItems
     amount,
     kind,
     sortOrder,
+    isDone,
     createdAt,
     updatedAt,
   ];
@@ -4457,6 +4471,12 @@ class $WeeklyBudgetItemsTable extends WeeklyBudgetItems
     } else if (isInserting) {
       context.missing(_sortOrderMeta);
     }
+    if (data.containsKey('is_done')) {
+      context.handle(
+        _isDoneMeta,
+        isDone.isAcceptableOrUnknown(data['is_done']!, _isDoneMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -4516,6 +4536,11 @@ class $WeeklyBudgetItemsTable extends WeeklyBudgetItems
             DriftSqlType.int,
             data['${effectivePrefix}sort_order'],
           )!,
+      isDone:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}is_done'],
+          )!,
       createdAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -4544,6 +4569,7 @@ class WeeklyBudgetItemRow extends DataClass
   final double amount;
   final String kind;
   final int sortOrder;
+  final bool isDone;
   final DateTime createdAt;
   final DateTime updatedAt;
   const WeeklyBudgetItemRow({
@@ -4554,6 +4580,7 @@ class WeeklyBudgetItemRow extends DataClass
     required this.amount,
     required this.kind,
     required this.sortOrder,
+    required this.isDone,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -4569,6 +4596,7 @@ class WeeklyBudgetItemRow extends DataClass
     map['amount'] = Variable<double>(amount);
     map['kind'] = Variable<String>(kind);
     map['sort_order'] = Variable<int>(sortOrder);
+    map['is_done'] = Variable<bool>(isDone);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -4586,6 +4614,7 @@ class WeeklyBudgetItemRow extends DataClass
       amount: Value(amount),
       kind: Value(kind),
       sortOrder: Value(sortOrder),
+      isDone: Value(isDone),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -4604,6 +4633,7 @@ class WeeklyBudgetItemRow extends DataClass
       amount: serializer.fromJson<double>(json['amount']),
       kind: serializer.fromJson<String>(json['kind']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      isDone: serializer.fromJson<bool>(json['isDone']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -4619,6 +4649,7 @@ class WeeklyBudgetItemRow extends DataClass
       'amount': serializer.toJson<double>(amount),
       'kind': serializer.toJson<String>(kind),
       'sortOrder': serializer.toJson<int>(sortOrder),
+      'isDone': serializer.toJson<bool>(isDone),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -4632,6 +4663,7 @@ class WeeklyBudgetItemRow extends DataClass
     double? amount,
     String? kind,
     int? sortOrder,
+    bool? isDone,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => WeeklyBudgetItemRow(
@@ -4642,6 +4674,7 @@ class WeeklyBudgetItemRow extends DataClass
     amount: amount ?? this.amount,
     kind: kind ?? this.kind,
     sortOrder: sortOrder ?? this.sortOrder,
+    isDone: isDone ?? this.isDone,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -4655,6 +4688,7 @@ class WeeklyBudgetItemRow extends DataClass
       amount: data.amount.present ? data.amount.value : this.amount,
       kind: data.kind.present ? data.kind.value : this.kind,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      isDone: data.isDone.present ? data.isDone.value : this.isDone,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -4670,6 +4704,7 @@ class WeeklyBudgetItemRow extends DataClass
           ..write('amount: $amount, ')
           ..write('kind: $kind, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('isDone: $isDone, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -4685,6 +4720,7 @@ class WeeklyBudgetItemRow extends DataClass
     amount,
     kind,
     sortOrder,
+    isDone,
     createdAt,
     updatedAt,
   );
@@ -4699,6 +4735,7 @@ class WeeklyBudgetItemRow extends DataClass
           other.amount == this.amount &&
           other.kind == this.kind &&
           other.sortOrder == this.sortOrder &&
+          other.isDone == this.isDone &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -4711,6 +4748,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
   final Value<double> amount;
   final Value<String> kind;
   final Value<int> sortOrder;
+  final Value<bool> isDone;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -4722,6 +4760,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     this.amount = const Value.absent(),
     this.kind = const Value.absent(),
     this.sortOrder = const Value.absent(),
+    this.isDone = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -4734,6 +4773,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     required double amount,
     required String kind,
     required int sortOrder,
+    this.isDone = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -4753,6 +4793,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     Expression<double>? amount,
     Expression<String>? kind,
     Expression<int>? sortOrder,
+    Expression<bool>? isDone,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -4765,6 +4806,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
       if (amount != null) 'amount': amount,
       if (kind != null) 'kind': kind,
       if (sortOrder != null) 'sort_order': sortOrder,
+      if (isDone != null) 'is_done': isDone,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -4779,6 +4821,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     Value<double>? amount,
     Value<String>? kind,
     Value<int>? sortOrder,
+    Value<bool>? isDone,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -4791,6 +4834,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
       amount: amount ?? this.amount,
       kind: kind ?? this.kind,
       sortOrder: sortOrder ?? this.sortOrder,
+      isDone: isDone ?? this.isDone,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -4821,6 +4865,9 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
+    if (isDone.present) {
+      map['is_done'] = Variable<bool>(isDone.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -4843,6 +4890,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
           ..write('amount: $amount, ')
           ..write('kind: $kind, ')
           ..write('sortOrder: $sortOrder, ')
+          ..write('isDone: $isDone, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -8065,6 +8113,7 @@ typedef $$WeeklyBudgetItemsTableCreateCompanionBuilder =
       required double amount,
       required String kind,
       required int sortOrder,
+      Value<bool> isDone,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -8078,6 +8127,7 @@ typedef $$WeeklyBudgetItemsTableUpdateCompanionBuilder =
       Value<double> amount,
       Value<String> kind,
       Value<int> sortOrder,
+      Value<bool> isDone,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -8172,6 +8222,11 @@ class $$WeeklyBudgetItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
+  ColumnFilters<bool> get isDone => $composableBuilder(
+    column: $table.isDone,
+    builder: (column) => ColumnFilters(column),
+  );
+
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
@@ -8263,6 +8318,11 @@ class $$WeeklyBudgetItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get isDone => $composableBuilder(
+    column: $table.isDone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -8343,6 +8403,9 @@ class $$WeeklyBudgetItemsTableAnnotationComposer
 
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDone =>
+      $composableBuilder(column: $table.isDone, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -8443,6 +8506,7 @@ class $$WeeklyBudgetItemsTableTableManager
                 Value<double> amount = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
+                Value<bool> isDone = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -8454,6 +8518,7 @@ class $$WeeklyBudgetItemsTableTableManager
                 amount: amount,
                 kind: kind,
                 sortOrder: sortOrder,
+                isDone: isDone,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -8467,6 +8532,7 @@ class $$WeeklyBudgetItemsTableTableManager
                 required double amount,
                 required String kind,
                 required int sortOrder,
+                Value<bool> isDone = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -8478,6 +8544,7 @@ class $$WeeklyBudgetItemsTableTableManager
                 amount: amount,
                 kind: kind,
                 sortOrder: sortOrder,
+                isDone: isDone,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

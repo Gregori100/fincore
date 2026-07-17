@@ -41,6 +41,7 @@ void main() {
       amount: amount,
       kind: kind,
       sortOrder: sortOrder,
+      isDone: false,
       createdAt: ts(1),
       updatedAt: ts(1),
     );
