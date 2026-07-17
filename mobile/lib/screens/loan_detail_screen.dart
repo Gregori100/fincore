@@ -821,25 +821,32 @@ class _SplitPill extends StatelessWidget {
   }
 }
 
+/// F-DES-1: FAB dividido apilado verticalmente (mini "Abono a capital"
+/// arriba + extended "Pago del mes" abajo). Antes eran dos extended en
+/// fila que sumaban ~360dp de ancho y se salían del borde en teléfonos
+/// de 360dp lógicos (gama media MX, muy común). La disposición vertical
+/// funciona en cualquier ancho sin `MediaQuery` condicional y refuerza
+/// que "Pago del mes" es la acción primaria (más cerca del pulgar).
 class _PaymentFabRow extends StatelessWidget {
   final String loanId;
   const _PaymentFabRow({required this.loanId});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        FloatingActionButton.extended(
+        FloatingActionButton.small(
           heroTag: 'loan-capital',
           onPressed: () =>
               context.push('/loans/$loanId/payments/new/capital'),
           backgroundColor: FincoreColors.surfaceElevated,
           foregroundColor: FincoreColors.accent,
-          icon: const Icon(Icons.savings_outlined),
-          label: const Text('Abono a capital'),
+          tooltip: 'Abono a capital',
+          child: const Icon(Icons.savings_outlined),
         ),
-        const SizedBox(width: kSpaceMd),
+        const SizedBox(height: kSpaceMd),
         FloatingActionButton.extended(
           heroTag: 'loan-monthly',
           onPressed: () =>
