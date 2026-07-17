@@ -229,6 +229,32 @@ Bonus manuales:
 - Verificar chip PRÓXIMO PAGO en Dashboard cuando el payment_day está a ≤5 días.
 - Verificar que un préstamo con payment_day próximo aparece con "en X días" y al día del vencimiento aparece "hoy".
 
+## Smoke post-hotfix v2-v5 (anexo 2026-07-17)
+
+Los smokes de arriba (1-20) corresponden al plan inicial del sprint. Durante los ciclos de smoke con Diego se agregaron los siguientes items para blindar los hotfixes iterativos v2 (columna `is_monthly_payment`), v3 (overpay + cascade + Saldar + read-only + renglón capital), v4 (chip inteligente con contract_day <= payment_day) y v5 (post-review).
+
+21. **Splits editables persisten `is_monthly_payment`** — Registrar pago del mes con `interest_amount = 0`. Editar el pago (cambiar amount): al guardar el badge del row sigue diciendo "Pago del mes" (no debe convertirse en capital). Este es el bug pre-v2 que reemplazó el proxy `interest > 0` por la columna persistida.
+22. **Bloqueo estricto de overpay** — En pago del mes o abono a capital, intentar capturar `principal > saldo pendiente`. Snackbar rojo con `overpay_loan` y el pago no se guarda. Verificar en edición que la fórmula suma el capital previo del propio entry.
+23. **Botón Saldar autocompleta y cierra** — En pago del mes: tap "Saldar" → `principal = saldo pendiente` y `amount = principal + interés`. Guardar → préstamo cierra `paid`. En abono a capital: tap "Saldar" → `amount = saldo`. Guardar → paid.
+24. **Cascada al eliminar pago del mes** — Registrar monthly + ≥1 abono a capital en el mismo mes. Eliminar el monthly. `DestructiveDialog` avisa "N abonos a capital se cancelarán en cascada". Confirmar "Eliminar todo": los N+1 quedan soft-deleted en una transacción.
+25. **Read-only solo si cerrado manual** — En un préstamo `paid` los pagos siguen editables/eliminables (con auto-reapertura). En un préstamo cerrado desde overflow "Cerrar préstamo" (manual) los rows del historial están read-only (con ícono candado + opacity 0.6). Reabrir vuelve a permitir edición.
+26. **Renglón "Pago a capital de préstamos"** — En Reportes → Gastos por categoría del mes con pagos registrados, aparece un renglón sintético azul (color blue, icon savings) con la suma de `principal_amount`. Tap → drill-down a `/entries` filtrado por `kind=loan_payment` en el rango.
+27. **Chip inteligente muestra atrasos** — Préstamo con `payment_day` que ya pasó este mes y sin pago del mes: chip rojo `"<nombre> · N mes(es) atrasado(s)"` en Dashboard. Registrar el pago → chip desaparece.
+28. **Chip inteligente con contract_day == payment_day** — Préstamo del 1/mes con `paymentDay = 1` y hoy > 1: chip rojo debe aparecer. Blindea el edge que introdujo el bug pre-v5.
+29. **Nav post-delete al Dashboard** — Eliminar préstamo desde el detalle → vuelve a Dashboard. Back nativo del cel no cierra la app (bug pre-v3).
+
+## Smoke post-quality-review (anexo 2026-07-17)
+
+Añadidos por el review de rama del 2026-07-17 (ver `engineering/quality-review/flutter-loans-v1/2026-07-17-2200-branch-quality-review.md`):
+
+30. **Backup preserva pagos del mes (B1)** — Registrar monthly + capital del mismo mes. Export → wipe → import. Verificar en `/loans/:id` que el pago mensual sigue con badge "Pago del mes" y NO se convierte en capital. Chip "próximo pago" del Dashboard NO aparece si el mes ya se cubrió.
+31. **Menú de acciones consistente entre form y detail (M3)** — Abrir menú overflow desde `/loans/:id` (detalle) y desde `/loans/:id/edit` (form). Los items deben ser idénticos módulo "Editar contrato" (solo en detalle). Los textos de los diálogos idénticos.
+32. **Botón Saldar disabled con tooltip cuando balance = 0 (B12)** — Editar un pago de un préstamo saldado. El botón "Saldar" está deshabilitado con tooltip "El préstamo ya está saldado" en vez de ocultarse.
+33. **Read-only visual con candado + opacity (M9)** — En préstamo cerrado manualmente, cada row de pago tiene ícono `lock_outline` en el header y opacity 0.6 sobre el card entero. Reabrir el préstamo restaura el look normal.
+34. **Empty state en préstamo eliminado (M10)** — Deep-link a `/loans/<id_inexistente>` muestra empty state "Este préstamo ya no existe" + botón "Volver al inicio". No spinner infinito.
+35. **Chips atrasado y próximo pago con minHeight 44 (M8)** — Verificar visualmente en cel que los chips del Dashboard son tappables sin miss touch.
+36. **Validador visible en picker de cuenta destino (B14)** — Al alta de préstamo, dejar el picker vacío e intentar Guardar. Mensaje rojo aparece debajo del picker (no solo snackbar).
+
 ## Datos de prueba recomendados
 
 - BD con:
@@ -257,10 +283,10 @@ flutter build apk --release --split-per-abi --target-platform android-arm64
 ## Criterios minimos para aprobar la implementacion
 
 - `flutter analyze` sin errores nuevos (5 hints preexistentes de `prefer_const_constructors` en entry_form_screen tolerados).
-- `flutter test` verde con ≥ 780 tests.
-- APK arm64 build sin errores. versionCode = 110.
-- Migración schemaVersion 9 → 10 corre sin corrupción en test de integración.
-- Smoke manual: los 20 items verificados por Diego.
+- `flutter test` verde con ≥ 840 tests (base 735 + los del sprint + hotfixes v2-v5 + post-review).
+- APK arm64 build sin errores. versionCode ≥ 113 (0.27.3 shipped; el review post-cierre puede bumpear a 114+).
+- Migración schemaVersion 9 → 12 corre sin corrupción en test de integración; ramas defensivas 5→11, 6→11, 7→11 cubiertas.
+- Smoke manual: los 20 items originales + smokes 21-29 post-hotfix + 30-36 post-review verificados por Diego.
 - Cero regresión en BO/DE/CR y reportes existentes.
 - Backup round-trip funciona.
 - KPI naranja aparece/desaparece correctamente.

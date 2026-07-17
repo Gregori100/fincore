@@ -54,7 +54,8 @@ dart run flutter_launcher_icons
 
 - **Account** (`lib/data/database.dart` tabla `accounts`): UUID v7 PK. `type ∈ { cash, debit, credit }`. La **Bolsa** es singleton: `type=cash`, `is_protected=true`, creada por `seedDefaults` al "Arrancar limpio". Los credit guardan `credit_limit` (NOT NULL DEFAULT 0 desde schema v5), `closing_day`, `payment_day`, `interest_rate`, `minimum_payment_pct`. Las tasas se guardan como decimal 0-1 (compat backup legacy: `0.05` = 5%); `interest_rate` y `minimum_payment_pct` quedan en schema por compat backup pero la UI ya no los expone. Acepta `description` (texto libre, máx 200).
 - **Category** (tabla `categories`): UUID v7 PK. `name`, `applies_to ∈ { income, expense, both }`, `color_slug` (1 de 10 colores curados), `icon_slug` (1 de ~30 iconos curados). Slugs en `lib/constants/category_catalog.dart`. SoftDelete: archived es terminal sin reactivación.
-- **JournalEntry** (tabla `journal_entries`): UUID v7 PK. `kind ∈ { income, expense, credit_expense, debt_payment, transfer }`. `account_origin_id` y `account_destination_id` opcionales según kind. Soft delete para cancelación.
+- **JournalEntry** (tabla `journal_entries`): UUID v7 PK. `kind ∈ { income, expense, credit_expense, debt_payment, transfer, loan_payment }`. `account_origin_id` y `account_destination_id` opcionales según kind. Los `loan_payment` guardan además `loan_id`, `principal_amount`, `interest_amount` e `is_monthly_payment`. Soft delete para cancelación.
+- **Loan** (tabla `loans`, sprint `flutter-loans-v1`): UUID v7 PK. `name`, `principal_amount`, `monthly_payment`, `initial_duration_months`, `current_duration_months`, `payment_day` (1-28), `contract_date`, `destination_account_id` (cash/debit — inmutable). Estados: activo (`closed_at IS NULL`), `paid` (auto tras saldo ≤ 0), `manual` (cerrado por usuario). Soft delete cascada income + pagos.
 
 ### Kinds y reglas tipo↔cuenta (RN-011)
 
@@ -65,6 +66,7 @@ dart run flutter_launcher_icons
 | `credit_expense` | credit | null | cargo a tarjeta |
 | `debt_payment` | cash/debit | credit | pago de tarjeta |
 | `transfer` | cash/debit | cash/debit | mover entre cuentas |
+| `loan_payment` | cash/debit | null | pago mensual / abono a capital de un préstamo (`loan_id` obligatorio, `principal + interest = amount`, sólo desde `/loans/:id`) |
 
 ### Balance derivado
 
@@ -82,17 +84,18 @@ Los gastos, transfers y cargos a tarjeta se permiten **siempre**, incluso si dej
 
 ```
 data/
-├── database.dart           # Tablas drift + 6 índices + schemaVersion=1 + PRAGMA foreign_keys=ON
+├── database.dart           # Tablas drift + índices + schemaVersion=12 + PRAGMA foreign_keys=ON
 ├── database.g.dart         # Generado por build_runner (no editar)
 ├── uuid.dart               # UuidV7 compatible con backend Laravel HasUuids
 ├── daos/
 │   ├── accounts_dao.dart   # CRUD + validaciones (Bolsa singleton, duplicate name, ...)
 │   ├── categories_dao.dart # CRUD + slugs válidos
-│   └── entries_dao.dart    # registerIncome/Expense/CreditExpense/DebtPayment/Transfer + updateEntry + cancel
-├── financial_state.dart    # Streams reactivos cacheados BO/DE/CR + balance por cuenta
+│   ├── entries_dao.dart    # registerIncome/Expense/CreditExpense/DebtPayment/Transfer + register/update/deleteLoanPayment + updateEntry + cancel
+│   └── loans_dao.dart      # CRUD préstamos + balanceOf reactivo + closeManual/reopen + applyPaymentSideEffects + watchMonthsOverdue
+├── financial_state.dart    # Streams reactivos cacheados BO/DE/CR + balance por cuenta + total loans
 ├── seed.dart               # Bolsa + 10 categorías default (idempotente)
 ├── bootstrap.dart          # hasBolsa(db) para decidir redirect inicial
-└── backup.dart             # Export + Import + wipeAll (JSON v1 idéntico al backend legacy)
+└── backup.dart             # Export + Import + wipeAll (JSON v1 legacy + v2 con loans)
 ```
 
 ### Reglas clave de los DAOs
@@ -229,6 +232,16 @@ Los DAOs lanzan errores con código y mensaje. Los mismos códigos del backend l
 | `immutable_journal_field` | `EntriesDao.updateEntry` | sí |
 | `not_found` | `EntriesDao.findById` | sí |
 | `unsupported_version` / `missing_bolsa` / `invalid_reference` / `invalid_json` | `BackupService.importFromJson` | sí |
+| `overpay_loan` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
+| `duplicate_monthly_payment` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
+| `capital_before_monthly` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
+| `invalid_loan_split` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
+| `payment_before_contract` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
+| `loan_closed` | `EntriesDao.registerLoanPayment` | sí |
+| `immutable_loan_payment` | `EntriesDao.updateEntry/cancel` sobre `loan_payment`/`loan_income` | sí |
+| `immutable_loan_field` | `LoansDao.updateLoan` | sí |
+| `account_in_use_by_loan` | `AccountsDao.archive/deleteAccount` | sí |
+| `cannot_reopen_paid` | `LoansDao.reopen` | sí |
 
 `lib/widgets/error_snackbar.dart` mapea cada código a un mensaje amigable en español.
 

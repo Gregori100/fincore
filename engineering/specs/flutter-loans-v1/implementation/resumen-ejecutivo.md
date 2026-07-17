@@ -38,3 +38,14 @@ Los movimientos ligados a préstamo (ingreso inicial + pagos) son **inmutables**
 ## Bump de versión
 
 `0.26.0+109` → `0.27.0+110` (minor por feature de dominio grande + schema bump 9→10 + backup v1→v2).
+
+## Addenda de cierre (2026-07-17)
+
+El sprint terminó shipped en `0.27.3+113` con schemaVersion 11 tras 5 ciclos de hotfixes iterativos con Diego:
+
+- **v2 (0.27.1+111)**: agregó columna persistida `is_monthly_payment` (schema 10→11) reemplazando el proxy legacy `interest > 0`. Sin esto los pagos del mes con interés=0 quedaban clasificados como capital.
+- **v3 (0.27.2+112)**: bloqueo estricto de overpay (`overpay_loan`), cascade delete de capitales del mismo mes al eliminar monthly, botón "Saldar" en ambos formularios, read-only condicional en préstamos cerrados, renglón sintético "Pago a capital de préstamos" en reportes.
+- **v4 (0.27.3+113)**: fix del bug real del cascade (`customStatement` no acepta `Variable<DateTime>`), chip inteligente del dashboard con `contract_day <= paymentDay` (edge del 1 del mes), read-only solo si `closeReason == 'manual'`.
+- **Quality review 2026-07-17** (`engineering/quality-review/flutter-loans-v1/2026-07-17-2200-branch-quality-review.md`): 3 bloqueantes (backup no preservaba `is_monthly_payment`, `updateLoanPayment` sin tests, brecha del round-trip) + 11 medias + 17 bajas. Corregidos en un solo lote post-review con schema bump 11→12 (índices en `loans`) y `LoanActionsMenu` extraído.
+- Total tests al cierre: **≥ 842 verdes**, 0 errores de analyze.
+- Los cambios finales del ciclo shipped en una versión posterior a `0.27.3`.
