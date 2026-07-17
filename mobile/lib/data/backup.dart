@@ -278,6 +278,39 @@ class BackupService {
         );
       }
     }
+    // Hotfix quality-review B4: cada Loan del payload debe tener exactamente
+    // 1 income inicial en journal_entries con {kind:'income',
+    // loan_id=loan.id, account_destination_id=loan.destination_account_id,
+    // amount ≈ loan.principal_amount}. Sin este check, un backup manipulado
+    // deja Loans "sin origen contable" y BO/DE reportan saldos inconsistentes
+    // sin error tipado. Ojo: los cerrados/eliminados también aplican porque
+    // el export sólo emite loans con deleted_at IS NULL.
+    for (final loan in loansParsed) {
+      final loanId = loan.id.value;
+      final expectedDest = loan.destinationAccountId.value;
+      final expectedAmount = loan.principalAmount.value;
+      final loanIncomes = entriesParsed.where((e) =>
+          e.kind.value == 'income' &&
+          e.loanId.value == loanId &&
+          e.accountDestinationId.value == expectedDest &&
+          (e.amount.value - expectedAmount).abs() < 0.005);
+      if (loanIncomes.isEmpty) {
+        throw BackupError(
+          'invalid_reference',
+          'El préstamo "${loan.name.value}" no tiene un ingreso inicial válido '
+          'en journal_entries (kind=income con loan_id, cuenta destino y '
+          'principal_amount correspondientes).',
+        );
+      }
+      if (loanIncomes.length > 1) {
+        throw BackupError(
+          'invalid_reference',
+          'El préstamo "${loan.name.value}" tiene múltiples ingresos iniciales '
+          '(esperado exactamente 1).',
+        );
+      }
+    }
+
     for (final entry in entriesParsed) {
       final origin = entry.accountOriginId.value;
       if (origin != null && !accountIds.contains(origin)) {
@@ -418,6 +451,12 @@ class BackupService {
         if (e.loanId != null) 'loan_id': e.loanId,
         if (e.principalAmount != null) 'principal_amount': e.principalAmount,
         if (e.interestAmount != null) 'interest_amount': e.interestAmount,
+        // Hotfix quality-review B1: sin este flag el round-trip convierte
+        // TODOS los loan_payment en capital (default 0 del schema), rompe
+        // watchHasMonthlyPaymentIn y capital_before_monthly después de
+        // cualquier import.
+        if (e.kind == 'loan_payment')
+          'is_monthly_payment': e.isMonthlyPayment,
         'created_at': e.createdAt.toUtc().toIso8601String(),
         'updated_at': e.updatedAt.toUtc().toIso8601String(),
       };
@@ -648,6 +687,10 @@ class BackupService {
         );
       }
     }
+    // Hotfix quality-review B1: leer `is_monthly_payment` con default false
+    // para backups v1 (no tenían el campo). Es NOT NULL en el schema.
+    final isMonthlyPayment =
+        (json['is_monthly_payment'] as bool?) ?? false;
     return JournalEntriesCompanion.insert(
       id: id,
       kind: kind,
@@ -660,6 +703,7 @@ class BackupService {
       loanId: Value(loanId),
       principalAmount: Value(principalAmount),
       interestAmount: Value(interestAmount),
+      isMonthlyPayment: Value(isMonthlyPayment),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );

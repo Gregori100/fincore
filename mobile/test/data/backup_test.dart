@@ -925,6 +925,114 @@ void main() {
       expect(payments.first.amount, 750);
       expect(payments.first.principalAmount, 500);
       expect(payments.first.interestAmount, 250);
+      // Hotfix quality-review B3: la brecha que dejó pasar B1.
+      expect(payments.first.isMonthlyPayment, isTrue,
+          reason: 'is_monthly_payment DEBE preservarse en el round-trip v2');
+    });
+
+    test(
+        'Round-trip preserva is_monthly_payment mixto (monthly + capital del mismo mes)',
+        () async {
+      await accountsDao.createBolsa();
+      final bolsaId = (await accountsDao.listAll())
+          .firstWhere((a) => a.type == 'cash')
+          .id;
+      final loanId = await db.loansDao.create(
+        name: 'BBVA Mixto',
+        principalAmount: 10000,
+        monthlyPayment: 500,
+        initialDurationMonths: 24,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 6, 1),
+        destinationAccountId: bolsaId,
+      );
+      final monthlyId = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500,
+        principalAmount: 400,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 7, 5),
+        isMonthlyPayment: true,
+      );
+      final capitalId = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 200,
+        principalAmount: 200,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 7, 20),
+        isMonthlyPayment: false,
+      );
+
+      final json = await backup.exportToJson();
+      await backup.wipeAll();
+      await accountsDao.createBolsa();
+      await backup.importFromJson(json);
+
+      final monthlyAfter = await entriesDao.findById(monthlyId);
+      final capitalAfter = await entriesDao.findById(capitalId);
+      expect(monthlyAfter?.entry.isMonthlyPayment, isTrue,
+          reason: 'El pago del mes debe seguir siendo monthly');
+      expect(capitalAfter?.entry.isMonthlyPayment, isFalse,
+          reason: 'El abono a capital debe seguir siendo capital');
+    });
+
+    test('Import v1 legacy sin is_monthly_payment: cae a false por default',
+        () async {
+      // v1 no tenía loan_payment, pero por robustez validamos el default
+      // del mapper para cualquier entry sin el flag.
+      const jsonV2SinFlag = '''
+{
+  "version": 2,
+  "exported_at": "2026-07-15T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01888888-89ab-7cde-8def-000000000001",
+      "name": "Bolsa",
+      "type": "cash",
+      "is_protected": true,
+      "credit_limit": 0,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "loans": [
+    {
+      "id": "01888888-89ab-7cde-8def-000000000002",
+      "name": "Legacy",
+      "principal_amount": 1000,
+      "monthly_payment": 100,
+      "initial_duration_months": 10,
+      "current_duration_months": 10,
+      "payment_day": 5,
+      "contract_date": "2026-06-01T00:00:00.000Z",
+      "destination_account_id": "01888888-89ab-7cde-8def-000000000001",
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "journal_entries": [
+    {
+      "id": "01888888-89ab-7cde-8def-000000000003",
+      "kind": "income",
+      "account_destination_id": "01888888-89ab-7cde-8def-000000000001",
+      "amount": 1000,
+      "occurred_at": "2026-06-01T00:00:00.000Z",
+      "loan_id": "01888888-89ab-7cde-8def-000000000002",
+      "created_at": "2026-06-01T00:00:00.000Z",
+      "updated_at": "2026-06-01T00:00:00.000Z"
+    }
+  ]
+}
+''';
+      await backup.wipeAll();
+      await backup.importFromJson(jsonV2SinFlag);
+      final entry = await entriesDao
+          .findById('01888888-89ab-7cde-8def-000000000003');
+      expect(entry?.entry.isMonthlyPayment, isFalse,
+          reason: 'Default false cuando el JSON no trae el flag');
     });
 
     test('Import v2 con loan.destination_account_id inexistente → invalid_reference',
