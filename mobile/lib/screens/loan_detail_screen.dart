@@ -637,10 +637,19 @@ class _PaymentRow extends StatelessWidget {
     // en vez del proxy `interest > 0`. Un pago del mes puede legítimamente
     // tener interés = 0 (mes de gracia) y sigue siendo del mes.
     final isMonthly = payment.isMonthlyPayment;
-    // Hotfix quality-review M9: en modo read-only (préstamo cerrado
-    // manualmente) atenuamos el card + agregamos ícono lock para señalizar
-    // por qué no responde al tap. Antes el usuario tocaba y no pasaba nada.
-    final card = BaseCard(
+    // F-DES-9: en read-only usamos colores explícitos (textSubtle/muted)
+    // en vez de `Opacity(0.6)` global. La opacidad atenuaba texto+fondo
+    // por igual y bajaba el contraste efectivo de forma no controlada —
+    // mal para datos contables históricos que el usuario quiere seguir
+    // leyendo con precisión. Ahora el ícono lock + los colores muted
+    // comunican "solo lectura" sin dilucionar la legibilidad del monto.
+    final textPrimary = readOnly
+        ? FincoreColors.textMuted
+        : FincoreColors.textPrimary;
+    final textSecondary = readOnly
+        ? FincoreColors.textSubtle
+        : FincoreColors.textPrimary;
+    return BaseCard(
       onTap: readOnly
           ? null
           : () {
@@ -665,16 +674,16 @@ class _PaymentRow extends StatelessWidget {
                     ],
                     Text(
                       fmt.format(payment.occurredAt),
-                      style: const TextStyle(
-                        color: FincoreColors.textPrimary,
+                      style: TextStyle(
+                        color: textSecondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       formatAmount(payment.amount),
-                      style: const TextStyle(
-                        color: FincoreColors.textPrimary,
+                      style: TextStyle(
+                        color: textPrimary,
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
@@ -726,7 +735,6 @@ class _PaymentRow extends StatelessWidget {
         ],
       ),
     );
-    return readOnly ? Opacity(opacity: 0.6, child: card) : card;
   }
 }
 
