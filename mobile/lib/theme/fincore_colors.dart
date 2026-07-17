@@ -101,4 +101,11 @@ abstract final class FincoreColors {
 
   /// Estado seleccionado (chip active, picker tile).
   static const double alphaSelected = 0.20;
+
+  /// Sprint flutter-budgets-polish-v1: atenuación uniforme para estado
+  /// "completado / done" en items de presupuesto. Aplicar al stripe, monto
+  /// tachado, badge de categoría y a cualquier acento de color que deba
+  /// leerse como "presente pero secundario". Un solo valor para evitar la
+  /// incoherencia de 3 alphas distintas (0.35/0.45/0.50) en el mismo row.
+  static const double alphaMuted = 0.45;
 }
