@@ -227,7 +227,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
     );
     if (!confirmed || !mounted) return;
     try {
-      await deps.loansDao.deleteLoan(widget.loanId, deps.stateService);
+      await deps.loansDao.deleteLoan(widget.loanId);
       if (mounted) {
         showSuccessSnackbar(context, 'Préstamo eliminado.');
         // Hotfix smoke Diego v3: nav a /dashboard (raíz) para evitar el

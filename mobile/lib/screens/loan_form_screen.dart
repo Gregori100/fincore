@@ -254,7 +254,7 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
     if (!confirmed || !mounted) return;
     setState(() => _saving = true);
     try {
-      await deps.loansDao.deleteLoan(widget.loanId!, deps.stateService);
+      await deps.loansDao.deleteLoan(widget.loanId!);
       if (mounted) {
         showSuccessSnackbar(context, 'Préstamo eliminado.');
         // Hotfix smoke Diego v3: nav a /dashboard (raíz) — dejaba /loans

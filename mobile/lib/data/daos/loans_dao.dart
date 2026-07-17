@@ -1,6 +1,5 @@
 import 'package:drift/drift.dart';
 import 'package:fincore/data/database.dart';
-import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/uuid.dart';
 
 part 'loans_dao.g.dart';
@@ -288,6 +287,45 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
     );
   }
 
+  /// Hotfix quality-review M2: aplica auto-cierre `paid` / auto-reapertura
+  /// según el balance actual del préstamo. Debe llamarse DENTRO de una
+  /// transacción del caller (registerLoanPayment, updateLoanPayment,
+  /// deleteLoanPayment) — no abre transacción propia. Idempotente: si el
+  /// estado ya coincide con la política, no escribe.
+  ///
+  /// Reglas (RN-L11/L12/L13):
+  ///  • Si `closeReason == 'manual'`: nunca toca (RN-L13).
+  ///  • `balance <= 0.005` + no cerrado → cerrar paid.
+  ///  • `balance > 0.005` + cerrado por paid → reabrir.
+  Future<void> applyPaymentSideEffects({
+    required String loanId,
+    required DateTime now,
+  }) async {
+    final loan = await (select(loans)
+          ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
+        .getSingleOrNull();
+    if (loan == null) return;
+    if (loan.closeReason == 'manual') return;
+    final balance = await balanceOf(loanId);
+    if (balance <= 0.005 && loan.closedAt == null) {
+      await (update(loans)..where((l) => l.id.equals(loanId))).write(
+        LoansCompanion(
+          closedAt: Value(now),
+          closeReason: const Value('paid'),
+          updatedAt: Value(now),
+        ),
+      );
+    } else if (balance > 0.005 && loan.closeReason == 'paid') {
+      await (update(loans)..where((l) => l.id.equals(loanId))).write(
+        LoansCompanion(
+          closedAt: const Value(null),
+          closeReason: const Value(null),
+          updatedAt: Value(now),
+        ),
+      );
+    }
+  }
+
   /// Cierre manual (RN-L14, reversible via `reopen`). Idempotente si el
   /// préstamo ya está cerrado (silencioso).
   Future<void> closeManual(String id) async {
@@ -337,10 +375,15 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
   }
 
   /// Elimina el préstamo en cascada: `deleted_at` en el `Loan`, en el `income`
-  /// inicial y en todos los `loan_payment`s (RN-L16). Recomputa balances
-  /// on-the-fly (los stream de cuentas involucradas re-emiten).
-  Future<void> deleteLoan(String id,
-      [FinancialStateService? stateService]) async {
+  /// inicial y en todos los `loan_payment`s (RN-L16). Los streams de balances
+  /// (BO/DE/CR y por cuenta) re-emiten automáticamente vía `readsFrom` sobre
+  /// `journal_entries` — no requiere invalidación manual del cache.
+  ///
+  /// Hotfix quality-review B6: se removió el parámetro `FinancialStateService?
+  /// stateService` opcional (era un rezago del patrón manual pre-M4 del
+  /// sprint `flutter-local-hardening-v4`). Convención consistente con el
+  /// resto de DAOs: los streams cacheados invalidan solos con `readsFrom`.
+  Future<void> deleteLoan(String id) async {
     final existing = await findById(id);
     if (existing == null) {
       throw const LoansDaoError('not_found', 'El préstamo no existe.');
@@ -362,8 +405,6 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         ),
       );
     });
-    // Invalidar cache de balances (income de la cuenta destino se canceló).
-    stateService?.invalidateAccount(existing.destinationAccountId);
   }
 
   /// Devuelve el id del préstamo que usa esta cuenta como destino, si existe

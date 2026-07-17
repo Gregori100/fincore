@@ -572,7 +572,7 @@ void main() {
         destinationAccountId: bolsa,
       );
       expect(await state.watchTotalLoans().first, 3000);
-      await db.loansDao.deleteLoan(loanId, state);
+      await db.loansDao.deleteLoan(loanId);
       expect(
         await state
             .watchTotalLoans()

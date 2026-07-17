@@ -383,53 +383,8 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       );
     }
 
-    // Hotfix smoke Diego v2: reglas de orden y unicidad por mes calendario,
-    // usando la columna `is_monthly_payment` persistida (antes era proxy
-    // `interest_amount > 0` que fallaba en pago del mes sin intereses).
-    // - `isMonthlyPayment=true` (Pago del mes) requiere unicidad: no puede
-    //   existir otro con `is_monthly_payment=1` en el mismo mes.
-    // - `isMonthlyPayment=false` (Abono a capital) requiere que YA exista
-    //   el pago del mes correspondiente en el mismo mes calendario.
-    final monthKey =
-        '${occurredAt.year.toString().padLeft(4, '0')}-${occurredAt.month.toString().padLeft(2, '0')}';
-    final monthlyCountRow = await customSelect(
-      "SELECT COUNT(*) AS c FROM journal_entries "
-      "WHERE loan_id = ? AND kind = 'loan_payment' "
-      "AND deleted_at IS NULL AND is_monthly_payment = 1 "
-      "AND strftime('%Y-%m', occurred_at) = ?",
-      variables: [
-        Variable.withString(loanId),
-        Variable.withString(monthKey),
-      ],
-    ).getSingle();
-    final monthlyCount = monthlyCountRow.read<int>('c');
-    if (isMonthlyPayment && monthlyCount > 0) {
-      throw const EntriesDaoError(
-        'duplicate_monthly_payment',
-        'Ya registraste el pago del mes para este préstamo. Si vas a pagar de más, usa "Abono a capital".',
-      );
-    }
-    if (!isMonthlyPayment && monthlyCount == 0) {
-      throw const EntriesDaoError(
-        'capital_before_monthly',
-        'Registra primero el pago del mes correspondiente antes de hacer abonos a capital.',
-      );
-    }
-
-    // Hotfix smoke Diego v3: bloqueo estricto de overpay. El capital del
-    // pago no puede exceder el saldo pendiente actual del préstamo (por
-    // sobre 0.005 de tolerancia). Sin esto el saldo caía en negativo y
-    // Diego perdía trazabilidad.
-    final currentBalance =
-        await attachedDatabase.loansDao.balanceOf(loanId);
-    if (principalAmount > currentBalance + 0.005) {
-      throw EntriesDaoError(
-        'overpay_loan',
-        'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente del préstamo (${currentBalance.toStringAsFixed(2)}).',
-      );
-    }
-
     // Validar cuenta origen (existe, cash|debit, no archivada, no eliminada).
+    // Este check no depende del estado transaccional del préstamo, va afuera.
     await _validateAccountTypes(
       kind: 'loan_payment',
       originId: accountOriginId,
@@ -438,12 +393,14 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
 
     final id = UuidV7.generate();
     final now = DateTime.now();
+    final monthKey =
+        '${occurredAt.year.toString().padLeft(4, '0')}-${occurredAt.month.toString().padLeft(2, '0')}';
+
     await transaction(() async {
-      // Hotfix branch-quality-review (F-TX-02): re-leer el préstamo DENTRO
-      // de la transacción para decidir auto-close. La variable `loan` del
-      // scope externo es stale — dos taps rápidos del botón "Guardar"
-      // pueden haber cerrado el préstamo entre la validación previa y
-      // este punto. Si se re-leyó cerrado, abortamos el insert.
+      // Hotfix quality-review M1: los 3 checks de unicidad/orden y overpay
+      // corren DENTRO de la transacción re-computando estado. Antes
+      // vivían fuera y dos submits paralelos podían pasar ambos con foto
+      // stale (dos monthly del mismo mes, o balance negativo silencioso).
       final freshLoan = await (select(attachedDatabase.loans)
             ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
           .getSingleOrNull();
@@ -456,6 +413,37 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
           'No se pueden registrar pagos sobre un préstamo cerrado.',
         );
       }
+      final monthlyCountRow = await customSelect(
+        "SELECT COUNT(*) AS c FROM journal_entries "
+        "WHERE loan_id = ? AND kind = 'loan_payment' "
+        "AND deleted_at IS NULL AND is_monthly_payment = 1 "
+        "AND strftime('%Y-%m', occurred_at) = ?",
+        variables: [
+          Variable.withString(loanId),
+          Variable.withString(monthKey),
+        ],
+      ).getSingle();
+      final monthlyCount = monthlyCountRow.read<int>('c');
+      if (isMonthlyPayment && monthlyCount > 0) {
+        throw const EntriesDaoError(
+          'duplicate_monthly_payment',
+          'Ya registraste el pago del mes para este préstamo. Si vas a pagar de más, usa "Abono a capital".',
+        );
+      }
+      if (!isMonthlyPayment && monthlyCount == 0) {
+        throw const EntriesDaoError(
+          'capital_before_monthly',
+          'Registra primero el pago del mes correspondiente antes de hacer abonos a capital.',
+        );
+      }
+      final currentBalance =
+          await attachedDatabase.loansDao.balanceOf(loanId);
+      if (principalAmount > currentBalance + 0.005) {
+        throw EntriesDaoError(
+          'overpay_loan',
+          'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente del préstamo (${currentBalance.toStringAsFixed(2)}).',
+        );
+      }
       await into(journalEntries).insert(JournalEntriesCompanion.insert(
         id: id,
         kind: 'loan_payment',
@@ -466,22 +454,13 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         loanId: Value(loanId),
         principalAmount: Value(principalAmount),
         interestAmount: Value(interestAmount),
-        // Hotfix smoke Diego v2: persistir el flag.
         isMonthlyPayment: Value(isMonthlyPayment),
         createdAt: now,
         updatedAt: now,
       ));
-      // Auto-cierre paid si saldo ≤ 0 tras el insert (RN-L11).
-      final balance = await attachedDatabase.loansDao.balanceOf(loanId);
-      if (balance <= 0.005) {
-        await (update(attachedDatabase.loans)
-              ..where((l) => l.id.equals(loanId)))
-            .write(LoansCompanion(
-          closedAt: Value(now),
-          closeReason: const Value('paid'),
-          updatedAt: Value(now),
-        ));
-      }
+      // Hotfix quality-review M2: auto-close/reopen unificado en helper.
+      await attachedDatabase.loansDao
+          .applyPaymentSideEffects(loanId: loanId, now: now);
     });
     return id;
   }
@@ -574,54 +553,53 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       );
     }
 
-    // Re-validar reglas de mes excluyendo el propio entry. El tipo del
-    // pago (monthly vs capital) se preserva del entry existente — el edit
-    // NO permite cambiar el tipo (para eso hay que eliminar y recrear).
+    // El tipo del pago (monthly vs capital) se preserva del entry existente
+    // — el edit NO permite cambiar el tipo (para eso hay que eliminar y
+    // recrear).
     final isMonthly = existing.isMonthlyPayment;
+    final oldPrincipal = existing.principalAmount ?? 0;
     final monthKey =
         '${occurredAt.year.toString().padLeft(4, '0')}-${occurredAt.month.toString().padLeft(2, '0')}';
-    final monthlyCountRow = await customSelect(
-      "SELECT COUNT(*) AS c FROM journal_entries "
-      "WHERE loan_id = ? AND kind = 'loan_payment' "
-      "AND deleted_at IS NULL AND is_monthly_payment = 1 "
-      "AND strftime('%Y-%m', occurred_at) = ? "
-      "AND id != ?",
-      variables: [
-        Variable.withString(loanId),
-        Variable.withString(monthKey),
-        Variable.withString(entryId),
-      ],
-    ).getSingle();
-    final otherMonthlyCount = monthlyCountRow.read<int>('c');
-    if (isMonthly && otherMonthlyCount > 0) {
-      throw const EntriesDaoError(
-        'duplicate_monthly_payment',
-        'Ya existe otro pago del mes para este préstamo en ese mes.',
-      );
-    }
-    if (!isMonthly && otherMonthlyCount == 0) {
-      throw const EntriesDaoError(
-        'capital_before_monthly',
-        'No puedes dejar un abono a capital sin pago del mes correspondiente en su mes.',
-      );
-    }
-
-    // Hotfix smoke Diego v3: overpay check en modo edit — el nuevo capital
-    // no puede exceder el saldo pendiente que existiría si se ELIMINA
-    // primero el capital actual del entry y luego se aplica el nuevo.
-    final currentBalance =
-        await attachedDatabase.loansDao.balanceOf(loanId);
-    final oldPrincipal = existing.principalAmount ?? 0;
-    final availableBalance = currentBalance + oldPrincipal;
-    if (principalAmount > availableBalance + 0.005) {
-      throw EntriesDaoError(
-        'overpay_loan',
-        'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente disponible (${availableBalance.toStringAsFixed(2)}).',
-      );
-    }
-
     final now = DateTime.now();
+
     await transaction(() async {
+      // Hotfix quality-review M1: los checks de mes y overpay corren
+      // DENTRO de la transacción con estado fresco. Antes vivían afuera y
+      // dos edits paralelos podían pasar la validación con foto stale.
+      final monthlyCountRow = await customSelect(
+        "SELECT COUNT(*) AS c FROM journal_entries "
+        "WHERE loan_id = ? AND kind = 'loan_payment' "
+        "AND deleted_at IS NULL AND is_monthly_payment = 1 "
+        "AND strftime('%Y-%m', occurred_at) = ? "
+        "AND id != ?",
+        variables: [
+          Variable.withString(loanId),
+          Variable.withString(monthKey),
+          Variable.withString(entryId),
+        ],
+      ).getSingle();
+      final otherMonthlyCount = monthlyCountRow.read<int>('c');
+      if (isMonthly && otherMonthlyCount > 0) {
+        throw const EntriesDaoError(
+          'duplicate_monthly_payment',
+          'Ya existe otro pago del mes para este préstamo en ese mes.',
+        );
+      }
+      if (!isMonthly && otherMonthlyCount == 0) {
+        throw const EntriesDaoError(
+          'capital_before_monthly',
+          'No puedes dejar un abono a capital sin pago del mes correspondiente en su mes.',
+        );
+      }
+      final currentBalance =
+          await attachedDatabase.loansDao.balanceOf(loanId);
+      final availableBalance = currentBalance + oldPrincipal;
+      if (principalAmount > availableBalance + 0.005) {
+        throw EntriesDaoError(
+          'overpay_loan',
+          'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente disponible (${availableBalance.toStringAsFixed(2)}).',
+        );
+      }
       await (update(journalEntries)..where((e) => e.id.equals(entryId))).write(
         JournalEntriesCompanion(
           amount: Value(amount),
@@ -632,31 +610,9 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
           updatedAt: Value(now),
         ),
       );
-      // Recomputar balance y decidir transición de estado del préstamo.
-      final freshLoan = await (select(attachedDatabase.loans)
-            ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
-          .getSingleOrNull();
-      if (freshLoan == null) return;
-      final balance = await attachedDatabase.loansDao.balanceOf(loanId);
-      if (balance <= 0.005 && freshLoan.closedAt == null) {
-        // Cerrar paid.
-        await (update(attachedDatabase.loans)
-              ..where((l) => l.id.equals(loanId)))
-            .write(LoansCompanion(
-          closedAt: Value(now),
-          closeReason: const Value('paid'),
-          updatedAt: Value(now),
-        ));
-      } else if (balance > 0.005 && freshLoan.closeReason == 'paid') {
-        // Reabrir auto (mismo criterio que deleteLoanPayment).
-        await (update(attachedDatabase.loans)
-              ..where((l) => l.id.equals(loanId)))
-            .write(LoansCompanion(
-          closedAt: const Value(null),
-          closeReason: const Value(null),
-          updatedAt: Value(now),
-        ));
-      }
+      // Hotfix quality-review M2: auto-close/reopen unificado.
+      await attachedDatabase.loansDao
+          .applyPaymentSideEffects(loanId: loanId, now: now);
     });
   }
 
@@ -743,22 +699,11 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
           [nowIso, nowIso, loanId, monthKey],
         );
       }
-      // Reapertura auto sólo si estaba paid y ahora saldo > 0.
-      final loan = await (select(attachedDatabase.loans)
-            ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
-          .getSingleOrNull();
-      if (loan == null) return;
-      if (loan.closeReason != 'paid') return;
-      final balance = await attachedDatabase.loansDao.balanceOf(loanId);
-      if (balance > 0.005) {
-        await (update(attachedDatabase.loans)
-              ..where((l) => l.id.equals(loanId)))
-            .write(LoansCompanion(
-          closedAt: const Value(null),
-          closeReason: const Value(null),
-          updatedAt: Value(now),
-        ));
-      }
+      // Hotfix quality-review M2: auto-close/reopen unificado. Respeta
+      // RN-L13 (cerrado manual nunca reabre) porque el helper filtra
+      // closeReason == 'manual' antes de tocar.
+      await attachedDatabase.loansDao
+          .applyPaymentSideEffects(loanId: loanId, now: now);
     });
   }
 
