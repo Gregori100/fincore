@@ -451,6 +451,112 @@ void main() {
     });
   });
 
+  group('toggleItemDone (flutter-budgets-item-completion-v1)', () {
+    test('UT-WB-D01: primer toggle marca; segundo desmarca', () async {
+      final budgetId = await weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 17),
+        label: 'Sueldo 17',
+      );
+      final itemId = await weeklyBudgetsDao.addItem(
+        budgetId: budgetId,
+        name: 'Renta',
+        amount: 5000,
+        kind: 'expense',
+      );
+
+      final initial = await weeklyBudgetsDao.watchBudgetItems(budgetId).first;
+      expect(initial.single.isDone, isFalse,
+          reason: 'default de la columna DEBE ser false');
+
+      final afterFirst = await weeklyBudgetsDao.toggleItemDone(itemId);
+      expect(afterFirst, isTrue);
+      final firstQuery = await weeklyBudgetsDao.watchBudgetItems(budgetId).first;
+      expect(firstQuery.single.isDone, isTrue);
+
+      final afterSecond = await weeklyBudgetsDao.toggleItemDone(itemId);
+      expect(afterSecond, isFalse);
+      final secondQuery =
+          await weeklyBudgetsDao.watchBudgetItems(budgetId).first;
+      expect(secondQuery.single.isDone, isFalse);
+    });
+
+    test('UT-WB-D02: toggle actualiza updated_at', () async {
+      final budgetId = await weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 17),
+        label: 'Sueldo 17',
+      );
+      final itemId = await weeklyBudgetsDao.addItem(
+        budgetId: budgetId,
+        name: 'Renta',
+        amount: 5000,
+        kind: 'expense',
+      );
+      final before =
+          (await weeklyBudgetsDao.watchBudgetItems(budgetId).first).single;
+
+      // Delay mínimo para que updated_at cambie (SQLite guarda ms).
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await weeklyBudgetsDao.toggleItemDone(itemId);
+
+      final after =
+          (await weeklyBudgetsDao.watchBudgetItems(budgetId).first).single;
+      expect(after.updatedAt.isAfter(before.updatedAt), isTrue,
+          reason: 'toggle DEBE tocar updated_at para invalidar caches del UI');
+    });
+
+    test('UT-WB-D03: toggle con id inexistente lanza not_found', () async {
+      expect(
+        () => weeklyBudgetsDao.toggleItemDone('uuid-inexistente'),
+        throwsA(isA<WeeklyBudgetsDaoError>()
+            .having((e) => e.code, 'code', 'not_found')),
+      );
+    });
+
+    test(
+        'UT-WB-D04: createBudgetFromTemplate arranca items del clon con '
+        'isDone=false, incluso si la plantilla tiene items marcados', () async {
+      // Arrange: plantilla con 2 items, uno marcado done.
+      final templateId = await weeklyBudgetsDao.createBudget(
+        weekStartDate: DateTime(2026, 7, 10),
+        label: 'Plantilla semanal',
+      );
+      await weeklyBudgetsDao.toggleTemplateFlag(templateId);
+      final marcadoId = await weeklyBudgetsDao.addItem(
+        budgetId: templateId,
+        name: 'Renta',
+        amount: 5000,
+        kind: 'expense',
+      );
+      await weeklyBudgetsDao.addItem(
+        budgetId: templateId,
+        name: 'Luz',
+        amount: 500,
+        kind: 'expense',
+      );
+      await weeklyBudgetsDao.toggleItemDone(marcadoId);
+
+      // Act: clonar.
+      final clonId = await weeklyBudgetsDao.createBudgetFromTemplate(
+        weekStartDate: DateTime(2026, 7, 17),
+        label: 'Semana nueva',
+        templateId: templateId,
+      );
+
+      // Assert: los 2 items del clon arrancan con is_done=false.
+      final clonItems = await weeklyBudgetsDao.watchBudgetItems(clonId).first;
+      expect(clonItems, hasLength(2));
+      expect(clonItems.every((i) => i.isDone == false), isTrue,
+          reason: 'clon arranca fresco — nada se cumplió aún');
+
+      // Sanity: la plantilla mantiene su estado.
+      final templateItems =
+          await weeklyBudgetsDao.watchBudgetItems(templateId).first;
+      final marcadoTemplate =
+          templateItems.firstWhere((i) => i.id == marcadoId);
+      expect(marcadoTemplate.isDone, isTrue);
+    });
+  });
+
   group('reorderItems', () {
     test(
         'UT-WB17: reorderItems([id2, id1, id3]) renumera sort_order en '

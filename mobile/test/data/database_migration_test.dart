@@ -444,6 +444,52 @@ void main() {
   });
 
   test(
+      'MG-BIC-01: 12→13 agrega columna is_done a weekly_budget_items '
+      '(sprint flutter-budgets-item-completion-v1)', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll();
+    final migrator = db.createMigrator();
+
+    // Idempotente vía probe: correr 12→13 sobre una BD que ya está en v13
+    // no debe fallar.
+    await db.migration.onUpgrade(migrator, 12, 13);
+
+    final colProbe = await db
+        .customSelect(
+          "SELECT COUNT(*) AS c FROM pragma_table_info('weekly_budget_items') "
+          "WHERE name = 'is_done'",
+          readsFrom: const {},
+        )
+        .getSingle();
+    expect(colProbe.read<int>('c'), 1,
+        reason: '12→13 debe garantizar la columna is_done');
+
+    await db.close();
+  });
+
+  test(
+      'MG-BIC-02: 5→13, 8→13, 11→13 y 12→13 dejan la columna is_done '
+      'presente (cadenas defensivas)', () async {
+    for (final from in [5, 8, 11, 12]) {
+      final db = FincoreDatabase(NativeDatabase.memory());
+      await db.accountsDao.listAll(); // fuerza schema real (v13).
+      final migrator = db.createMigrator();
+      await db.migration.onUpgrade(migrator, from, 13);
+
+      final colProbe = await db
+          .customSelect(
+            "SELECT COUNT(*) AS c FROM pragma_table_info('weekly_budget_items') "
+            "WHERE name = 'is_done'",
+            readsFrom: const {},
+          )
+          .getSingle();
+      expect(colProbe.read<int>('c'), 1,
+          reason: 'ruta $from→13 debe dejar is_done en la tabla');
+      await db.close();
+    }
+  });
+
+  test(
       'MG-04: guardrail UnimplementedError sigue activo para un upgrade no '
       'implementado (from=99, to=100)', () async {
     final db = FincoreDatabase(NativeDatabase.memory());
