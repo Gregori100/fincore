@@ -1,4 +1,5 @@
 import 'package:fincore/theme/fincore_colors.dart';
+import 'package:fincore/theme/fincore_motion.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:flutter/material.dart';
@@ -7,17 +8,23 @@ import 'package:flutter/material.dart';
 ///
 /// No es el modelo drift (`BudgetIncomeItem` / `BudgetExpenseItem`): el
 /// caller mapea a esta forma para que `ItemsSection` no conozca tablas.
+///
+/// Sprint flutter-budgets-item-completion-v1: `isDone` refleja el flag
+/// manual del usuario ("ya pasó / ya cumplí"). Nace en `false` y el toggle
+/// del checkbox lo invierte.
 class BudgetItemDisplay {
   final String id;
   final String name;
   final String? categoryId;
   final double amount;
+  final bool isDone;
 
   const BudgetItemDisplay({
     required this.id,
     required this.name,
     this.categoryId,
     required this.amount,
+    this.isDone = false,
   });
 }
 
@@ -55,6 +62,10 @@ class ItemsSection extends StatelessWidget {
   /// Abre el form sheet en modo crear con `kind` pre-seteado.
   final VoidCallback onAddItem;
 
+  /// Tap en el checkbox del row → invierte `is_done` en el DAO. Si es null,
+  /// el checkbox no se renderiza (caller que no quiere el marcado manual).
+  final void Function(String itemId)? onToggleDone;
+
   /// Opcional: si se pasa, renderiza el `CategoryBadge` bajo el nombre.
   final Widget Function(String? categoryId)? categoryBadgeBuilder;
 
@@ -67,6 +78,7 @@ class ItemsSection extends StatelessWidget {
     required this.onDeleteItem,
     required this.onReorder,
     required this.onAddItem,
+    this.onToggleDone,
     this.categoryBadgeBuilder,
   });
 
@@ -140,6 +152,9 @@ class ItemsSection extends StatelessWidget {
                   amountColor: amountColor,
                   onTap: () => onTapItem(items[i].id),
                   onDelete: () => onDeleteItem(items[i].id),
+                  onToggleDone: onToggleDone == null
+                      ? null
+                      : () => onToggleDone!(items[i].id),
                   categoryBadgeBuilder: categoryBadgeBuilder,
                 ),
             ],
@@ -155,6 +170,7 @@ class _ItemRow extends StatelessWidget {
   final Color amountColor;
   final VoidCallback onTap;
   final VoidCallback onDelete;
+  final VoidCallback? onToggleDone;
   final Widget Function(String? categoryId)? categoryBadgeBuilder;
 
   const _ItemRow({
@@ -164,11 +180,23 @@ class _ItemRow extends StatelessWidget {
     required this.amountColor,
     required this.onTap,
     required this.onDelete,
+    required this.onToggleDone,
     required this.categoryBadgeBuilder,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Sprint flutter-budgets-item-completion-v1: cuando `is_done`, el
+    // stripe lateral y el monto se atenúan y el nombre queda tachado.
+    // El drag handle y el checkbox mantienen contraste completo — siguen
+    // siendo affordances tapables.
+    final done = item.isDone;
+    final effectiveAmountColor = done
+        ? amountColor.withValues(alpha: 0.45)
+        : amountColor;
+    final nameColor = done ? FincoreColors.textMuted : FincoreColors.textPrimary;
+    final stripeColor = done ? amountColor.withValues(alpha: 0.35) : amountColor;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: ClipRRect(
@@ -189,7 +217,12 @@ class _ItemRow extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(width: 3, color: amountColor),
+                  AnimatedContainer(
+                    duration: kMotionFast,
+                    curve: kCurveStandard,
+                    width: 3,
+                    color: stripeColor,
+                  ),
                   // Único punto de la fila que inicia el reorder (RN-B20):
                   // el resto del row responde solo a tap (edit), nunca a
                   // drag. Área tapable 44x44 real (mínimo WCAG 2.5.5 /
@@ -216,6 +249,43 @@ class _ItemRow extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (onToggleDone != null)
+                    // Checkbox del sprint flutter-budgets-item-completion-v1.
+                    // Rechazamos `Checkbox` desnudo — el touch target de M3
+                    // ya es 40x40, pero el ícono se ve chico y sin borde en
+                    // dark theme. Envolvemos en un contenedor 44x44 tapable.
+                    Semantics(
+                      button: true,
+                      checked: done,
+                      label: done
+                          ? 'Marcado como completado, tap para desmarcar'
+                          : 'Sin completar, tap para marcar',
+                      child: SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: InkWell(
+                          onTap: onToggleDone,
+                          customBorder: const CircleBorder(),
+                          child: Center(
+                            child: AnimatedSwitcher(
+                              duration: kMotionFast,
+                              switchInCurve: kCurveStandard,
+                              switchOutCurve: kCurveExit,
+                              child: Icon(
+                                done
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                                key: ValueKey(done),
+                                size: 22,
+                                color: done
+                                    ? amountColor
+                                    : FincoreColors.textSubtle,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   Expanded(
                     child: InkWell(
                       onTap: onTap,
@@ -231,28 +301,48 @@ class _ItemRow extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    item.name,
-                                    style: const TextStyle(
-                                      color: FincoreColors.textPrimary,
+                                  AnimatedDefaultTextStyle(
+                                    duration: kMotionFast,
+                                    curve: kCurveStandard,
+                                    style: TextStyle(
+                                      color: nameColor,
                                       fontWeight: FontWeight.w500,
+                                      decoration: done
+                                          ? TextDecoration.lineThrough
+                                          : TextDecoration.none,
+                                      decorationColor: FincoreColors.textMuted,
+                                      decorationThickness: 2,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
+                                    child: Text(
+                                      item.name,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                   ),
                                   if (categoryBadgeBuilder != null) ...[
                                     const SizedBox(height: 4),
-                                    categoryBadgeBuilder!(item.categoryId),
+                                    Opacity(
+                                      opacity: done ? 0.5 : 1.0,
+                                      child: categoryBadgeBuilder!(
+                                          item.categoryId),
+                                    ),
                                   ],
                                 ],
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              formatAmount(item.amount),
+                            AnimatedDefaultTextStyle(
+                              duration: kMotionFast,
+                              curve: kCurveStandard,
                               style: TextStyle(
-                                color: amountColor,
+                                color: effectiveAmountColor,
                                 fontWeight: FontWeight.w600,
+                                decoration: done
+                                    ? TextDecoration.lineThrough
+                                    : TextDecoration.none,
+                                decorationColor: FincoreColors.textMuted,
+                                decorationThickness: 2,
                               ),
+                              child: Text(formatAmount(item.amount)),
                             ),
                           ],
                         ),

@@ -221,6 +221,14 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
     ).weeklyBudgetsDao.reorderItems(widget.budgetId, orderedIds);
   }
 
+  Future<void> _toggleDone(String itemId) async {
+    try {
+      await AppDependencies.of(context).weeklyBudgetsDao.toggleItemDone(itemId);
+    } on WeeklyBudgetsDaoError catch (e) {
+      if (mounted) showErrorSnackbar(context, e);
+    }
+  }
+
   Widget _categoryBadge(String? categoryId) {
     final category = categoryId == null ? null : _categoryById[categoryId];
     return CategoryBadge(
@@ -405,6 +413,7 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
                         name: i.name,
                         categoryId: i.categoryId,
                         amount: i.amount,
+                        isDone: i.isDone,
                       ),
                   ],
                   onTapItem: (itemId) {
@@ -417,6 +426,7 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
                   },
                   onReorder: _reorder,
                   onAddItem: () => _openItemForm(initialKind: 'income'),
+                  onToggleDone: _toggleDone,
                   categoryBadgeBuilder: _categoryBadge,
                 ),
                 const SizedBox(height: 24),
@@ -430,6 +440,7 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
                         name: i.name,
                         categoryId: i.categoryId,
                         amount: i.amount,
+                        isDone: i.isDone,
                       ),
                   ],
                   onTapItem: (itemId) {
@@ -442,6 +453,7 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
                   },
                   onReorder: _reorder,
                   onAddItem: () => _openItemForm(initialKind: 'expense'),
+                  onToggleDone: _toggleDone,
                   categoryBadgeBuilder: _categoryBadge,
                 ),
               ],
