@@ -343,7 +343,7 @@ publish_to: 'none'
 # (#B561D6) en 4 sitios: dashboard_screen, account_picker,
 # accounts_list_screen y entry_form_screen amount hero para
 # creditExpense kind. Warning libera su semántico completo.
-version: 0.31.0+117
+version: 0.31.1+118
 
 environment:
   sdk: ^3.7.2
