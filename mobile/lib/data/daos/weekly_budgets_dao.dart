@@ -220,6 +220,29 @@ class WeeklyBudgetsDao extends DatabaseAccessor<FincoreDatabase>
     );
   }
 
+  /// Sprint flutter-budgets-item-completion-v1: invierte `is_done` del
+  /// renglón. Lanza `not_found` si el id no existe. Devuelve el nuevo estado.
+  /// Flag manual — no valida ni ejecuta efectos secundarios sobre entries.
+  Future<bool> toggleItemDone(String itemId) async {
+    final existing = await (select(weeklyBudgetItems)
+          ..where((i) => i.id.equals(itemId)))
+        .getSingleOrNull();
+    if (existing == null) {
+      throw const WeeklyBudgetsDaoError(
+        'not_found',
+        'El renglón no existe.',
+      );
+    }
+    final next = !existing.isDone;
+    await (update(weeklyBudgetItems)..where((i) => i.id.equals(itemId))).write(
+      WeeklyBudgetItemsCompanion(
+        isDone: Value(next),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    return next;
+  }
+
   /// Borrado físico de un renglón del presupuesto. Lanza `not_found` si el id
   /// no existe.
   Future<void> deleteItem(String itemId) async {
@@ -404,6 +427,10 @@ WHERE budget_id = ?
 
       for (final item in templateItems) {
         final itemNow = DateTime.now();
+        // Sprint flutter-budgets-item-completion-v1: `is_done` NO se propaga
+        // desde la plantilla. Los items del clon arrancan en `false` (default
+        // de la columna). Un presupuesto duplicado representa una semana
+        // nueva: nada se ha "cumplido" aún.
         await into(weeklyBudgetItems).insert(WeeklyBudgetItemsCompanion.insert(
           id: UuidV7.generate(),
           budgetId: budgetId,
