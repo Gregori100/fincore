@@ -1,5 +1,6 @@
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_motion.dart';
+import 'package:fincore/theme/fincore_typography.dart';
 import 'package:fincore/widgets/amount_formatter.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:flutter/material.dart';
@@ -12,12 +13,21 @@ import 'package:flutter/material.dart';
 /// Sprint flutter-budgets-item-completion-v1: `isDone` refleja el flag
 /// manual del usuario ("ya pasó / ya cumplí"). Nace en `false` y el toggle
 /// del checkbox lo invierte.
+///
+/// Sprint flutter-budgets-running-balance-v1: `cumulativeAfter` es el
+/// saldo acumulado del presupuesto tras aplicar este renglón según su
+/// `sort_order`. Ingresos suman, gastos restan. La cascada arranca en 0
+/// para el primer ingreso y "arrastra" el subtotal final de la sección
+/// de ingresos al primer gasto. Opcional: si null, el _ItemRow no
+/// renderiza el subtítulo. Lo calcula el caller para que el widget no
+/// dependa del `kind` cruzado entre secciones.
 class BudgetItemDisplay {
   final String id;
   final String name;
   final String? categoryId;
   final double amount;
   final bool isDone;
+  final double? cumulativeAfter;
 
   const BudgetItemDisplay({
     required this.id,
@@ -25,7 +35,49 @@ class BudgetItemDisplay {
     this.categoryId,
     required this.amount,
     this.isDone = false,
+    this.cumulativeAfter,
   });
+
+  BudgetItemDisplay copyWith({double? cumulativeAfter}) {
+    return BudgetItemDisplay(
+      id: id,
+      name: name,
+      categoryId: categoryId,
+      amount: amount,
+      isDone: isDone,
+      cumulativeAfter: cumulativeAfter ?? this.cumulativeAfter,
+    );
+  }
+}
+
+/// Sprint flutter-budgets-running-balance-v1: calcula el saldo acumulado
+/// tras cada renglón. Recibe las dos secciones en el orden en que se
+/// muestran (ya filtradas por kind y ordenadas por sort_order) y devuelve
+/// copias con `cumulativeAfter` seteado.
+///
+/// La cascada arranca en 0 sumando los ingresos; el subtotal final de la
+/// sección de ingresos "arrastra" al primer gasto. `isDone` NO altera el
+/// cálculo (representa el plan, no lo realizado).
+///
+/// Función pura para permitir tests unitarios sin harness de widget. La
+/// invoca `WeeklyBudgetScreen.build` sobre el snapshot del stream.
+({List<BudgetItemDisplay> income, List<BudgetItemDisplay> expense})
+    withCumulativeCascade({
+  required List<BudgetItemDisplay> income,
+  required List<BudgetItemDisplay> expense,
+}) {
+  double running = 0;
+  final incomeOut = <BudgetItemDisplay>[];
+  for (final i in income) {
+    running += i.amount;
+    incomeOut.add(i.copyWith(cumulativeAfter: running));
+  }
+  final expenseOut = <BudgetItemDisplay>[];
+  for (final e in expense) {
+    running -= e.amount;
+    expenseOut.add(e.copyWith(cumulativeAfter: running));
+  }
+  return (income: incomeOut, expense: expenseOut);
 }
 
 /// Sección editable con lista reordenable de renglones de un presupuesto
@@ -330,19 +382,43 @@ class _ItemRow extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            AnimatedDefaultTextStyle(
-                              duration: kMotionFast,
-                              curve: kCurveStandard,
-                              style: TextStyle(
-                                color: effectiveAmountColor,
-                                fontWeight: FontWeight.w600,
-                                decoration: done
-                                    ? TextDecoration.lineThrough
-                                    : TextDecoration.none,
-                                decorationColor: FincoreColors.textMuted,
-                                decorationThickness: 2,
-                              ),
-                              child: Text(formatAmount(item.amount)),
+                            // Sprint flutter-budgets-running-balance-v1:
+                            // Column con monto arriba + subtotal acumulado
+                            // debajo. El subtotal solo se renderiza si el
+                            // caller lo pasó (cumulativeAfter != null). No
+                            // lo atenuamos por `isDone` porque el saldo
+                            // sigue siendo real; el tachado ya comunica el
+                            // estado del renglón.
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                AnimatedDefaultTextStyle(
+                                  duration: kMotionFast,
+                                  curve: kCurveStandard,
+                                  style: TextStyle(
+                                    color: effectiveAmountColor,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: done
+                                        ? TextDecoration.lineThrough
+                                        : TextDecoration.none,
+                                    decorationColor: FincoreColors.textMuted,
+                                    decorationThickness: 2,
+                                  ),
+                                  child: Text(formatAmount(item.amount)),
+                                ),
+                                if (item.cumulativeAfter != null) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '= ${formatAmount(item.cumulativeAfter!)}',
+                                    style: overline.copyWith(
+                                      color: item.cumulativeAfter! < 0
+                                          ? FincoreColors.negative
+                                          : FincoreColors.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
                           ],
                         ),
