@@ -230,7 +230,11 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: kSpaceLg),
+              const SizedBox(height: kSpaceXl),
+              // F-DES-11: subtítulos overline entre grupos (mismo patrón que
+              // account_form_screen). Identidad — Términos — Vínculo.
+              const _FormGroupHeader(label: 'Términos del contrato'),
+              const SizedBox(height: kSpaceMd),
               TextFormField(
                 controller: _monthlyCtrl,
                 enabled: !_isClosed,
@@ -312,7 +316,9 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
                 enabled: !_isClosed,
                 onTap: _pickDate,
               ),
-              const SizedBox(height: kSpaceLg),
+              const SizedBox(height: kSpaceXl),
+              const _FormGroupHeader(label: 'Vínculo financiero'),
+              const SizedBox(height: kSpaceMd),
               AbsorbPointer(
                 absorbing: _isEdit,
                 child: Opacity(
@@ -497,6 +503,40 @@ class _StatusBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// F-DES-11: subtítulo overline para agrupar campos del form. Sigue el
+/// mismo patrón de `account_form_screen` (Divider + label uppercase +
+/// letterSpacing). Los grupos actuales:
+///  1. Identidad (nombre + monto original) — sin header, arranque del form.
+///  2. Términos del contrato (pago mensual, duración, día pago, fecha).
+///  3. Vínculo financiero (cuenta destino).
+class _FormGroupHeader extends StatelessWidget {
+  final String label;
+  const _FormGroupHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Divider(
+          height: 1,
+          color: FincoreColors.surfaceElevated,
+        ),
+        const SizedBox(height: kSpaceMd),
+        Text(
+          label.toUpperCase(),
+          style: const TextStyle(
+            color: FincoreColors.textSubtle,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ],
     );
   }
 }
