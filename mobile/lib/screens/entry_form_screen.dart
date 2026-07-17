@@ -1013,8 +1013,10 @@ class _KindChipHeader extends StatelessWidget {
 }
 
 /// Amount input tratado como hero visual del form.
-/// - fontSize: 36 (token-exception documentada; sin token entre headingL=20
-///   y displayXL=56 que aplique al hero de un solo input).
+/// - Usa el token `displayL` (36sp/700, letterSpacing -0.5) creado en
+///   F-DES-4. Antes era literal con `// token-exception:` porque el token
+///   no existía; ahora dos consumidores lo comparten (hero del monto del
+///   entry form + hero del saldo del detalle de préstamo).
 /// - Color emocional según kind, con tabular figures para alineación consistente.
 /// - Prefix "$" inline en textMuted.
 /// - autofocus en modo alta para captura rápida.
@@ -1043,29 +1045,21 @@ class _AmountHero extends StatelessWidget {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [AmountInputFormatter()],
       textAlign: TextAlign.center,
-      // token-exception: 36 es fontSize hero del amount, sin token entre headingL (20) y displayXL (56).
-      style: TextStyle(
+      style: typo.displayL.copyWith(
         color: color,
-        fontSize: 36,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.5,
         fontFeatures: const [FontFeature.tabularFigures()],
       ),
       decoration: InputDecoration(
         prefixText: r'$ ',
-        prefixStyle: TextStyle(
+        prefixStyle: const TextStyle(
           color: FincoreColors.textMuted,
-          // token-exception: matchea el fontSize del hero del amount.
+          // token-exception: prefix "$" a 28sp para acompañar al displayL 36sp
+          // sin dominar visualmente (razón visual, no escala tipográfica).
           fontSize: 28,
           fontWeight: FontWeight.w500,
         ),
         hintText: '0',
-        hintStyle: TextStyle(
-          color: FincoreColors.textSubtle,
-          // token-exception: matchea el fontSize del hero del amount.
-          fontSize: 36,
-          fontWeight: FontWeight.w700,
-        ),
+        hintStyle: typo.displayL.copyWith(color: FincoreColors.textSubtle),
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
         focusedBorder: InputBorder.none,

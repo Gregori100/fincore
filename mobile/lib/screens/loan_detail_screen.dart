@@ -374,7 +374,7 @@ class _Header extends StatelessWidget {
               }
               return Text(
                 formatAmount(snap.data!),
-                style: displayXL.copyWith(fontSize: 32),
+                style: displayL,
               );
             },
           ),

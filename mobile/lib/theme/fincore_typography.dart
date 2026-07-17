@@ -22,6 +22,17 @@ const TextStyle displayXL = TextStyle(
   letterSpacing: -1.5,
 );
 
+/// F-DES-4: hero amount de una pantalla — saldo pendiente del detalle de
+/// préstamo, monto capturado del entry form. Ocupa el hueco entre
+/// `headingL` (20sp, títulos de sección) y `displayXL` (56sp, logo).
+/// letterSpacing más suave que `displayXL` para no apretar los dígitos.
+const TextStyle displayL = TextStyle(
+  color: FincoreColors.textPrimary,
+  fontSize: 36,
+  fontWeight: FontWeight.w700,
+  letterSpacing: -0.5,
+);
+
 /// Título de dialog, screen hero, tarjetas grandes.
 const TextStyle headingL = TextStyle(
   color: FincoreColors.textPrimary,
