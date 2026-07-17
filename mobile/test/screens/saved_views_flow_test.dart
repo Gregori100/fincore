@@ -27,16 +27,25 @@ void main() {
 
       // H7 quality review v1: el botón "Guardar como vista" está disabled
       // cuando activeCount == 0. Tappear al menos un kind para habilitarlo.
-      await tester.tap(find.widgetWithText(FilterChip, 'Gasto'));
+      // Sprint flutter-loans-v1: usamos 'Ingreso' (primer chip del Wrap)
+      // que no requiere scroll — el chip 'Gasto' quedaba parcialmente
+      // ocluido después de agregar el 6to chip 'Pago de préstamo'.
+      final chipFinder = find.widgetWithText(FilterChip, 'Ingreso');
+      await tester.ensureVisible(chipFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(chipFinder);
       await tester.pumpAndSettle();
 
       // Scroll para llegar al botón "Guardar como vista" (al final del
-      // panel).
+      // panel). Sprint flutter-loans-v1: usamos `find.text` (más laxo que
+      // widgetWithText+OutlinedButton) para tolerar variaciones internas
+      // del scaffold del panel.
       await tester.scrollUntilVisible(
         find.text('Guardar como vista'),
         300,
         scrollable: find.byType(Scrollable).first,
       );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Guardar como vista'));
       await tester.pumpAndSettle();
 

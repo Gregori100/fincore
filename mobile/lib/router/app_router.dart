@@ -10,6 +10,11 @@ import 'package:fincore/screens/entries_list_screen.dart';
 import 'package:fincore/screens/entry_form_screen.dart';
 import 'package:fincore/screens/first_run_screen.dart';
 import 'package:fincore/screens/help_screen.dart';
+import 'package:fincore/screens/loan_capital_payment_form.dart';
+import 'package:fincore/screens/loan_detail_screen.dart';
+import 'package:fincore/screens/loan_form_screen.dart';
+import 'package:fincore/screens/loan_monthly_payment_form.dart';
+import 'package:fincore/screens/loans_list_screen.dart';
 import 'package:fincore/screens/onboarding_screen.dart';
 import 'package:fincore/screens/reports_screen.dart';
 import 'package:fincore/screens/settings_screen.dart';
@@ -182,6 +187,53 @@ GoRouter buildAppRouter({
           GoRoute(
             path: ':id/edit',
             builder: (_, st) => EntryFormScreen(entryId: st.pathParameters['id']),
+          ),
+        ],
+      ),
+      // Sprint flutter-loans-v1: módulo de préstamos personales.
+      GoRoute(
+        path: '/loans',
+        builder: (_, __) => const LoansListScreen(),
+        routes: <RouteBase>[
+          GoRoute(path: 'new', builder: (_, __) => const LoanFormScreen()),
+          GoRoute(
+            path: ':id',
+            builder: (_, st) =>
+                LoanDetailScreen(loanId: st.pathParameters['id']!),
+            routes: <RouteBase>[
+              GoRoute(
+                path: 'edit',
+                builder: (_, st) =>
+                    LoanFormScreen(loanId: st.pathParameters['id']),
+              ),
+              GoRoute(
+                path: 'payments/new/monthly',
+                builder: (_, st) => LoanMonthlyPaymentForm(
+                  loanId: st.pathParameters['id']!,
+                ),
+              ),
+              GoRoute(
+                path: 'payments/new/capital',
+                builder: (_, st) => LoanCapitalPaymentForm(
+                  loanId: st.pathParameters['id']!,
+                ),
+              ),
+              // Hotfix smoke Diego: edición de pagos existentes.
+              GoRoute(
+                path: 'payments/:paymentId/edit/monthly',
+                builder: (_, st) => LoanMonthlyPaymentForm(
+                  loanId: st.pathParameters['id']!,
+                  paymentId: st.pathParameters['paymentId'],
+                ),
+              ),
+              GoRoute(
+                path: 'payments/:paymentId/edit/capital',
+                builder: (_, st) => LoanCapitalPaymentForm(
+                  loanId: st.pathParameters['id']!,
+                  paymentId: st.pathParameters['paymentId'],
+                ),
+              ),
+            ],
           ),
         ],
       ),

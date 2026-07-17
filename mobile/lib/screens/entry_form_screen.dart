@@ -96,6 +96,15 @@ class _EntryFormScreenState extends State<EntryFormScreen>
     return false;
   }
 
+  /// Sprint flutter-loans-v1 (RN-L15): si el entry en edición tiene
+  /// `loan_id != null` (income inicial o loan_payment), el form entra en
+  /// modo read-only con banner naranja + enlace "Ver préstamo". No hay
+  /// eliminación desde aquí — se administra desde /loans.
+  String? _loanIdOfEntry;
+  bool get _lockedByLoan => _isEdit && _loanIdOfEntry != null;
+
+  bool get _locked => _lockedByArchivedAccount || _lockedByLoan;
+
   @override
   void initState() {
     super.initState();
@@ -273,6 +282,7 @@ class _EntryFormScreenState extends State<EntryFormScreen>
         _kind = parseJournalKind(item.entry.kind);
         _originId = item.entry.accountOriginId;
         _destId = item.entry.accountDestinationId;
+        _loanIdOfEntry = item.entry.loanId;
         // B2 (quality review 2026-06-19): si la categoría heredada está
         // archivada, resetear _categoryId a null. Sin esto, el form pasaba
         // categoryId del entry como "explícito" al DAO y el updateEntry
@@ -417,6 +427,13 @@ class _EntryFormScreenState extends State<EntryFormScreen>
               description: description,
             );
             break;
+          case JournalKind.loanPayment:
+            // Los loan_payment se registran desde /loans/:id/payments/new/*,
+            // no desde este form. Rama defensiva para exhaustividad del
+            // switch: no debería alcanzarse porque KindPicker no ofrece
+            // loanPayment.
+            throw StateError(
+                'loanPayment se registra desde /loans, no desde /entries/new.');
         }
       }
       if (mounted) {
@@ -574,12 +591,14 @@ class _EntryFormScreenState extends State<EntryFormScreen>
       child: Scaffold(
         appBar: AppBar(
           title: Text(_isEdit
-              ? (_lockedByArchivedAccount
-                  ? 'Movimiento archivado'
-                  : 'Editar movimiento')
+              ? (_lockedByLoan
+                  ? 'Movimiento de préstamo'
+                  : (_lockedByArchivedAccount
+                      ? 'Movimiento archivado'
+                      : 'Editar movimiento'))
               : 'Nuevo movimiento'),
           actions: [
-            if (_kind != null && !_lockedByArchivedAccount)
+            if (_kind != null && !_locked)
               TextButton(
                 onPressed: _saving ? null : _submit,
                 style: TextButton.styleFrom(
@@ -616,11 +635,14 @@ class _EntryFormScreenState extends State<EntryFormScreen>
 
   Widget _buildForm() {
     final k = _kind!;
-    final locked = _lockedByArchivedAccount;
+    final locked = _locked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (locked) ...[
+        if (_lockedByLoan) ...[
+          _LoanEntryBanner(loanId: _loanIdOfEntry!),
+          const SizedBox(height: kSpaceLg),
+        ] else if (locked) ...[
           const _ArchivedEntryBanner(),
           const SizedBox(height: kSpaceLg),
         ],
@@ -752,7 +774,11 @@ class _EntryFormScreenState extends State<EntryFormScreen>
                   )
                 : Text(_isEdit ? 'Guardar cambios' : 'Registrar movimiento'),
           ),
-        if (_isEdit) ...[
+        // Sprint flutter-loans-v1 (RN-L15): botón "Eliminar movimiento"
+        // NO se renderiza cuando el entry pertenece a un préstamo — los
+        // loan_payment se eliminan desde /loans/:id (detail screen) y el
+        // income inicial sólo se borra con deleteLoan cascada.
+        if (_isEdit && !_lockedByLoan) ...[
           const SizedBox(height: kSpaceMd),
           OutlinedButton.icon(
             onPressed: _saving ? null : _cancel,
@@ -785,6 +811,11 @@ class _EntryFormScreenState extends State<EntryFormScreen>
         JournalKind.creditExpense => FincoreColors.categoryPurple,
         JournalKind.debtPayment => FincoreColors.accent,
         JournalKind.transfer => FincoreColors.accent,
+        // Sprint flutter-loans-v1: naranja (warning) alineado con módulo
+        // de préstamos. En este form nunca se instancia porque loanPayment
+        // se registra desde /loans/:id/payments/new/*, pero el switch debe
+        // ser exhaustivo para el analyzer.
+        JournalKind.loanPayment => FincoreColors.warning,
       };
 
   /// Handler del botón "Cambiar" del chip del kind. Solo en modo alta.
@@ -831,15 +862,22 @@ class _EntryFormScreenState extends State<EntryFormScreen>
         JournalKind.debtPayment => 'Pago desde',
         JournalKind.transfer => 'Cuenta origen',
         JournalKind.income => '',
+        JournalKind.loanPayment => 'Pago desde',
       };
   String _destLabel(JournalKind k) => switch (k) {
         JournalKind.income => 'Cuenta destino',
         JournalKind.debtPayment => 'Tarjeta a pagar',
         JournalKind.transfer => 'Cuenta destino',
-        JournalKind.expense || JournalKind.creditExpense => '',
+        JournalKind.expense ||
+        JournalKind.creditExpense ||
+        JournalKind.loanPayment =>
+          '',
       };
   List<String> _originTypes(JournalKind k) => switch (k) {
-        JournalKind.expense || JournalKind.debtPayment || JournalKind.transfer =>
+        JournalKind.expense ||
+        JournalKind.debtPayment ||
+        JournalKind.transfer ||
+        JournalKind.loanPayment =>
           const ['cash', 'debit'],
         JournalKind.creditExpense => const ['credit'],
         JournalKind.income => const [],
@@ -847,7 +885,10 @@ class _EntryFormScreenState extends State<EntryFormScreen>
   List<String> _destTypes(JournalKind k) => switch (k) {
         JournalKind.income || JournalKind.transfer => const ['cash', 'debit'],
         JournalKind.debtPayment => const ['credit'],
-        JournalKind.expense || JournalKind.creditExpense => const [],
+        JournalKind.expense ||
+        JournalKind.creditExpense ||
+        JournalKind.loanPayment =>
+          const [],
       };
 }
 
@@ -1190,6 +1231,87 @@ class _DateChip extends StatelessWidget {
 /// Banner de "movimiento archivado". Se muestra arriba del form cuando el
 /// entry en edición apunta a una cuenta con `archived_at != null`. Toda la
 /// edición queda bloqueada: sólo puede eliminarse el movimiento.
+/// Banner naranja para movimientos ligados a préstamo (RN-L15). Ofrece un
+/// enlace "Ver préstamo" que navega a `/loans/:id`. Todo el form queda
+/// read-only y no aparece botón Eliminar (los pagos se eliminan desde el
+/// detalle del préstamo).
+class _LoanEntryBanner extends StatelessWidget {
+  final String loanId;
+  const _LoanEntryBanner({required this.loanId});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: kSpaceLg, vertical: kSpaceMd),
+      decoration: BoxDecoration(
+        color:
+            FincoreColors.warning.withValues(alpha: FincoreColors.alphaTint),
+        borderRadius: BorderRadius.circular(kRadiusMd),
+        border: Border.all(
+          color: FincoreColors.warning
+              .withValues(alpha: FincoreColors.alphaHairline),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.request_quote_outlined,
+              color: FincoreColors.warning, size: 20),
+          const SizedBox(width: kSpaceMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Movimiento ligado a préstamo',
+                  style: TextStyle(
+                    color: FincoreColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: kSpace2xs),
+                const Text(
+                  'Se administra desde /loans. Aquí no se puede editar ni '
+                  'eliminar.',
+                  style: TextStyle(
+                    color: FincoreColors.textSubtle,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: kSpaceSm),
+                InkWell(
+                  onTap: () => context.push('/loans/$loanId'),
+                  borderRadius: BorderRadius.circular(kRadiusSm),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: kSpaceXs),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_forward,
+                            size: 14, color: FincoreColors.warning),
+                        SizedBox(width: kSpaceXs),
+                        Text(
+                          'Ver préstamo',
+                          style: TextStyle(
+                            color: FincoreColors.warning,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ArchivedEntryBanner extends StatelessWidget {
   const _ArchivedEntryBanner();
 

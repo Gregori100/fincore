@@ -1,6 +1,7 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/constants/date_range_presets.dart';
+import 'package:fincore/constants/reports_tokens.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
@@ -333,8 +334,21 @@ class _SpendingBucketRow extends StatelessWidget {
     // se invoca esta clase con maxTotal=0.
     final widthFactor = maxTotal > 0 ? (bucket.total / maxTotal).clamp(0.0, 1.0) : 0.0;
     final percentLabel = '${(bucket.percent * 100).toStringAsFixed(0)}%';
+    // Hotfix branch-quality-review (F-ARCH-01 / B2) + refined smoke Diego:
+    // renglones sintéticos "Intereses de préstamos" (v1) y "Pago a capital
+    // de préstamos" (v4). Ambos comparten drill-down: filtro
+    // `kind='loan_payment'` + rango temporal del reporte para que Diego
+    // vea los pagos con su split.
+    final isSyntheticLoan =
+        bucket.categoryId == kLoanInterestSyntheticId ||
+            bucket.categoryId == kLoanCapitalSyntheticId;
     return BaseCard(
-      onTap: () => context.push(_buildDeepLink()),
+      onTap: () => isSyntheticLoan
+          ? context.push(EntriesFilters.forLoanInterestBucket(
+              from: from,
+              to: to,
+            ).toDeepLink())
+          : context.push(_buildDeepLink()),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

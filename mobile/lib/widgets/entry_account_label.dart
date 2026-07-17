@@ -34,6 +34,10 @@ String? entryAccountLabel(EntryWithRelations item) {
         return '$originName → $destName';
       }
       return originName ?? destName;
+    case JournalKind.loanPayment:
+      // loan_payment: sólo origen (cash/debit); destino es el préstamo,
+      // no una Account. Se muestra sólo el nombre del origen.
+      return originName;
   }
 }
 

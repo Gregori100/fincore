@@ -317,6 +317,7 @@ class _TopMovementRow extends StatelessWidget {
       JournalKind.creditExpense =>
         FincoreColors.negative,
       JournalKind.debtPayment || JournalKind.transfer => FincoreColors.accent,
+      JournalKind.loanPayment => FincoreColors.warning,
     };
     final dateStr = DateFormat('d MMM y', 'es_MX').format(entry.occurredAt);
     final description = entry.description?.isNotEmpty == true
@@ -401,6 +402,7 @@ class _TopMovementRow extends StatelessWidget {
         JournalKind.creditExpense => Icons.credit_card_outlined,
         JournalKind.debtPayment => Icons.payments_outlined,
         JournalKind.transfer => Icons.swap_horiz,
+        JournalKind.loanPayment => Icons.request_quote_outlined,
       };
 
   String _signed(JournalKind k, double amount) => switch (k) {
@@ -409,7 +411,8 @@ class _TopMovementRow extends StatelessWidget {
         JournalKind.creditExpense =>
           '-${formatAmount(amount)}',
         JournalKind.debtPayment ||
-        JournalKind.transfer =>
+        JournalKind.transfer ||
+        JournalKind.loanPayment =>
           formatAmount(amount),
       };
 }

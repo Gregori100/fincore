@@ -4,6 +4,7 @@ import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/app_preferences_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/data/daos/weekly_budgets_dao.dart';
 import 'package:fincore/data/database.dart';
@@ -21,6 +22,7 @@ class AppDependencies {
   final AccountsDao accountsDao;
   final CategoriesDao categoriesDao;
   final EntriesDao entriesDao;
+  final LoansDao loansDao;
   final SavedViewsDao savedViewsDao;
   final AppPreferencesDao appPreferencesDao;
   final WeeklyBudgetsDao weeklyBudgetsDao;
@@ -34,6 +36,7 @@ class AppDependencies {
     required this.accountsDao,
     required this.categoriesDao,
     required this.entriesDao,
+    required this.loansDao,
     required this.savedViewsDao,
     required this.appPreferencesDao,
     required this.weeklyBudgetsDao,
@@ -57,6 +60,7 @@ class AppDependencies {
     final accountsDao = database.accountsDao;
     final categoriesDao = database.categoriesDao;
     final entriesDao = database.entriesDao;
+    final loansDao = database.loansDao;
     final savedViewsDao = database.savedViewsDao;
     final appPreferencesDao = database.appPreferencesDao;
     final weeklyBudgetsDao = database.weeklyBudgetsDao;
@@ -68,6 +72,7 @@ class AppDependencies {
       accountsDao: accountsDao,
       categoriesDao: categoriesDao,
       entriesDao: entriesDao,
+      loansDao: loansDao,
       savedViewsDao: savedViewsDao,
       appPreferencesDao: appPreferencesDao,
       weeklyBudgetsDao: weeklyBudgetsDao,

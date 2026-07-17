@@ -56,6 +56,10 @@ class MovementRow extends StatelessWidget {
     ];
     final hasCategory = item.category != null;
     final hasArchivedAccount = entryHasArchivedAccount(item);
+    // Sprint flutter-loans-v1: chip pequeño naranja para movimientos ligados
+    // a un préstamo (income inicial o loan_payment). Diego identifica que
+    // ese movimiento se administra desde /loans, no desde /entries.
+    final belongsToLoan = entry.loanId != null;
 
     return BaseCard(
       onTap: () => context.push('/entries/${entry.id}/edit'),
@@ -120,6 +124,10 @@ class MovementRow extends StatelessWidget {
                     compact: true,
                   ),
                 ],
+                if (belongsToLoan) ...[
+                  const SizedBox(height: kSpaceXs),
+                  const _LoanChip(),
+                ],
               ],
             ),
           ),
@@ -136,6 +144,9 @@ class MovementRow extends StatelessWidget {
         JournalKind.debtPayment ||
         JournalKind.transfer =>
           FincoreColors.accent,
+        // Sprint flutter-loans-v1: pago de préstamo pinta naranja como el
+        // resto del módulo (KPI, chip · préstamo, iconografía).
+        JournalKind.loanPayment => FincoreColors.warning,
       };
 
   IconData _kindIcon(JournalKind k) => switch (k) {
@@ -144,6 +155,7 @@ class MovementRow extends StatelessWidget {
         JournalKind.creditExpense => Icons.credit_card_outlined,
         JournalKind.debtPayment => Icons.payments_outlined,
         JournalKind.transfer => Icons.swap_horiz,
+        JournalKind.loanPayment => Icons.request_quote_outlined,
       };
 
   String _signedAmount(JournalKind k, double amount) => switch (k) {
@@ -152,7 +164,8 @@ class MovementRow extends StatelessWidget {
         JournalKind.creditExpense =>
           '-${formatAmount(amount)}',
         JournalKind.debtPayment ||
-        JournalKind.transfer =>
+        JournalKind.transfer ||
+        JournalKind.loanPayment =>
           formatAmount(amount),
       };
 
@@ -165,6 +178,42 @@ class MovementRow extends StatelessWidget {
       iconSlug: c.iconSlug,
       monthlyLimit: c.monthlyLimit,
       deletedAt: c.deletedAt,
+    );
+  }
+}
+
+/// Chip pequeño naranja para el subtítulo de un movimiento ligado a préstamo.
+/// Sprint flutter-loans-v1: señal visual de que el entry se administra desde
+/// /loans y NO es editable desde entry_form_screen.
+class _LoanChip extends StatelessWidget {
+  const _LoanChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: kSpaceSm, vertical: kSpace2xs),
+      decoration: BoxDecoration(
+        color:
+            FincoreColors.warning.withValues(alpha: FincoreColors.alphaTint),
+        borderRadius: BorderRadius.circular(kRadiusSm),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.request_quote_outlined,
+              size: 11, color: FincoreColors.warning),
+          SizedBox(width: kSpace2xs),
+          Text(
+            'préstamo',
+            style: TextStyle(
+              color: FincoreColors.warning,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

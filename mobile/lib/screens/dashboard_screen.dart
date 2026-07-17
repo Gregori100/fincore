@@ -24,6 +24,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Stream<double>? _boStream;
   Stream<double>? _deStream;
   Stream<double>? _crStream;
+  // Sprint flutter-loans-v1: saldo total de préstamos activos + lista de
+  // préstamos activos (para chip "PRÓXIMO PAGO" ≤ 5 días).
+  Stream<double>? _totalLoansStream;
+  Stream<List<db.Loan>>? _activeLoansStream;
   Stream<List<db.Account>>? _accountsStream;
   Stream<List<EntryWithRelations>>? _recentEntriesStream;
   // Sprint flutter-dashboard-bundle-v1.
@@ -49,6 +53,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _boStream = deps.stateService.watchBo();
     _deStream = deps.stateService.watchDe();
     _crStream = deps.stateService.watchCr();
+    _totalLoansStream = deps.stateService.watchTotalLoans();
+    _activeLoansStream = deps.loansDao.watchActive();
     _accountsStream = deps.accountsDao.watchActive();
     _recentEntriesStream = deps.entriesDao.watchPage(limit: 10);
     _todayStream = deps.reportsService.watchTodaySummary();
@@ -155,8 +161,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
             tooltip: 'Más opciones',
             onSelected: (value) {
               if (value == 'categories') context.push('/categories');
+              if (value == 'loans') context.push('/loans');
             },
             itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'loans',
+                child: Row(
+                  children: [
+                    Icon(Icons.request_quote_outlined),
+                    SizedBox(width: 8),
+                    Text('Préstamos'),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: 'categories',
                 child: Row(
@@ -216,6 +233,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ],
+          ),
+          // Sprint flutter-loans-v1: KPI naranja "PRÉSTAMO" full-width,
+          // condicional (sólo si total > 0). Full-width para que el row de
+          // 3 KPIs BO/DE/CR no se comprima en cel angosto.
+          StreamBuilder<double>(
+            stream: _totalLoansStream,
+            builder: (context, snap) {
+              final total = snap.data ?? 0;
+              if (total <= 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _LoanTotalCard(total: total),
+              );
+            },
+          ),
+          // Chips por préstamo activo:
+          //  • Atrasado (rojo): al menos 1 mes calendario ya pasó su
+          //    payment_day sin pago del mes registrado (o meses anteriores
+          //    sin pagar). Hotfix smoke Diego v4.
+          //  • Próximo pago (naranja): daysUntil ≤ 5 y el mes actual aún
+          //    no tiene pago registrado.
+          // El chip rojo tiene prioridad sobre el naranja.
+          StreamBuilder<List<db.Loan>>(
+            stream: _activeLoansStream,
+            builder: (context, snap) {
+              final loans = snap.data ?? const <db.Loan>[];
+              if (loans.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (final l in loans) ...[
+                        _LoanStatusChip(loan: l),
+                        const SizedBox(width: 8),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: 24),
           SectionTitle(
@@ -310,6 +369,194 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Calcula cuántos días faltan para el próximo `paymentDay` (1-28) desde
+/// `DateTime.now()`. Si hoy es día 25 y payment_day = 5, retorna días
+/// restantes al 5 del mes siguiente. Nunca retorna negativo.
+int _daysUntilPayment(int paymentDay) {
+  final now = DateTime.now();
+  DateTime target = DateTime(now.year, now.month, paymentDay);
+  if (target.isBefore(DateTime(now.year, now.month, now.day))) {
+    target = DateTime(now.year, now.month + 1, paymentDay);
+  }
+  return target.difference(DateTime(now.year, now.month, now.day)).inDays;
+}
+
+/// KPI naranja "PRÉSTAMO" full-width. Se renderiza sólo cuando el total > 0
+/// (RN-L20). Tap → `/loans`.
+class _LoanTotalCard extends StatelessWidget {
+  final double total;
+  const _LoanTotalCard({required this.total});
+
+  @override
+  Widget build(BuildContext context) {
+    return BaseCard(
+      onTap: () => context.push('/loans'),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: FincoreColors.warning.withValues(
+                alpha: FincoreColors.alphaTint,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.request_quote_outlined,
+                color: FincoreColors.warning),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'PRÉSTAMO',
+                  // Hotfix branch-quality-review (L4 / F-UX-05): alineamos
+                  // el label con el resto de KPIs BO/DE/CR para conservar
+                  // la gestalt del row cuando los 4 quedan en el mismo
+                  // fold (fontSize 10, letterSpacing 1.2, w700).
+                  style: TextStyle(
+                    color: FincoreColors.textMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Saldo pendiente total',
+                  style: TextStyle(
+                      color: FincoreColors.textSubtle, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            formatAmount(total),
+            style: const TextStyle(
+              color: FincoreColors.warning,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(Icons.chevron_right, color: FincoreColors.textSubtle),
+        ],
+      ),
+    );
+  }
+}
+
+/// Chip de estado del préstamo. Muestra uno de tres estados por prioridad:
+///   1. Atrasado (rojo): `monthsOverdue >= 1`. Prioridad máxima.
+///   2. Próximo pago (naranja): `daysUntil ≤ 5` y mes actual no pagado.
+///   3. Nada (invisible) si el préstamo está al día y sin pagos próximos.
+///
+/// Hotfix smoke Diego v4: antes el chip usaba `_daysUntilPayment` que "rueda"
+/// al mes siguiente cuando el día ya pasó, lo que ocultaba pagos atrasados
+/// (paymentDay=15, hoy=17 → devolvía 29 días → no aparecía). Ahora el
+/// atraso se cuenta por MES CALENDARIO faltante, no por proximidad.
+class _LoanStatusChip extends StatelessWidget {
+  final db.Loan loan;
+  const _LoanStatusChip({required this.loan});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final deps = AppDependencies.of(context);
+    return StreamBuilder<int>(
+      stream: deps.loansDao.watchMonthsOverdue(
+        loanId: loan.id,
+        today: now,
+        contractDate: loan.contractDate,
+        paymentDay: loan.paymentDay,
+      ),
+      builder: (context, overdueSnap) {
+        final overdue = overdueSnap.data ?? 0;
+        if (overdue >= 1) {
+          return _ChipShell(
+            loanId: loan.id,
+            color: FincoreColors.negative,
+            icon: Icons.priority_high,
+            label:
+                '${loan.name} · $overdue ${overdue == 1 ? "mes atrasado" : "meses atrasados"}',
+          );
+        }
+        // Sin atrasos: reusar el flujo naranja original (upcoming ≤ 5 días
+        // y mes actual no pagado).
+        final days = _daysUntilPayment(loan.paymentDay);
+        if (days > 5) return const SizedBox.shrink();
+        return StreamBuilder<bool>(
+          stream: deps.loansDao
+              .watchHasMonthlyPaymentIn(loan.id, now.year, now.month),
+          builder: (context, paidSnap) {
+            final alreadyPaid = paidSnap.data ?? false;
+            if (alreadyPaid) return const SizedBox.shrink();
+            final label = days == 0
+                ? 'hoy'
+                : (days == 1 ? 'mañana' : 'en $days días');
+            return _ChipShell(
+              loanId: loan.id,
+              color: FincoreColors.warning,
+              icon: Icons.schedule_outlined,
+              label: '${loan.name} · $label',
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _ChipShell extends StatelessWidget {
+  final String loanId;
+  final Color color;
+  final IconData icon;
+  final String label;
+  const _ChipShell({
+    required this.loanId,
+    required this.color,
+    required this.icon,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => context.push('/loans/$loanId'),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: FincoreColors.alphaTint),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: color.withValues(alpha: FincoreColors.alphaHairline),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: FincoreColors.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

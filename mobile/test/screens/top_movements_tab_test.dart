@@ -74,7 +74,8 @@ void main() {
 
       await openTopMovementsTab(tester);
 
-      // Destildar los 5 chips de kinds (default: los 5 seleccionados).
+      // Destildar los 6 chips de kinds (default: los 6 seleccionados).
+      // Sprint flutter-loans-v1 agregó 'Pago de préstamo' al enum.
       await tester.tap(find.text('Ingreso'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Gasto'));
@@ -84,6 +85,8 @@ void main() {
       await tester.tap(find.text('Pago de tarjeta'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Transferencia'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pago de préstamo'));
       await tester.pumpAndSettle();
 
       expect(

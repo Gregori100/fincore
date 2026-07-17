@@ -78,6 +78,8 @@ class KindPicker extends StatelessWidget {
       case JournalKind.debtPayment:
       case JournalKind.transfer:
         return FincoreColors.accent;
+      case JournalKind.loanPayment:
+        return FincoreColors.warning;
     }
   }
 
@@ -93,6 +95,8 @@ class KindPicker extends StatelessWidget {
         return Icons.payments_outlined;
       case JournalKind.transfer:
         return Icons.swap_horiz;
+      case JournalKind.loanPayment:
+        return Icons.request_quote_outlined;
     }
   }
 
@@ -108,6 +112,8 @@ class KindPicker extends StatelessWidget {
         return 'Pagar una tarjeta desde otra cuenta';
       case JournalKind.transfer:
         return 'Mover dinero entre cuentas';
+      case JournalKind.loanPayment:
+        return 'Pago de un préstamo (se registra desde /loans)';
     }
   }
 }

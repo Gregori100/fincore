@@ -1,5 +1,8 @@
 import 'package:fincore/data/backup.dart';
+import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
+import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/models/domain_error.dart';
 import 'package:fincore/theme/fincore_colors.dart';
@@ -51,6 +54,69 @@ String backupErrorToMessage(BackupError error) {
   }
 }
 
+/// Sprint flutter-loans-v1 (hotfix): switch por código extraído del helper
+/// `domainErrorToMessage` para reusarlo desde los cases de `*DaoError` que
+/// no son `DomainError`. Toma `fallback` (el `.message` del error) cuando
+/// no hay match — así el DAO puede emitir texto humano en el mensaje sin
+/// necesidad de re-mapear cada nuevo código aquí.
+String _daoCodeToMessage(String code, String fallback) {
+  switch (code) {
+    case 'overpay_debt':
+      return 'El pago no puede ser mayor a la deuda de la tarjeta.';
+    case 'invalid_account_type':
+      return fallback;
+    case 'invalid_credit_limit':
+      return fallback;
+    case 'invalid_credit_metadata':
+      return fallback;
+    case 'duplicate_account_name':
+      return 'Ya existe una cuenta con ese nombre.';
+    case 'account_not_empty':
+      return 'No se puede eliminar una cuenta con movimientos activos.';
+    case 'protected_account':
+      return fallback; // El DAO ya explicita "Bolsa no se puede X".
+    case 'invalid_category_applies_to':
+      return 'La categoría no aplica a este tipo de movimiento.';
+    case 'invalid_amount':
+      return 'El monto debe ser mayor a 0.';
+    case 'invalid_kind':
+      return fallback;
+    case 'immutable_journal_field':
+      return 'Ese campo no es editable.';
+    case 'not_found':
+      return fallback;
+    case 'account_in_use_by_loan':
+      return fallback;
+    case 'immutable_loan_field':
+      return 'Ese campo del préstamo no es editable. Sólo puedes editar nombre, pago, plazo, día y fecha.';
+    case 'immutable_loan_payment':
+      return 'Este movimiento pertenece a un préstamo. Se administra desde /loans.';
+    case 'invalid_loan_split':
+      return 'La suma de capital + intereses debe ser igual al monto total.';
+    case 'invalid_loan_data':
+      return fallback;
+    case 'invalid_payment_day':
+      return 'El día de pago debe estar entre 1 y 28.';
+    case 'loan_closed':
+      return 'No se pueden registrar pagos sobre un préstamo cerrado.';
+    case 'cannot_reopen_paid':
+      return 'Un préstamo pagado no puede reabrirse. Elimina un pago para reactivarlo o elimina el préstamo.';
+    // Hotfix smoke Diego: unicidad de pago del mes + fecha < contrato.
+    case 'payment_before_contract':
+      return 'El pago no puede ser anterior a la fecha del contrato del préstamo.';
+    case 'duplicate_monthly_payment':
+      return fallback; // Mensaje del DAO ya sugiere "usa Abono a capital".
+    case 'capital_before_monthly':
+      return fallback; // Mensaje del DAO explica la regla de orden.
+    case 'not_loan_payment':
+      return 'Este movimiento no es un pago de préstamo.';
+    case 'overpay_loan':
+      return fallback; // El DAO ya explica el monto que excede el saldo.
+    default:
+      return fallback;
+  }
+}
+
 /// Mapeo de códigos del backend a mensajes amigables en español.
 /// Si no hay match, devolvemos `error.message` directo (que ya es texto humano
 /// del backend en la mayoría de los casos).
@@ -84,6 +150,23 @@ String domainErrorToMessage(DomainError error) {
       return 'El ícono seleccionado no está disponible.';
     case 'immutable_journal_field':
       return 'Ese campo no es editable.';
+    // Sprint flutter-loans-v1: errores nuevos del dominio de préstamos.
+    case 'immutable_loan_field':
+      return 'Ese campo del préstamo no es editable. Sólo puedes editar nombre, pago, plazo, día y fecha.';
+    case 'immutable_loan_payment':
+      return 'Este movimiento pertenece a un préstamo. Se administra desde /loans.';
+    case 'invalid_loan_split':
+      return 'La suma de capital + intereses debe ser igual al monto total.';
+    case 'invalid_loan_data':
+      return 'Datos del préstamo inválidos: revisa monto, pago mensual y plazo.';
+    case 'invalid_payment_day':
+      return 'El día de pago debe estar entre 1 y 28.';
+    case 'account_in_use_by_loan':
+      return error.message; // El DAO ya incluye el nombre del préstamo.
+    case 'loan_closed':
+      return 'No se pueden registrar pagos sobre un préstamo cerrado.';
+    case 'cannot_reopen_paid':
+      return 'Un préstamo pagado no puede reabrirse. Elimina un pago para reactivarlo o elimina el préstamo.';
     case 'network_error':
       return error.message;
     default:
@@ -190,6 +273,16 @@ void showErrorSnackbar(BuildContext context, Object error) {
     DomainError() => domainErrorToMessage(error),
     CategoriesDaoError() => categoriesDaoErrorToMessage(error),
     SavedViewsDaoError() => savedViewsDaoErrorToMessage(error),
+    // Sprint flutter-loans-v1 (hotfix): faltaban cases explícitos para las
+    // 3 clases *DaoError. Sin esto caían al `Exception()` genérico y el
+    // usuario veía "EntriesDaoError(invalid_loan_split): La suma..." con
+    // prefijo feo, o al `_` (default) si el pattern no matcheaba. Los 3
+    // comparten el mapping de códigos con `domainErrorToMessage` porque
+    // muchos usan códigos comunes (`invalid_account_type`, etc.).
+    EntriesDaoError() => _daoCodeToMessage(error.code, error.message),
+    AccountsDaoError() => _daoCodeToMessage(error.code, error.message),
+    LoansDaoError() => _daoCodeToMessage(error.code, error.message),
+    String() => error,
     Exception() => error.toString().replaceFirst('Exception: ', ''),
     _ => 'Error inesperado.',
   };

@@ -36,6 +36,7 @@ void main() {
         createdAt: DateTime(2026, 1, 1),
         updatedAt: DateTime(2026, 1, 1),
         deletedAt: null,
+        isMonthlyPayment: false,
       );
 
   final bolsa = account('a1', 'Bolsa', 'cash');
