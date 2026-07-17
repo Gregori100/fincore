@@ -8,6 +8,12 @@ enum JournalKind {
   creditExpense,
   debtPayment,
   transfer,
+  // Sprint flutter-loans-v1: pago de préstamo (kind 'loan_payment'). Se
+  // registra desde /loans/:id/payments/new/*, NO desde el KindPicker de
+  // /entries/new. Existe en el enum para que `parseJournalKind` no explote
+  // al leer entries persistidas (el famoso bug del "recuadro gris" en la
+  // lista de movimientos).
+  loanPayment,
 }
 
 extension JournalKindX on JournalKind {
@@ -24,6 +30,8 @@ extension JournalKindX on JournalKind {
         return 'debt_payment';
       case JournalKind.transfer:
         return 'transfer';
+      case JournalKind.loanPayment:
+        return 'loan_payment';
     }
   }
 
@@ -40,11 +48,15 @@ extension JournalKindX on JournalKind {
         return 'Pago de tarjeta';
       case JournalKind.transfer:
         return 'Transferencia';
+      case JournalKind.loanPayment:
+        return 'Pago de préstamo';
     }
   }
 
   /// Si requiere o no categoría asociada.
-  /// transfer y debt_payment no aceptan categoría (validado por backend).
+  /// transfer, debt_payment y loan_payment no aceptan categoría (validado
+  /// por DAO). loan_payment lleva su propio split principal/interest y
+  /// los intereses aparecen en spending_by_category como renglón sintético.
   bool get acceptsCategory {
     return this == JournalKind.income ||
         this == JournalKind.expense ||
@@ -62,6 +74,7 @@ extension JournalKindX on JournalKind {
         return ['expense', 'both'];
       case JournalKind.debtPayment:
       case JournalKind.transfer:
+      case JournalKind.loanPayment:
         return const <String>[];
     }
   }
@@ -74,3 +87,14 @@ JournalKind parseJournalKind(String apiValue) {
   }
   throw FormatException('JournalKind desconocido: $apiValue');
 }
+
+/// Set canónico de kinds válidos derivado del enum. Hotfix
+/// branch-quality-review (F-ARCH-02): fuente única de verdad para
+/// validaciones cross-módulo. Antes del hotfix existían 3 hardcoded sets
+/// duplicados en `EntriesDao._validKinds`, `BackupService._validKinds` y
+/// `EntriesFilters._kValidKinds` — la triplicación causó que el chip
+/// "Pago de préstamo" en filtros no round-trippeara porque uno de los
+/// 3 sets no se actualizó tras agregar `loanPayment` al enum.
+final Set<String> kAllJournalKinds = {
+  for (final k in JournalKind.values) k.apiValue,
+};

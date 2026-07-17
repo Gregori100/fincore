@@ -4,6 +4,7 @@ import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/app_preferences_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/daos/saved_views_dao.dart';
 import 'package:fincore/data/daos/weekly_budgets_dao.dart';
 
@@ -106,6 +107,72 @@ class JournalEntries extends Table {
   DateTimeColumn get occurredAt => dateTime()();
   TextColumn get categoryId =>
       text().nullable().references(Categories, #id)();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+  // Sprint flutter-loans-v1 (schemaVersion 10): campos para el kind
+  // `loan_payment` y para trazabilidad del `income` inicial ligado a un
+  // préstamo. `loan_id` no-null implica que este entry pertenece a un préstamo
+  // y no es editable desde entry_form_screen (se administra desde /loans).
+  // `principal_amount` + `interest_amount` sólo poblados cuando
+  // `kind == 'loan_payment'` (split declarado por el usuario que suma amount).
+  TextColumn get loanId =>
+      text().nullable().references(Loans, #id)();
+  RealColumn get principalAmount => real().nullable()();
+  RealColumn get interestAmount => real().nullable()();
+  // Hotfix smoke Diego v2: distingue "Pago del mes" (monthly obligatorio,
+  // único por mes calendario) de "Abono a capital" (extra, múltiples
+  // permitidos tras el monthly). El proxy anterior `interest_amount > 0`
+  // fallaba en el edge case legítimo de pago del mes sin intereses
+  // (mes de gracia). Se persiste el flag explícito seteado por la UI:
+  // `LoanMonthlyPaymentForm` → true, `LoanCapitalPaymentForm` → false.
+  // Sólo relevante para `kind == 'loan_payment'`; en otros kinds el
+  // valor es irrelevante (default false).
+  BoolColumn get isMonthlyPayment =>
+      boolean().withDefault(const Constant(false))();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// =============================================================================
+// Tabla: loans (sprint flutter-loans-v1)
+// =============================================================================
+// Préstamos personales que Diego recibe (bancarios, hipoteca, auto, amigos).
+// Entidad autónoma — NO es una Account virtual. El saldo pendiente se deriva
+// on-the-fly de `journal_entries` con `kind='loan_payment' AND loan_id=X`:
+//   saldo = principal_amount − Σ(loan_payment.principal_amount).
+//
+// Cada Loan tiene un `income` inicial ligado por `loan_id` (creado
+// atómicamente en `LoansDao.create`) que representa el desembolso en
+// `destination_account_id`.
+//
+// Estados:
+//   - Activo:            deleted_at IS NULL AND closed_at IS NULL
+//   - Cerrado (paid):    closed_at != NULL AND close_reason='paid'    (auto)
+//   - Cerrado (manual):  closed_at != NULL AND close_reason='manual'  (UI)
+//   - Eliminado:         deleted_at != NULL  (cascada income + pagos)
+//
+// Los `paid` no se reabren por acción manual (sólo por eliminar un pago con
+// capital > 0 que devuelve saldo>0). Los `manual` sí se reabren via reopen.
+//
+// `principal_amount` y `destination_account_id` son INMUTABLES post-create
+// (RN-L01, RN-L02) porque están atados al `income` inicial. `monthly_payment`,
+// `current_duration_months`, `payment_day`, `contract_date`, `name` sí son
+// editables.
+class Loans extends Table {
+  TextColumn get id => text()();
+  TextColumn get name => text()();
+  RealColumn get principalAmount => real()();
+  RealColumn get monthlyPayment => real()();
+  IntColumn get initialDurationMonths => integer()();
+  IntColumn get currentDurationMonths => integer()();
+  IntColumn get paymentDay => integer()(); // 1-28
+  DateTimeColumn get contractDate => dateTime()();
+  TextColumn get destinationAccountId =>
+      text().references(Accounts, #id)();
+  DateTimeColumn get closedAt => dateTime().nullable()();
+  TextColumn get closeReason => text().nullable()(); // 'paid' | 'manual'
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -253,6 +320,7 @@ class AppPreferences extends Table {
     Accounts,
     Categories,
     JournalEntries,
+    Loans,
     SavedViews,
     AppPreferences,
     WeeklyBudgets,
@@ -262,6 +330,7 @@ class AppPreferences extends Table {
     AccountsDao,
     CategoriesDao,
     EntriesDao,
+    LoansDao,
     SavedViewsDao,
     AppPreferencesDao,
     WeeklyBudgetsDao,
@@ -272,7 +341,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -336,6 +405,12 @@ class FincoreDatabase extends _$FincoreDatabase {
             'CREATE INDEX IF NOT EXISTS idx_entries_occurred_active '
             'ON journal_entries(occurred_at DESC) '
             'WHERE deleted_at IS NULL',
+          );
+          // Sprint flutter-loans-v1: índice parcial para agregación rápida
+          // del saldo de préstamos y de la cascada de deleteLoan.
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_entries_loan '
+            'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
           );
         },
         onUpgrade: (m, from, to) async {
@@ -678,6 +753,204 @@ class FincoreDatabase extends _$FincoreDatabase {
             );
             await customStatement(
               'ALTER TABLE accounts ADD COLUMN archived_at TEXT',
+            );
+            return;
+          }
+          // Migración 9 → 10 (sprint flutter-loans-v1): crea tabla `loans` +
+          // agrega 4 columnas nullable a `journal_entries` para el kind nuevo
+          // `loan_payment` (loan_id FK + principal_amount + interest_amount +
+          // is_monthly_payment) + índice parcial para acelerar `balanceOf`.
+          // Aditiva, no destructiva, no toca datos del usuario.
+          if (from == 9 && to == 10) {
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS loans ('
+              'id TEXT NOT NULL, '
+              'name TEXT NOT NULL, '
+              'principal_amount REAL NOT NULL, '
+              'monthly_payment REAL NOT NULL, '
+              'initial_duration_months INTEGER NOT NULL, '
+              'current_duration_months INTEGER NOT NULL, '
+              'payment_day INTEGER NOT NULL, '
+              'contract_date TEXT NOT NULL, '
+              'destination_account_id TEXT NOT NULL REFERENCES accounts (id), '
+              'closed_at TEXT NULL, '
+              'close_reason TEXT NULL, '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'deleted_at TEXT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN loan_id TEXT '
+              'REFERENCES loans (id)',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN principal_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN interest_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN is_monthly_payment '
+              'INTEGER NOT NULL DEFAULT 0 '
+              'CHECK (is_monthly_payment IN (0, 1))',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_entries_loan '
+              'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
+            );
+            return;
+          }
+          // Migración 8 → 10 (defensiva): combina 8→9 (archived_at) + 9→10.
+          if (from == 8 && to == 10) {
+            await customStatement(
+              'ALTER TABLE accounts ADD COLUMN archived_at TEXT',
+            );
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS loans ('
+              'id TEXT NOT NULL, '
+              'name TEXT NOT NULL, '
+              'principal_amount REAL NOT NULL, '
+              'monthly_payment REAL NOT NULL, '
+              'initial_duration_months INTEGER NOT NULL, '
+              'current_duration_months INTEGER NOT NULL, '
+              'payment_day INTEGER NOT NULL, '
+              'contract_date TEXT NOT NULL, '
+              'destination_account_id TEXT NOT NULL REFERENCES accounts (id), '
+              'closed_at TEXT NULL, '
+              'close_reason TEXT NULL, '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'deleted_at TEXT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN loan_id TEXT '
+              'REFERENCES loans (id)',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN principal_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN interest_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN is_monthly_payment '
+              'INTEGER NOT NULL DEFAULT 0 '
+              'CHECK (is_monthly_payment IN (0, 1))',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_entries_loan '
+              'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
+            );
+            return;
+          }
+          // Migración 10 → 11 (hotfix smoke Diego v2): agrega
+          // `is_monthly_payment` a `journal_entries` para distinguir
+          // "Pago del mes" de "Abono a capital" sin depender del proxy
+          // `interest_amount > 0`. Idempotente vía probe de pragma_table_info
+          // porque algunas instalaciones tempranas del sprint corrieron una
+          // versión iterativa de la rama 9→10 que ya incluía la columna
+          // (bump inline sin cambio de schemaVersion), y otras no.
+          if (from == 10 && to == 11) {
+            final probe = await customSelect(
+              "SELECT COUNT(*) AS c FROM pragma_table_info('journal_entries') "
+              "WHERE name = 'is_monthly_payment'",
+            ).getSingle();
+            if (probe.read<int>('c') == 0) {
+              await customStatement(
+                'ALTER TABLE journal_entries ADD COLUMN is_monthly_payment '
+                'INTEGER NOT NULL DEFAULT 0 '
+                'CHECK (is_monthly_payment IN (0, 1))',
+              );
+            }
+            return;
+          }
+          // Migración 9 → 11 (defensiva): combina 9→10 (loans + 4 columnas
+          // en journal_entries + índice) + 10→11 no-op (la columna ya la
+          // pusimos en la rama 9→10 aquí).
+          if (from == 9 && to == 11) {
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS loans ('
+              'id TEXT NOT NULL, '
+              'name TEXT NOT NULL, '
+              'principal_amount REAL NOT NULL, '
+              'monthly_payment REAL NOT NULL, '
+              'initial_duration_months INTEGER NOT NULL, '
+              'current_duration_months INTEGER NOT NULL, '
+              'payment_day INTEGER NOT NULL, '
+              'contract_date TEXT NOT NULL, '
+              'destination_account_id TEXT NOT NULL REFERENCES accounts (id), '
+              'closed_at TEXT NULL, '
+              'close_reason TEXT NULL, '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'deleted_at TEXT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN loan_id TEXT '
+              'REFERENCES loans (id)',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN principal_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN interest_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN is_monthly_payment '
+              'INTEGER NOT NULL DEFAULT 0 '
+              'CHECK (is_monthly_payment IN (0, 1))',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_entries_loan '
+              'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
+            );
+            return;
+          }
+          // Migración 8 → 11 (defensiva): combina 8→9 (archived_at) +
+          // 9→11.
+          if (from == 8 && to == 11) {
+            await customStatement(
+              'ALTER TABLE accounts ADD COLUMN archived_at TEXT',
+            );
+            await customStatement(
+              'CREATE TABLE IF NOT EXISTS loans ('
+              'id TEXT NOT NULL, '
+              'name TEXT NOT NULL, '
+              'principal_amount REAL NOT NULL, '
+              'monthly_payment REAL NOT NULL, '
+              'initial_duration_months INTEGER NOT NULL, '
+              'current_duration_months INTEGER NOT NULL, '
+              'payment_day INTEGER NOT NULL, '
+              'contract_date TEXT NOT NULL, '
+              'destination_account_id TEXT NOT NULL REFERENCES accounts (id), '
+              'closed_at TEXT NULL, '
+              'close_reason TEXT NULL, '
+              'created_at TEXT NOT NULL, '
+              'updated_at TEXT NOT NULL, '
+              'deleted_at TEXT NULL, '
+              'PRIMARY KEY (id))',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN loan_id TEXT '
+              'REFERENCES loans (id)',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN principal_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN interest_amount REAL',
+            );
+            await customStatement(
+              'ALTER TABLE journal_entries ADD COLUMN is_monthly_payment '
+              'INTEGER NOT NULL DEFAULT 0 '
+              'CHECK (is_monthly_payment IN (0, 1))',
+            );
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_entries_loan '
+              'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
             );
             return;
           }

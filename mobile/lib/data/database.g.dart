@@ -1533,6 +1533,879 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   }
 }
 
+class $LoansTable extends Loans with TableInfo<$LoansTable, Loan> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $LoansTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nameMeta = const VerificationMeta('name');
+  @override
+  late final GeneratedColumn<String> name = GeneratedColumn<String>(
+    'name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _principalAmountMeta = const VerificationMeta(
+    'principalAmount',
+  );
+  @override
+  late final GeneratedColumn<double> principalAmount = GeneratedColumn<double>(
+    'principal_amount',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _monthlyPaymentMeta = const VerificationMeta(
+    'monthlyPayment',
+  );
+  @override
+  late final GeneratedColumn<double> monthlyPayment = GeneratedColumn<double>(
+    'monthly_payment',
+    aliasedName,
+    false,
+    type: DriftSqlType.double,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _initialDurationMonthsMeta =
+      const VerificationMeta('initialDurationMonths');
+  @override
+  late final GeneratedColumn<int> initialDurationMonths = GeneratedColumn<int>(
+    'initial_duration_months',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currentDurationMonthsMeta =
+      const VerificationMeta('currentDurationMonths');
+  @override
+  late final GeneratedColumn<int> currentDurationMonths = GeneratedColumn<int>(
+    'current_duration_months',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _paymentDayMeta = const VerificationMeta(
+    'paymentDay',
+  );
+  @override
+  late final GeneratedColumn<int> paymentDay = GeneratedColumn<int>(
+    'payment_day',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contractDateMeta = const VerificationMeta(
+    'contractDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> contractDate = GeneratedColumn<DateTime>(
+    'contract_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _destinationAccountIdMeta =
+      const VerificationMeta('destinationAccountId');
+  @override
+  late final GeneratedColumn<String> destinationAccountId =
+      GeneratedColumn<String>(
+        'destination_account_id',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+        defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'REFERENCES accounts (id)',
+        ),
+      );
+  static const VerificationMeta _closedAtMeta = const VerificationMeta(
+    'closedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> closedAt = GeneratedColumn<DateTime>(
+    'closed_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _closeReasonMeta = const VerificationMeta(
+    'closeReason',
+  );
+  @override
+  late final GeneratedColumn<String> closeReason = GeneratedColumn<String>(
+    'close_reason',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    name,
+    principalAmount,
+    monthlyPayment,
+    initialDurationMonths,
+    currentDurationMonths,
+    paymentDay,
+    contractDate,
+    destinationAccountId,
+    closedAt,
+    closeReason,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'loans';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Loan> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('name')) {
+      context.handle(
+        _nameMeta,
+        name.isAcceptableOrUnknown(data['name']!, _nameMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nameMeta);
+    }
+    if (data.containsKey('principal_amount')) {
+      context.handle(
+        _principalAmountMeta,
+        principalAmount.isAcceptableOrUnknown(
+          data['principal_amount']!,
+          _principalAmountMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_principalAmountMeta);
+    }
+    if (data.containsKey('monthly_payment')) {
+      context.handle(
+        _monthlyPaymentMeta,
+        monthlyPayment.isAcceptableOrUnknown(
+          data['monthly_payment']!,
+          _monthlyPaymentMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_monthlyPaymentMeta);
+    }
+    if (data.containsKey('initial_duration_months')) {
+      context.handle(
+        _initialDurationMonthsMeta,
+        initialDurationMonths.isAcceptableOrUnknown(
+          data['initial_duration_months']!,
+          _initialDurationMonthsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_initialDurationMonthsMeta);
+    }
+    if (data.containsKey('current_duration_months')) {
+      context.handle(
+        _currentDurationMonthsMeta,
+        currentDurationMonths.isAcceptableOrUnknown(
+          data['current_duration_months']!,
+          _currentDurationMonthsMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_currentDurationMonthsMeta);
+    }
+    if (data.containsKey('payment_day')) {
+      context.handle(
+        _paymentDayMeta,
+        paymentDay.isAcceptableOrUnknown(data['payment_day']!, _paymentDayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_paymentDayMeta);
+    }
+    if (data.containsKey('contract_date')) {
+      context.handle(
+        _contractDateMeta,
+        contractDate.isAcceptableOrUnknown(
+          data['contract_date']!,
+          _contractDateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_contractDateMeta);
+    }
+    if (data.containsKey('destination_account_id')) {
+      context.handle(
+        _destinationAccountIdMeta,
+        destinationAccountId.isAcceptableOrUnknown(
+          data['destination_account_id']!,
+          _destinationAccountIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_destinationAccountIdMeta);
+    }
+    if (data.containsKey('closed_at')) {
+      context.handle(
+        _closedAtMeta,
+        closedAt.isAcceptableOrUnknown(data['closed_at']!, _closedAtMeta),
+      );
+    }
+    if (data.containsKey('close_reason')) {
+      context.handle(
+        _closeReasonMeta,
+        closeReason.isAcceptableOrUnknown(
+          data['close_reason']!,
+          _closeReasonMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_updatedAtMeta);
+    }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Loan map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Loan(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      name:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}name'],
+          )!,
+      principalAmount:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}principal_amount'],
+          )!,
+      monthlyPayment:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.double,
+            data['${effectivePrefix}monthly_payment'],
+          )!,
+      initialDurationMonths:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}initial_duration_months'],
+          )!,
+      currentDurationMonths:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}current_duration_months'],
+          )!,
+      paymentDay:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}payment_day'],
+          )!,
+      contractDate:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}contract_date'],
+          )!,
+      destinationAccountId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}destination_account_id'],
+          )!,
+      closedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}closed_at'],
+      ),
+      closeReason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}close_reason'],
+      ),
+      createdAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}created_at'],
+          )!,
+      updatedAt:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.dateTime,
+            data['${effectivePrefix}updated_at'],
+          )!,
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
+    );
+  }
+
+  @override
+  $LoansTable createAlias(String alias) {
+    return $LoansTable(attachedDatabase, alias);
+  }
+}
+
+class Loan extends DataClass implements Insertable<Loan> {
+  final String id;
+  final String name;
+  final double principalAmount;
+  final double monthlyPayment;
+  final int initialDurationMonths;
+  final int currentDurationMonths;
+  final int paymentDay;
+  final DateTime contractDate;
+  final String destinationAccountId;
+  final DateTime? closedAt;
+  final String? closeReason;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime? deletedAt;
+  const Loan({
+    required this.id,
+    required this.name,
+    required this.principalAmount,
+    required this.monthlyPayment,
+    required this.initialDurationMonths,
+    required this.currentDurationMonths,
+    required this.paymentDay,
+    required this.contractDate,
+    required this.destinationAccountId,
+    this.closedAt,
+    this.closeReason,
+    required this.createdAt,
+    required this.updatedAt,
+    this.deletedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['name'] = Variable<String>(name);
+    map['principal_amount'] = Variable<double>(principalAmount);
+    map['monthly_payment'] = Variable<double>(monthlyPayment);
+    map['initial_duration_months'] = Variable<int>(initialDurationMonths);
+    map['current_duration_months'] = Variable<int>(currentDurationMonths);
+    map['payment_day'] = Variable<int>(paymentDay);
+    map['contract_date'] = Variable<DateTime>(contractDate);
+    map['destination_account_id'] = Variable<String>(destinationAccountId);
+    if (!nullToAbsent || closedAt != null) {
+      map['closed_at'] = Variable<DateTime>(closedAt);
+    }
+    if (!nullToAbsent || closeReason != null) {
+      map['close_reason'] = Variable<String>(closeReason);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
+    }
+    return map;
+  }
+
+  LoansCompanion toCompanion(bool nullToAbsent) {
+    return LoansCompanion(
+      id: Value(id),
+      name: Value(name),
+      principalAmount: Value(principalAmount),
+      monthlyPayment: Value(monthlyPayment),
+      initialDurationMonths: Value(initialDurationMonths),
+      currentDurationMonths: Value(currentDurationMonths),
+      paymentDay: Value(paymentDay),
+      contractDate: Value(contractDate),
+      destinationAccountId: Value(destinationAccountId),
+      closedAt:
+          closedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(closedAt),
+      closeReason:
+          closeReason == null && nullToAbsent
+              ? const Value.absent()
+              : Value(closeReason),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      deletedAt:
+          deletedAt == null && nullToAbsent
+              ? const Value.absent()
+              : Value(deletedAt),
+    );
+  }
+
+  factory Loan.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Loan(
+      id: serializer.fromJson<String>(json['id']),
+      name: serializer.fromJson<String>(json['name']),
+      principalAmount: serializer.fromJson<double>(json['principalAmount']),
+      monthlyPayment: serializer.fromJson<double>(json['monthlyPayment']),
+      initialDurationMonths: serializer.fromJson<int>(
+        json['initialDurationMonths'],
+      ),
+      currentDurationMonths: serializer.fromJson<int>(
+        json['currentDurationMonths'],
+      ),
+      paymentDay: serializer.fromJson<int>(json['paymentDay']),
+      contractDate: serializer.fromJson<DateTime>(json['contractDate']),
+      destinationAccountId: serializer.fromJson<String>(
+        json['destinationAccountId'],
+      ),
+      closedAt: serializer.fromJson<DateTime?>(json['closedAt']),
+      closeReason: serializer.fromJson<String?>(json['closeReason']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'name': serializer.toJson<String>(name),
+      'principalAmount': serializer.toJson<double>(principalAmount),
+      'monthlyPayment': serializer.toJson<double>(monthlyPayment),
+      'initialDurationMonths': serializer.toJson<int>(initialDurationMonths),
+      'currentDurationMonths': serializer.toJson<int>(currentDurationMonths),
+      'paymentDay': serializer.toJson<int>(paymentDay),
+      'contractDate': serializer.toJson<DateTime>(contractDate),
+      'destinationAccountId': serializer.toJson<String>(destinationAccountId),
+      'closedAt': serializer.toJson<DateTime?>(closedAt),
+      'closeReason': serializer.toJson<String?>(closeReason),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+    };
+  }
+
+  Loan copyWith({
+    String? id,
+    String? name,
+    double? principalAmount,
+    double? monthlyPayment,
+    int? initialDurationMonths,
+    int? currentDurationMonths,
+    int? paymentDay,
+    DateTime? contractDate,
+    String? destinationAccountId,
+    Value<DateTime?> closedAt = const Value.absent(),
+    Value<String?> closeReason = const Value.absent(),
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<DateTime?> deletedAt = const Value.absent(),
+  }) => Loan(
+    id: id ?? this.id,
+    name: name ?? this.name,
+    principalAmount: principalAmount ?? this.principalAmount,
+    monthlyPayment: monthlyPayment ?? this.monthlyPayment,
+    initialDurationMonths: initialDurationMonths ?? this.initialDurationMonths,
+    currentDurationMonths: currentDurationMonths ?? this.currentDurationMonths,
+    paymentDay: paymentDay ?? this.paymentDay,
+    contractDate: contractDate ?? this.contractDate,
+    destinationAccountId: destinationAccountId ?? this.destinationAccountId,
+    closedAt: closedAt.present ? closedAt.value : this.closedAt,
+    closeReason: closeReason.present ? closeReason.value : this.closeReason,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+  );
+  Loan copyWithCompanion(LoansCompanion data) {
+    return Loan(
+      id: data.id.present ? data.id.value : this.id,
+      name: data.name.present ? data.name.value : this.name,
+      principalAmount:
+          data.principalAmount.present
+              ? data.principalAmount.value
+              : this.principalAmount,
+      monthlyPayment:
+          data.monthlyPayment.present
+              ? data.monthlyPayment.value
+              : this.monthlyPayment,
+      initialDurationMonths:
+          data.initialDurationMonths.present
+              ? data.initialDurationMonths.value
+              : this.initialDurationMonths,
+      currentDurationMonths:
+          data.currentDurationMonths.present
+              ? data.currentDurationMonths.value
+              : this.currentDurationMonths,
+      paymentDay:
+          data.paymentDay.present ? data.paymentDay.value : this.paymentDay,
+      contractDate:
+          data.contractDate.present
+              ? data.contractDate.value
+              : this.contractDate,
+      destinationAccountId:
+          data.destinationAccountId.present
+              ? data.destinationAccountId.value
+              : this.destinationAccountId,
+      closedAt: data.closedAt.present ? data.closedAt.value : this.closedAt,
+      closeReason:
+          data.closeReason.present ? data.closeReason.value : this.closeReason,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Loan(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('principalAmount: $principalAmount, ')
+          ..write('monthlyPayment: $monthlyPayment, ')
+          ..write('initialDurationMonths: $initialDurationMonths, ')
+          ..write('currentDurationMonths: $currentDurationMonths, ')
+          ..write('paymentDay: $paymentDay, ')
+          ..write('contractDate: $contractDate, ')
+          ..write('destinationAccountId: $destinationAccountId, ')
+          ..write('closedAt: $closedAt, ')
+          ..write('closeReason: $closeReason, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    name,
+    principalAmount,
+    monthlyPayment,
+    initialDurationMonths,
+    currentDurationMonths,
+    paymentDay,
+    contractDate,
+    destinationAccountId,
+    closedAt,
+    closeReason,
+    createdAt,
+    updatedAt,
+    deletedAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Loan &&
+          other.id == this.id &&
+          other.name == this.name &&
+          other.principalAmount == this.principalAmount &&
+          other.monthlyPayment == this.monthlyPayment &&
+          other.initialDurationMonths == this.initialDurationMonths &&
+          other.currentDurationMonths == this.currentDurationMonths &&
+          other.paymentDay == this.paymentDay &&
+          other.contractDate == this.contractDate &&
+          other.destinationAccountId == this.destinationAccountId &&
+          other.closedAt == this.closedAt &&
+          other.closeReason == this.closeReason &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.deletedAt == this.deletedAt);
+}
+
+class LoansCompanion extends UpdateCompanion<Loan> {
+  final Value<String> id;
+  final Value<String> name;
+  final Value<double> principalAmount;
+  final Value<double> monthlyPayment;
+  final Value<int> initialDurationMonths;
+  final Value<int> currentDurationMonths;
+  final Value<int> paymentDay;
+  final Value<DateTime> contractDate;
+  final Value<String> destinationAccountId;
+  final Value<DateTime?> closedAt;
+  final Value<String?> closeReason;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<DateTime?> deletedAt;
+  final Value<int> rowid;
+  const LoansCompanion({
+    this.id = const Value.absent(),
+    this.name = const Value.absent(),
+    this.principalAmount = const Value.absent(),
+    this.monthlyPayment = const Value.absent(),
+    this.initialDurationMonths = const Value.absent(),
+    this.currentDurationMonths = const Value.absent(),
+    this.paymentDay = const Value.absent(),
+    this.contractDate = const Value.absent(),
+    this.destinationAccountId = const Value.absent(),
+    this.closedAt = const Value.absent(),
+    this.closeReason = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LoansCompanion.insert({
+    required String id,
+    required String name,
+    required double principalAmount,
+    required double monthlyPayment,
+    required int initialDurationMonths,
+    required int currentDurationMonths,
+    required int paymentDay,
+    required DateTime contractDate,
+    required String destinationAccountId,
+    this.closedAt = const Value.absent(),
+    this.closeReason = const Value.absent(),
+    required DateTime createdAt,
+    required DateTime updatedAt,
+    this.deletedAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       name = Value(name),
+       principalAmount = Value(principalAmount),
+       monthlyPayment = Value(monthlyPayment),
+       initialDurationMonths = Value(initialDurationMonths),
+       currentDurationMonths = Value(currentDurationMonths),
+       paymentDay = Value(paymentDay),
+       contractDate = Value(contractDate),
+       destinationAccountId = Value(destinationAccountId),
+       createdAt = Value(createdAt),
+       updatedAt = Value(updatedAt);
+  static Insertable<Loan> custom({
+    Expression<String>? id,
+    Expression<String>? name,
+    Expression<double>? principalAmount,
+    Expression<double>? monthlyPayment,
+    Expression<int>? initialDurationMonths,
+    Expression<int>? currentDurationMonths,
+    Expression<int>? paymentDay,
+    Expression<DateTime>? contractDate,
+    Expression<String>? destinationAccountId,
+    Expression<DateTime>? closedAt,
+    Expression<String>? closeReason,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<DateTime>? deletedAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (name != null) 'name': name,
+      if (principalAmount != null) 'principal_amount': principalAmount,
+      if (monthlyPayment != null) 'monthly_payment': monthlyPayment,
+      if (initialDurationMonths != null)
+        'initial_duration_months': initialDurationMonths,
+      if (currentDurationMonths != null)
+        'current_duration_months': currentDurationMonths,
+      if (paymentDay != null) 'payment_day': paymentDay,
+      if (contractDate != null) 'contract_date': contractDate,
+      if (destinationAccountId != null)
+        'destination_account_id': destinationAccountId,
+      if (closedAt != null) 'closed_at': closedAt,
+      if (closeReason != null) 'close_reason': closeReason,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LoansCompanion copyWith({
+    Value<String>? id,
+    Value<String>? name,
+    Value<double>? principalAmount,
+    Value<double>? monthlyPayment,
+    Value<int>? initialDurationMonths,
+    Value<int>? currentDurationMonths,
+    Value<int>? paymentDay,
+    Value<DateTime>? contractDate,
+    Value<String>? destinationAccountId,
+    Value<DateTime?>? closedAt,
+    Value<String?>? closeReason,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<DateTime?>? deletedAt,
+    Value<int>? rowid,
+  }) {
+    return LoansCompanion(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      principalAmount: principalAmount ?? this.principalAmount,
+      monthlyPayment: monthlyPayment ?? this.monthlyPayment,
+      initialDurationMonths:
+          initialDurationMonths ?? this.initialDurationMonths,
+      currentDurationMonths:
+          currentDurationMonths ?? this.currentDurationMonths,
+      paymentDay: paymentDay ?? this.paymentDay,
+      contractDate: contractDate ?? this.contractDate,
+      destinationAccountId: destinationAccountId ?? this.destinationAccountId,
+      closedAt: closedAt ?? this.closedAt,
+      closeReason: closeReason ?? this.closeReason,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (name.present) {
+      map['name'] = Variable<String>(name.value);
+    }
+    if (principalAmount.present) {
+      map['principal_amount'] = Variable<double>(principalAmount.value);
+    }
+    if (monthlyPayment.present) {
+      map['monthly_payment'] = Variable<double>(monthlyPayment.value);
+    }
+    if (initialDurationMonths.present) {
+      map['initial_duration_months'] = Variable<int>(
+        initialDurationMonths.value,
+      );
+    }
+    if (currentDurationMonths.present) {
+      map['current_duration_months'] = Variable<int>(
+        currentDurationMonths.value,
+      );
+    }
+    if (paymentDay.present) {
+      map['payment_day'] = Variable<int>(paymentDay.value);
+    }
+    if (contractDate.present) {
+      map['contract_date'] = Variable<DateTime>(contractDate.value);
+    }
+    if (destinationAccountId.present) {
+      map['destination_account_id'] = Variable<String>(
+        destinationAccountId.value,
+      );
+    }
+    if (closedAt.present) {
+      map['closed_at'] = Variable<DateTime>(closedAt.value);
+    }
+    if (closeReason.present) {
+      map['close_reason'] = Variable<String>(closeReason.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LoansCompanion(')
+          ..write('id: $id, ')
+          ..write('name: $name, ')
+          ..write('principalAmount: $principalAmount, ')
+          ..write('monthlyPayment: $monthlyPayment, ')
+          ..write('initialDurationMonths: $initialDurationMonths, ')
+          ..write('currentDurationMonths: $currentDurationMonths, ')
+          ..write('paymentDay: $paymentDay, ')
+          ..write('contractDate: $contractDate, ')
+          ..write('destinationAccountId: $destinationAccountId, ')
+          ..write('closedAt: $closedAt, ')
+          ..write('closeReason: $closeReason, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $JournalEntriesTable extends JournalEntries
     with TableInfo<$JournalEntriesTable, JournalEntry> {
   @override
@@ -1663,6 +2536,55 @@ class $JournalEntriesTable extends JournalEntries
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _loanIdMeta = const VerificationMeta('loanId');
+  @override
+  late final GeneratedColumn<String> loanId = GeneratedColumn<String>(
+    'loan_id',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES loans (id)',
+    ),
+  );
+  static const VerificationMeta _principalAmountMeta = const VerificationMeta(
+    'principalAmount',
+  );
+  @override
+  late final GeneratedColumn<double> principalAmount = GeneratedColumn<double>(
+    'principal_amount',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _interestAmountMeta = const VerificationMeta(
+    'interestAmount',
+  );
+  @override
+  late final GeneratedColumn<double> interestAmount = GeneratedColumn<double>(
+    'interest_amount',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isMonthlyPaymentMeta = const VerificationMeta(
+    'isMonthlyPayment',
+  );
+  @override
+  late final GeneratedColumn<bool> isMonthlyPayment = GeneratedColumn<bool>(
+    'is_monthly_payment',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_monthly_payment" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -1676,6 +2598,10 @@ class $JournalEntriesTable extends JournalEntries
     createdAt,
     updatedAt,
     deletedAt,
+    loanId,
+    principalAmount,
+    interestAmount,
+    isMonthlyPayment,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1773,6 +2699,39 @@ class $JournalEntriesTable extends JournalEntries
         deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
       );
     }
+    if (data.containsKey('loan_id')) {
+      context.handle(
+        _loanIdMeta,
+        loanId.isAcceptableOrUnknown(data['loan_id']!, _loanIdMeta),
+      );
+    }
+    if (data.containsKey('principal_amount')) {
+      context.handle(
+        _principalAmountMeta,
+        principalAmount.isAcceptableOrUnknown(
+          data['principal_amount']!,
+          _principalAmountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('interest_amount')) {
+      context.handle(
+        _interestAmountMeta,
+        interestAmount.isAcceptableOrUnknown(
+          data['interest_amount']!,
+          _interestAmountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('is_monthly_payment')) {
+      context.handle(
+        _isMonthlyPaymentMeta,
+        isMonthlyPayment.isAcceptableOrUnknown(
+          data['is_monthly_payment']!,
+          _isMonthlyPaymentMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1832,6 +2791,23 @@ class $JournalEntriesTable extends JournalEntries
         DriftSqlType.dateTime,
         data['${effectivePrefix}deleted_at'],
       ),
+      loanId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}loan_id'],
+      ),
+      principalAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}principal_amount'],
+      ),
+      interestAmount: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}interest_amount'],
+      ),
+      isMonthlyPayment:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}is_monthly_payment'],
+          )!,
     );
   }
 
@@ -1853,6 +2829,10 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
+  final String? loanId;
+  final double? principalAmount;
+  final double? interestAmount;
+  final bool isMonthlyPayment;
   const JournalEntry({
     required this.id,
     required this.kind,
@@ -1865,6 +2845,10 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
+    this.loanId,
+    this.principalAmount,
+    this.interestAmount,
+    required this.isMonthlyPayment,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1890,6 +2874,16 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     if (!nullToAbsent || deletedAt != null) {
       map['deleted_at'] = Variable<DateTime>(deletedAt);
     }
+    if (!nullToAbsent || loanId != null) {
+      map['loan_id'] = Variable<String>(loanId);
+    }
+    if (!nullToAbsent || principalAmount != null) {
+      map['principal_amount'] = Variable<double>(principalAmount);
+    }
+    if (!nullToAbsent || interestAmount != null) {
+      map['interest_amount'] = Variable<double>(interestAmount);
+    }
+    map['is_monthly_payment'] = Variable<bool>(isMonthlyPayment);
     return map;
   }
 
@@ -1921,6 +2915,17 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
           deletedAt == null && nullToAbsent
               ? const Value.absent()
               : Value(deletedAt),
+      loanId:
+          loanId == null && nullToAbsent ? const Value.absent() : Value(loanId),
+      principalAmount:
+          principalAmount == null && nullToAbsent
+              ? const Value.absent()
+              : Value(principalAmount),
+      interestAmount:
+          interestAmount == null && nullToAbsent
+              ? const Value.absent()
+              : Value(interestAmount),
+      isMonthlyPayment: Value(isMonthlyPayment),
     );
   }
 
@@ -1943,6 +2948,10 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
+      loanId: serializer.fromJson<String?>(json['loanId']),
+      principalAmount: serializer.fromJson<double?>(json['principalAmount']),
+      interestAmount: serializer.fromJson<double?>(json['interestAmount']),
+      isMonthlyPayment: serializer.fromJson<bool>(json['isMonthlyPayment']),
     );
   }
   @override
@@ -1960,6 +2969,10 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
+      'loanId': serializer.toJson<String?>(loanId),
+      'principalAmount': serializer.toJson<double?>(principalAmount),
+      'interestAmount': serializer.toJson<double?>(interestAmount),
+      'isMonthlyPayment': serializer.toJson<bool>(isMonthlyPayment),
     };
   }
 
@@ -1975,6 +2988,10 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
+    Value<String?> loanId = const Value.absent(),
+    Value<double?> principalAmount = const Value.absent(),
+    Value<double?> interestAmount = const Value.absent(),
+    bool? isMonthlyPayment,
   }) => JournalEntry(
     id: id ?? this.id,
     kind: kind ?? this.kind,
@@ -1991,6 +3008,12 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
     deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
+    loanId: loanId.present ? loanId.value : this.loanId,
+    principalAmount:
+        principalAmount.present ? principalAmount.value : this.principalAmount,
+    interestAmount:
+        interestAmount.present ? interestAmount.value : this.interestAmount,
+    isMonthlyPayment: isMonthlyPayment ?? this.isMonthlyPayment,
   );
   JournalEntry copyWithCompanion(JournalEntriesCompanion data) {
     return JournalEntry(
@@ -2014,6 +3037,19 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
       deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
+      loanId: data.loanId.present ? data.loanId.value : this.loanId,
+      principalAmount:
+          data.principalAmount.present
+              ? data.principalAmount.value
+              : this.principalAmount,
+      interestAmount:
+          data.interestAmount.present
+              ? data.interestAmount.value
+              : this.interestAmount,
+      isMonthlyPayment:
+          data.isMonthlyPayment.present
+              ? data.isMonthlyPayment.value
+              : this.isMonthlyPayment,
     );
   }
 
@@ -2030,7 +3066,11 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
           ..write('categoryId: $categoryId, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
-          ..write('deletedAt: $deletedAt')
+          ..write('deletedAt: $deletedAt, ')
+          ..write('loanId: $loanId, ')
+          ..write('principalAmount: $principalAmount, ')
+          ..write('interestAmount: $interestAmount, ')
+          ..write('isMonthlyPayment: $isMonthlyPayment')
           ..write(')'))
         .toString();
   }
@@ -2048,6 +3088,10 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     createdAt,
     updatedAt,
     deletedAt,
+    loanId,
+    principalAmount,
+    interestAmount,
+    isMonthlyPayment,
   );
   @override
   bool operator ==(Object other) =>
@@ -2063,7 +3107,11 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
           other.categoryId == this.categoryId &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt &&
-          other.deletedAt == this.deletedAt);
+          other.deletedAt == this.deletedAt &&
+          other.loanId == this.loanId &&
+          other.principalAmount == this.principalAmount &&
+          other.interestAmount == this.interestAmount &&
+          other.isMonthlyPayment == this.isMonthlyPayment);
 }
 
 class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
@@ -2078,6 +3126,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
+  final Value<String?> loanId;
+  final Value<double?> principalAmount;
+  final Value<double?> interestAmount;
+  final Value<bool> isMonthlyPayment;
   final Value<int> rowid;
   const JournalEntriesCompanion({
     this.id = const Value.absent(),
@@ -2091,6 +3143,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.deletedAt = const Value.absent(),
+    this.loanId = const Value.absent(),
+    this.principalAmount = const Value.absent(),
+    this.interestAmount = const Value.absent(),
+    this.isMonthlyPayment = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   JournalEntriesCompanion.insert({
@@ -2105,6 +3161,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     required DateTime createdAt,
     required DateTime updatedAt,
     this.deletedAt = const Value.absent(),
+    this.loanId = const Value.absent(),
+    this.principalAmount = const Value.absent(),
+    this.interestAmount = const Value.absent(),
+    this.isMonthlyPayment = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        kind = Value(kind),
@@ -2124,6 +3184,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
+    Expression<String>? loanId,
+    Expression<double>? principalAmount,
+    Expression<double>? interestAmount,
+    Expression<bool>? isMonthlyPayment,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -2139,6 +3203,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (deletedAt != null) 'deleted_at': deletedAt,
+      if (loanId != null) 'loan_id': loanId,
+      if (principalAmount != null) 'principal_amount': principalAmount,
+      if (interestAmount != null) 'interest_amount': interestAmount,
+      if (isMonthlyPayment != null) 'is_monthly_payment': isMonthlyPayment,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -2155,6 +3223,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
+    Value<String?>? loanId,
+    Value<double?>? principalAmount,
+    Value<double?>? interestAmount,
+    Value<bool>? isMonthlyPayment,
     Value<int>? rowid,
   }) {
     return JournalEntriesCompanion(
@@ -2169,6 +3241,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
+      loanId: loanId ?? this.loanId,
+      principalAmount: principalAmount ?? this.principalAmount,
+      interestAmount: interestAmount ?? this.interestAmount,
+      isMonthlyPayment: isMonthlyPayment ?? this.isMonthlyPayment,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -2211,6 +3287,18 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     if (deletedAt.present) {
       map['deleted_at'] = Variable<DateTime>(deletedAt.value);
     }
+    if (loanId.present) {
+      map['loan_id'] = Variable<String>(loanId.value);
+    }
+    if (principalAmount.present) {
+      map['principal_amount'] = Variable<double>(principalAmount.value);
+    }
+    if (interestAmount.present) {
+      map['interest_amount'] = Variable<double>(interestAmount.value);
+    }
+    if (isMonthlyPayment.present) {
+      map['is_monthly_payment'] = Variable<bool>(isMonthlyPayment.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -2231,6 +3319,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('deletedAt: $deletedAt, ')
+          ..write('loanId: $loanId, ')
+          ..write('principalAmount: $principalAmount, ')
+          ..write('interestAmount: $interestAmount, ')
+          ..write('isMonthlyPayment: $isMonthlyPayment, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -3764,6 +4856,7 @@ abstract class _$FincoreDatabase extends GeneratedDatabase {
   $FincoreDatabaseManager get managers => $FincoreDatabaseManager(this);
   late final $AccountsTable accounts = $AccountsTable(this);
   late final $CategoriesTable categories = $CategoriesTable(this);
+  late final $LoansTable loans = $LoansTable(this);
   late final $JournalEntriesTable journalEntries = $JournalEntriesTable(this);
   late final $SavedViewsTable savedViews = $SavedViewsTable(this);
   late final $AppPreferencesTable appPreferences = $AppPreferencesTable(this);
@@ -3775,6 +4868,7 @@ abstract class _$FincoreDatabase extends GeneratedDatabase {
     this as FincoreDatabase,
   );
   late final EntriesDao entriesDao = EntriesDao(this as FincoreDatabase);
+  late final LoansDao loansDao = LoansDao(this as FincoreDatabase);
   late final SavedViewsDao savedViewsDao = SavedViewsDao(
     this as FincoreDatabase,
   );
@@ -3791,6 +4885,7 @@ abstract class _$FincoreDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     accounts,
     categories,
+    loans,
     journalEntries,
     savedViews,
     appPreferences,
@@ -3842,6 +4937,32 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<DateTime?> archivedAt,
       Value<int> rowid,
     });
+
+final class $$AccountsTableReferences
+    extends BaseReferences<_$FincoreDatabase, $AccountsTable, Account> {
+  $$AccountsTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$LoansTable, List<Loan>> _loansRefsTable(
+    _$FincoreDatabase db,
+  ) => MultiTypedResultKey.fromTable(
+    db.loans,
+    aliasName: $_aliasNameGenerator(
+      db.accounts.id,
+      db.loans.destinationAccountId,
+    ),
+  );
+
+  $$LoansTableProcessedTableManager get loansRefs {
+    final manager = $$LoansTableTableManager($_db, $_db.loans).filter(
+      (f) => f.destinationAccountId.id.sqlEquals($_itemColumn<String>('id')!),
+    );
+
+    final cache = $_typedResult.readTableOrNull(_loansRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
 
 class $$AccountsTableFilterComposer
     extends Composer<_$FincoreDatabase, $AccountsTable> {
@@ -3931,6 +5052,31 @@ class $$AccountsTableFilterComposer
     column: $table.archivedAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> loansRefs(
+    Expression<bool> Function($$LoansTableFilterComposer f) f,
+  ) {
+    final $$LoansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.destinationAccountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableFilterComposer(
+            $db: $db,
+            $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$AccountsTableOrderingComposer
@@ -4099,6 +5245,31 @@ class $$AccountsTableAnnotationComposer
     column: $table.archivedAt,
     builder: (column) => column,
   );
+
+  Expression<T> loansRefs<T extends Object>(
+    Expression<T> Function($$LoansTableAnnotationComposer a) f,
+  ) {
+    final $$LoansTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.destinationAccountId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableAnnotationComposer(
+            $db: $db,
+            $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$AccountsTableTableManager
@@ -4112,9 +5283,9 @@ class $$AccountsTableTableManager
           $$AccountsTableAnnotationComposer,
           $$AccountsTableCreateCompanionBuilder,
           $$AccountsTableUpdateCompanionBuilder,
-          (Account, BaseReferences<_$FincoreDatabase, $AccountsTable, Account>),
+          (Account, $$AccountsTableReferences),
           Account,
-          PrefetchHooks Function()
+          PrefetchHooks Function({bool loansRefs})
         > {
   $$AccountsTableTableManager(_$FincoreDatabase db, $AccountsTable table)
     : super(
@@ -4209,11 +5380,39 @@ class $$AccountsTableTableManager
                       .map(
                         (e) => (
                           e.readTable(table),
-                          BaseReferences(db, table, e),
+                          $$AccountsTableReferences(db, table, e),
                         ),
                       )
                       .toList(),
-          prefetchHooksCallback: null,
+          prefetchHooksCallback: ({loansRefs = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [if (loansRefs) db.loans],
+              addJoins: null,
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (loansRefs)
+                    await $_getPrefetchedData<Account, $AccountsTable, Loan>(
+                      currentTable: table,
+                      referencedTable: $$AccountsTableReferences
+                          ._loansRefsTable(db),
+                      managerFromTypedResult:
+                          (p0) =>
+                              $$AccountsTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).loansRefs,
+                      referencedItemsForCurrentItem:
+                          (item, referencedItems) => referencedItems.where(
+                            (e) => e.destinationAccountId == item.id,
+                          ),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
         ),
       );
 }
@@ -4228,9 +5427,9 @@ typedef $$AccountsTableProcessedTableManager =
       $$AccountsTableAnnotationComposer,
       $$AccountsTableCreateCompanionBuilder,
       $$AccountsTableUpdateCompanionBuilder,
-      (Account, BaseReferences<_$FincoreDatabase, $AccountsTable, Account>),
+      (Account, $$AccountsTableReferences),
       Account,
-      PrefetchHooks Function()
+      PrefetchHooks Function({bool loansRefs})
     >;
 typedef $$CategoriesTableCreateCompanionBuilder =
     CategoriesCompanion Function({
@@ -4729,6 +5928,612 @@ typedef $$CategoriesTableProcessedTableManager =
         bool weeklyBudgetItemsRefs,
       })
     >;
+typedef $$LoansTableCreateCompanionBuilder =
+    LoansCompanion Function({
+      required String id,
+      required String name,
+      required double principalAmount,
+      required double monthlyPayment,
+      required int initialDurationMonths,
+      required int currentDurationMonths,
+      required int paymentDay,
+      required DateTime contractDate,
+      required String destinationAccountId,
+      Value<DateTime?> closedAt,
+      Value<String?> closeReason,
+      required DateTime createdAt,
+      required DateTime updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+typedef $$LoansTableUpdateCompanionBuilder =
+    LoansCompanion Function({
+      Value<String> id,
+      Value<String> name,
+      Value<double> principalAmount,
+      Value<double> monthlyPayment,
+      Value<int> initialDurationMonths,
+      Value<int> currentDurationMonths,
+      Value<int> paymentDay,
+      Value<DateTime> contractDate,
+      Value<String> destinationAccountId,
+      Value<DateTime?> closedAt,
+      Value<String?> closeReason,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<DateTime?> deletedAt,
+      Value<int> rowid,
+    });
+
+final class $$LoansTableReferences
+    extends BaseReferences<_$FincoreDatabase, $LoansTable, Loan> {
+  $$LoansTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $AccountsTable _destinationAccountIdTable(_$FincoreDatabase db) =>
+      db.accounts.createAlias(
+        $_aliasNameGenerator(db.loans.destinationAccountId, db.accounts.id),
+      );
+
+  $$AccountsTableProcessedTableManager get destinationAccountId {
+    final $_column = $_itemColumn<String>('destination_account_id')!;
+
+    final manager = $$AccountsTableTableManager(
+      $_db,
+      $_db.accounts,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(
+      _destinationAccountIdTable($_db),
+    );
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+
+  static MultiTypedResultKey<$JournalEntriesTable, List<JournalEntry>>
+  _journalEntriesRefsTable(_$FincoreDatabase db) =>
+      MultiTypedResultKey.fromTable(
+        db.journalEntries,
+        aliasName: $_aliasNameGenerator(db.loans.id, db.journalEntries.loanId),
+      );
+
+  $$JournalEntriesTableProcessedTableManager get journalEntriesRefs {
+    final manager = $$JournalEntriesTableTableManager(
+      $_db,
+      $_db.journalEntries,
+    ).filter((f) => f.loanId.id.sqlEquals($_itemColumn<String>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_journalEntriesRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+}
+
+class $$LoansTableFilterComposer
+    extends Composer<_$FincoreDatabase, $LoansTable> {
+  $$LoansTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get principalAmount => $composableBuilder(
+    column: $table.principalAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get monthlyPayment => $composableBuilder(
+    column: $table.monthlyPayment,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get initialDurationMonths => $composableBuilder(
+    column: $table.initialDurationMonths,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get currentDurationMonths => $composableBuilder(
+    column: $table.currentDurationMonths,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get paymentDay => $composableBuilder(
+    column: $table.paymentDay,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get contractDate => $composableBuilder(
+    column: $table.contractDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get closedAt => $composableBuilder(
+    column: $table.closedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get closeReason => $composableBuilder(
+    column: $table.closeReason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$AccountsTableFilterComposer get destinationAccountId {
+    final $$AccountsTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.destinationAccountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableFilterComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<bool> journalEntriesRefs(
+    Expression<bool> Function($$JournalEntriesTableFilterComposer f) f,
+  ) {
+    final $$JournalEntriesTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.journalEntries,
+      getReferencedColumn: (t) => t.loanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$JournalEntriesTableFilterComposer(
+            $db: $db,
+            $table: $db.journalEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$LoansTableOrderingComposer
+    extends Composer<_$FincoreDatabase, $LoansTable> {
+  $$LoansTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get name => $composableBuilder(
+    column: $table.name,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get principalAmount => $composableBuilder(
+    column: $table.principalAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get monthlyPayment => $composableBuilder(
+    column: $table.monthlyPayment,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get initialDurationMonths => $composableBuilder(
+    column: $table.initialDurationMonths,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get currentDurationMonths => $composableBuilder(
+    column: $table.currentDurationMonths,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get paymentDay => $composableBuilder(
+    column: $table.paymentDay,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get contractDate => $composableBuilder(
+    column: $table.contractDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get closedAt => $composableBuilder(
+    column: $table.closedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get closeReason => $composableBuilder(
+    column: $table.closeReason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$AccountsTableOrderingComposer get destinationAccountId {
+    final $$AccountsTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.destinationAccountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableOrderingComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$LoansTableAnnotationComposer
+    extends Composer<_$FincoreDatabase, $LoansTable> {
+  $$LoansTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get name =>
+      $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<double> get principalAmount => $composableBuilder(
+    column: $table.principalAmount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get monthlyPayment => $composableBuilder(
+    column: $table.monthlyPayment,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get initialDurationMonths => $composableBuilder(
+    column: $table.initialDurationMonths,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get currentDurationMonths => $composableBuilder(
+    column: $table.currentDurationMonths,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get paymentDay => $composableBuilder(
+    column: $table.paymentDay,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get contractDate => $composableBuilder(
+    column: $table.contractDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get closedAt =>
+      $composableBuilder(column: $table.closedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get closeReason => $composableBuilder(
+    column: $table.closeReason,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  $$AccountsTableAnnotationComposer get destinationAccountId {
+    final $$AccountsTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.destinationAccountId,
+      referencedTable: $db.accounts,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$AccountsTableAnnotationComposer(
+            $db: $db,
+            $table: $db.accounts,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+
+  Expression<T> journalEntriesRefs<T extends Object>(
+    Expression<T> Function($$JournalEntriesTableAnnotationComposer a) f,
+  ) {
+    final $$JournalEntriesTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.journalEntries,
+      getReferencedColumn: (t) => t.loanId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$JournalEntriesTableAnnotationComposer(
+            $db: $db,
+            $table: $db.journalEntries,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+}
+
+class $$LoansTableTableManager
+    extends
+        RootTableManager<
+          _$FincoreDatabase,
+          $LoansTable,
+          Loan,
+          $$LoansTableFilterComposer,
+          $$LoansTableOrderingComposer,
+          $$LoansTableAnnotationComposer,
+          $$LoansTableCreateCompanionBuilder,
+          $$LoansTableUpdateCompanionBuilder,
+          (Loan, $$LoansTableReferences),
+          Loan,
+          PrefetchHooks Function({
+            bool destinationAccountId,
+            bool journalEntriesRefs,
+          })
+        > {
+  $$LoansTableTableManager(_$FincoreDatabase db, $LoansTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$LoansTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () => $$LoansTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer:
+              () => $$LoansTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> id = const Value.absent(),
+                Value<String> name = const Value.absent(),
+                Value<double> principalAmount = const Value.absent(),
+                Value<double> monthlyPayment = const Value.absent(),
+                Value<int> initialDurationMonths = const Value.absent(),
+                Value<int> currentDurationMonths = const Value.absent(),
+                Value<int> paymentDay = const Value.absent(),
+                Value<DateTime> contractDate = const Value.absent(),
+                Value<String> destinationAccountId = const Value.absent(),
+                Value<DateTime?> closedAt = const Value.absent(),
+                Value<String?> closeReason = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LoansCompanion(
+                id: id,
+                name: name,
+                principalAmount: principalAmount,
+                monthlyPayment: monthlyPayment,
+                initialDurationMonths: initialDurationMonths,
+                currentDurationMonths: currentDurationMonths,
+                paymentDay: paymentDay,
+                contractDate: contractDate,
+                destinationAccountId: destinationAccountId,
+                closedAt: closedAt,
+                closeReason: closeReason,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String id,
+                required String name,
+                required double principalAmount,
+                required double monthlyPayment,
+                required int initialDurationMonths,
+                required int currentDurationMonths,
+                required int paymentDay,
+                required DateTime contractDate,
+                required String destinationAccountId,
+                Value<DateTime?> closedAt = const Value.absent(),
+                Value<String?> closeReason = const Value.absent(),
+                required DateTime createdAt,
+                required DateTime updatedAt,
+                Value<DateTime?> deletedAt = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => LoansCompanion.insert(
+                id: id,
+                name: name,
+                principalAmount: principalAmount,
+                monthlyPayment: monthlyPayment,
+                initialDurationMonths: initialDurationMonths,
+                currentDurationMonths: currentDurationMonths,
+                paymentDay: paymentDay,
+                contractDate: contractDate,
+                destinationAccountId: destinationAccountId,
+                closedAt: closedAt,
+                closeReason: closeReason,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                deletedAt: deletedAt,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable(table),
+                          $$LoansTableReferences(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: ({
+            destinationAccountId = false,
+            journalEntriesRefs = false,
+          }) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [
+                if (journalEntriesRefs) db.journalEntries,
+              ],
+              addJoins: <
+                T extends TableManagerState<
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic,
+                  dynamic
+                >
+              >(state) {
+                if (destinationAccountId) {
+                  state =
+                      state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.destinationAccountId,
+                            referencedTable: $$LoansTableReferences
+                                ._destinationAccountIdTable(db),
+                            referencedColumn:
+                                $$LoansTableReferences
+                                    ._destinationAccountIdTable(db)
+                                    .id,
+                          )
+                          as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [
+                  if (journalEntriesRefs)
+                    await $_getPrefetchedData<Loan, $LoansTable, JournalEntry>(
+                      currentTable: table,
+                      referencedTable: $$LoansTableReferences
+                          ._journalEntriesRefsTable(db),
+                      managerFromTypedResult:
+                          (p0) =>
+                              $$LoansTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).journalEntriesRefs,
+                      referencedItemsForCurrentItem:
+                          (item, referencedItems) =>
+                              referencedItems.where((e) => e.loanId == item.id),
+                      typedResults: items,
+                    ),
+                ];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$LoansTableProcessedTableManager =
+    ProcessedTableManager<
+      _$FincoreDatabase,
+      $LoansTable,
+      Loan,
+      $$LoansTableFilterComposer,
+      $$LoansTableOrderingComposer,
+      $$LoansTableAnnotationComposer,
+      $$LoansTableCreateCompanionBuilder,
+      $$LoansTableUpdateCompanionBuilder,
+      (Loan, $$LoansTableReferences),
+      Loan,
+      PrefetchHooks Function({
+        bool destinationAccountId,
+        bool journalEntriesRefs,
+      })
+    >;
 typedef $$JournalEntriesTableCreateCompanionBuilder =
     JournalEntriesCompanion Function({
       required String id,
@@ -4742,6 +6547,10 @@ typedef $$JournalEntriesTableCreateCompanionBuilder =
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
+      Value<String?> loanId,
+      Value<double?> principalAmount,
+      Value<double?> interestAmount,
+      Value<bool> isMonthlyPayment,
       Value<int> rowid,
     });
 typedef $$JournalEntriesTableUpdateCompanionBuilder =
@@ -4757,6 +6566,10 @@ typedef $$JournalEntriesTableUpdateCompanionBuilder =
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
+      Value<String?> loanId,
+      Value<double?> principalAmount,
+      Value<double?> interestAmount,
+      Value<bool> isMonthlyPayment,
       Value<int> rowid,
     });
 
@@ -4830,6 +6643,24 @@ final class $$JournalEntriesTableReferences
       manager.$state.copyWith(prefetchedData: [item]),
     );
   }
+
+  static $LoansTable _loanIdTable(_$FincoreDatabase db) => db.loans.createAlias(
+    $_aliasNameGenerator(db.journalEntries.loanId, db.loans.id),
+  );
+
+  $$LoansTableProcessedTableManager? get loanId {
+    final $_column = $_itemColumn<String>('loan_id');
+    if ($_column == null) return null;
+    final manager = $$LoansTableTableManager(
+      $_db,
+      $_db.loans,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_loanIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
 }
 
 class $$JournalEntriesTableFilterComposer
@@ -4878,6 +6709,21 @@ class $$JournalEntriesTableFilterComposer
 
   ColumnFilters<DateTime> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get principalAmount => $composableBuilder(
+    column: $table.principalAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get interestAmount => $composableBuilder(
+    column: $table.interestAmount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isMonthlyPayment => $composableBuilder(
+    column: $table.isMonthlyPayment,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4949,6 +6795,29 @@ class $$JournalEntriesTableFilterComposer
     );
     return composer;
   }
+
+  $$LoansTableFilterComposer get loanId {
+    final $$LoansTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.loanId,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableFilterComposer(
+            $db: $db,
+            $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$JournalEntriesTableOrderingComposer
@@ -4997,6 +6866,21 @@ class $$JournalEntriesTableOrderingComposer
 
   ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
     column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get principalAmount => $composableBuilder(
+    column: $table.principalAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get interestAmount => $composableBuilder(
+    column: $table.interestAmount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isMonthlyPayment => $composableBuilder(
+    column: $table.isMonthlyPayment,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5068,6 +6952,29 @@ class $$JournalEntriesTableOrderingComposer
     );
     return composer;
   }
+
+  $$LoansTableOrderingComposer get loanId {
+    final $$LoansTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.loanId,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableOrderingComposer(
+            $db: $db,
+            $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$JournalEntriesTableAnnotationComposer
@@ -5106,6 +7013,21 @@ class $$JournalEntriesTableAnnotationComposer
 
   GeneratedColumn<DateTime> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
+  GeneratedColumn<double> get principalAmount => $composableBuilder(
+    column: $table.principalAmount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get interestAmount => $composableBuilder(
+    column: $table.interestAmount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get isMonthlyPayment => $composableBuilder(
+    column: $table.isMonthlyPayment,
+    builder: (column) => column,
+  );
 
   $$AccountsTableAnnotationComposer get accountOriginId {
     final $$AccountsTableAnnotationComposer composer = $composerBuilder(
@@ -5175,6 +7097,29 @@ class $$JournalEntriesTableAnnotationComposer
     );
     return composer;
   }
+
+  $$LoansTableAnnotationComposer get loanId {
+    final $$LoansTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.loanId,
+      referencedTable: $db.loans,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$LoansTableAnnotationComposer(
+            $db: $db,
+            $table: $db.loans,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
 }
 
 class $$JournalEntriesTableTableManager
@@ -5194,6 +7139,7 @@ class $$JournalEntriesTableTableManager
             bool accountOriginId,
             bool accountDestinationId,
             bool categoryId,
+            bool loanId,
           })
         > {
   $$JournalEntriesTableTableManager(
@@ -5226,6 +7172,10 @@ class $$JournalEntriesTableTableManager
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> loanId = const Value.absent(),
+                Value<double?> principalAmount = const Value.absent(),
+                Value<double?> interestAmount = const Value.absent(),
+                Value<bool> isMonthlyPayment = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => JournalEntriesCompanion(
                 id: id,
@@ -5239,6 +7189,10 @@ class $$JournalEntriesTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                loanId: loanId,
+                principalAmount: principalAmount,
+                interestAmount: interestAmount,
+                isMonthlyPayment: isMonthlyPayment,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -5254,6 +7208,10 @@ class $$JournalEntriesTableTableManager
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
+                Value<String?> loanId = const Value.absent(),
+                Value<double?> principalAmount = const Value.absent(),
+                Value<double?> interestAmount = const Value.absent(),
+                Value<bool> isMonthlyPayment = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => JournalEntriesCompanion.insert(
                 id: id,
@@ -5267,6 +7225,10 @@ class $$JournalEntriesTableTableManager
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 deletedAt: deletedAt,
+                loanId: loanId,
+                principalAmount: principalAmount,
+                interestAmount: interestAmount,
+                isMonthlyPayment: isMonthlyPayment,
                 rowid: rowid,
               ),
           withReferenceMapper:
@@ -5283,6 +7245,7 @@ class $$JournalEntriesTableTableManager
             accountOriginId = false,
             accountDestinationId = false,
             categoryId = false,
+            loanId = false,
           }) {
             return PrefetchHooks(
               db: db,
@@ -5344,6 +7307,20 @@ class $$JournalEntriesTableTableManager
                           )
                           as T;
                 }
+                if (loanId) {
+                  state =
+                      state.withJoin(
+                            currentTable: table,
+                            currentColumn: table.loanId,
+                            referencedTable: $$JournalEntriesTableReferences
+                                ._loanIdTable(db),
+                            referencedColumn:
+                                $$JournalEntriesTableReferences
+                                    ._loanIdTable(db)
+                                    .id,
+                          )
+                          as T;
+                }
 
                 return state;
               },
@@ -5372,6 +7349,7 @@ typedef $$JournalEntriesTableProcessedTableManager =
         bool accountOriginId,
         bool accountDestinationId,
         bool categoryId,
+        bool loanId,
       })
     >;
 typedef $$SavedViewsTableCreateCompanionBuilder =
@@ -6595,6 +8573,8 @@ class $FincoreDatabaseManager {
       $$AccountsTableTableManager(_db, _db.accounts);
   $$CategoriesTableTableManager get categories =>
       $$CategoriesTableTableManager(_db, _db.categories);
+  $$LoansTableTableManager get loans =>
+      $$LoansTableTableManager(_db, _db.loans);
   $$JournalEntriesTableTableManager get journalEntries =>
       $$JournalEntriesTableTableManager(_db, _db.journalEntries);
   $$SavedViewsTableTableManager get savedViews =>

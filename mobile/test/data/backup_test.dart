@@ -95,15 +95,43 @@ void main() {
     expect((await accountsDao.listAll()).length, before);
   });
 
-  test('Import con version > 1 rechaza', () async {
+  test('Import con version > 2 rechaza', () async {
+    // Sprint flutter-loans-v1: export ahora emite v2. Cualquier version > 2
+    // (v3, v99, futura) sigue siendo rechazada con unsupported_version.
     await seed();
     final json = await backup.exportToJson();
-    final bumped = json.replaceFirst('"version": 1', '"version": 99');
+    final bumped = json.replaceFirst('"version": 2', '"version": 99');
     expect(
       () => backup.importFromJson(bumped),
       throwsA(isA<BackupError>()
           .having((e) => e.code, 'code', 'unsupported_version')),
     );
+  });
+
+  test('Import v1 legacy sigue siendo aceptado (compat total)', () async {
+    // Sprint flutter-loans-v1: import de v1 debe seguir funcionando aunque
+    // el export ahora sea v2. Un backup v1 sin loans importa OK con loans=[].
+    const v1Legacy = '''
+{
+  "version": 1,
+  "exported_at": "2026-07-15T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01234567-89ab-7cde-8def-0123456789ab",
+      "name": "Bolsa",
+      "type": "cash",
+      "is_protected": true,
+      "credit_limit": 0,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": []
+}
+''';
+    final report = await backup.importFromJson(v1Legacy);
+    expect(report.accountsCount, 1);
   });
 
   test('Import con accounts vacío rechaza missing_bolsa', () async {
@@ -178,10 +206,11 @@ void main() {
     expect((await entriesDao.watchPage().first).length, 2);
   });
 
-  test('Export con BD vacía produce JSON v1 con arrays vacíos', () async {
+  test('Export con BD vacía produce JSON v2 con arrays vacíos', () async {
     await accountsDao.createBolsa(); // mínimo: solo bolsa
     final json = await backup.exportToJson();
-    expect(json, contains('"version": 1'));
+    expect(json, contains('"version": 2'));
+    expect(json, contains('"loans"'));
     expect(json, contains('"accounts"'));
     expect(json, contains('"categories": []'));
     expect(json, contains('"journal_entries": []'));
@@ -707,12 +736,16 @@ void main() {
   // ===========================================================================
   group('Backup — weekly budgets (RN-B13, sprint flutter-weekly-budgets-v1)',
       () {
+    // Sprint flutter-loans-v1: el objeto raíz gana `loans` en v2. Se
+    // preserva el invariante de "no leak de weekly_budgets" en el resto de
+    // las expectativas del grupo.
     const rootKeys = {
       'version',
       'exported_at',
       'accounts',
       'categories',
       'journal_entries',
+      'loans',
     };
 
     test(
@@ -837,6 +870,261 @@ void main() {
           reason:
               'el array spurio "weekly_budgets" del JSON se ignora; wipeAll '
               'igual borra los budgets pre-existentes');
+    });
+  });
+
+  // ==========================================================================
+  // Sprint flutter-loans-v1 (RN-L18 + hotfix branch-quality-review B6):
+  // round-trip real de loans + validaciones de referencia + shape del
+  // loan_payment. La cobertura previa (v > 2 rechaza, v1 legacy acepta,
+  // export contiene "loans") no verificaba que los datos persistan
+  // bit-a-bit ni que las FKs se validaran.
+  // ==========================================================================
+  group('Backup — loans v2 (hotfix B6)', () {
+    test('Round-trip: export v2 con loans + splits → wipe → import → idéntico',
+        () async {
+      await accountsDao.createBolsa();
+      final loanId = await db.loansDao.create(
+        name: 'BBVA Round-trip',
+        principalAmount: 15000,
+        monthlyPayment: 750,
+        initialDurationMonths: 24,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 6, 1),
+        destinationAccountId: (await accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash')
+            .id,
+      );
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: (await accountsDao.listAll())
+            .firstWhere((a) => a.type == 'cash')
+            .id,
+        amount: 750,
+        principalAmount: 500,
+        interestAmount: 250,
+        occurredAt: DateTime.utc(2026, 7, 5),
+        isMonthlyPayment: true,
+      );
+
+      final json = await backup.exportToJson();
+      await backup.wipeAll();
+      await accountsDao.createBolsa(); // Re-seed Bolsa por wipeAll.
+      await backup.importFromJson(json);
+
+      final loansAfter = await db.loansDao.watchActive().first;
+      expect(loansAfter, hasLength(1));
+      expect(loansAfter.first.name, 'BBVA Round-trip');
+      expect(loansAfter.first.principalAmount, 15000);
+      expect(loansAfter.first.monthlyPayment, 750);
+      expect(loansAfter.first.paymentDay, 5);
+      // Verificar loan_payment reimportado con splits intactos.
+      final payments =
+          await db.loansDao.watchPayments(loansAfter.first.id).first;
+      expect(payments, hasLength(1));
+      expect(payments.first.amount, 750);
+      expect(payments.first.principalAmount, 500);
+      expect(payments.first.interestAmount, 250);
+    });
+
+    test('Import v2 con loan.destination_account_id inexistente → invalid_reference',
+        () async {
+      const badJson = '''
+{
+  "version": 2,
+  "exported_at": "2026-07-15T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01234567-89ab-7cde-8def-0123456789ab",
+      "name": "Bolsa",
+      "type": "cash",
+      "is_protected": true,
+      "credit_limit": 0,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": [],
+  "loans": [
+    {
+      "id": "01888888-89ab-7cde-8def-0123456789ab",
+      "name": "Ghost Loan",
+      "principal_amount": 1000,
+      "monthly_payment": 100,
+      "initial_duration_months": 12,
+      "current_duration_months": 12,
+      "payment_day": 5,
+      "contract_date": "2026-07-15T12:00:00.000Z",
+      "destination_account_id": "01ffffff-89ab-7cde-8def-0123456789ab",
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ]
+}
+''';
+      expect(
+        () => backup.importFromJson(badJson),
+        throwsA(isA<BackupError>()
+            .having((e) => e.code, 'code', 'invalid_reference')),
+      );
+    });
+
+    test('Import v2 con journal_entries[].loan_id inexistente → invalid_reference',
+        () async {
+      const badJson = '''
+{
+  "version": 2,
+  "exported_at": "2026-07-15T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01234567-89ab-7cde-8def-0123456789ab",
+      "name": "Bolsa",
+      "type": "cash",
+      "is_protected": true,
+      "credit_limit": 0,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": [
+    {
+      "id": "01aaaaaa-89ab-7cde-8def-0123456789ab",
+      "kind": "loan_payment",
+      "account_origin_id": "01234567-89ab-7cde-8def-0123456789ab",
+      "account_destination_id": null,
+      "amount": 500,
+      "occurred_at": "2026-07-15T12:00:00.000Z",
+      "loan_id": "01ffffff-89ab-7cde-8def-0123456789ab",
+      "principal_amount": 400,
+      "interest_amount": 100,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "loans": []
+}
+''';
+      expect(
+        () => backup.importFromJson(badJson),
+        throwsA(isA<BackupError>()
+            .having((e) => e.code, 'code', 'invalid_reference')),
+      );
+    });
+
+    test('Import v2 con close_reason inválido → invalid_loan_data', () async {
+      const badJson = '''
+{
+  "version": 2,
+  "exported_at": "2026-07-15T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01234567-89ab-7cde-8def-0123456789ab",
+      "name": "Bolsa",
+      "type": "cash",
+      "is_protected": true,
+      "credit_limit": 0,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": [],
+  "loans": [
+    {
+      "id": "01888888-89ab-7cde-8def-0123456789ab",
+      "name": "Bad State",
+      "principal_amount": 1000,
+      "monthly_payment": 100,
+      "initial_duration_months": 12,
+      "current_duration_months": 12,
+      "payment_day": 5,
+      "contract_date": "2026-07-15T12:00:00.000Z",
+      "destination_account_id": "01234567-89ab-7cde-8def-0123456789ab",
+      "closed_at": "2026-08-01T12:00:00.000Z",
+      "close_reason": "cancelled_by_user",
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ]
+}
+''';
+      expect(
+        () => backup.importFromJson(badJson),
+        throwsA(isA<BackupError>()
+            .having((e) => e.code, 'code', 'invalid_loan_data')),
+      );
+    });
+
+    test(
+        'Import v2 con loan_payment que tiene destination_account_id (violación shape) → invalid_loan_data',
+        () async {
+      // Hotfix F-SEC-03: bloquear entries corruptos donde loan_payment
+      // tiene destino a una cuenta.
+      const badJson = '''
+{
+  "version": 2,
+  "exported_at": "2026-07-15T12:00:00.000Z",
+  "accounts": [
+    {
+      "id": "01234567-89ab-7cde-8def-0123456789ab",
+      "name": "Bolsa",
+      "type": "cash",
+      "is_protected": true,
+      "credit_limit": 0,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    },
+    {
+      "id": "01cccccc-89ab-7cde-8def-0123456789ab",
+      "name": "Tarjeta Fantasma",
+      "type": "credit",
+      "credit_limit": 5000,
+      "closing_day": 15,
+      "payment_day": 5,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "categories": [],
+  "journal_entries": [
+    {
+      "id": "01aaaaaa-89ab-7cde-8def-0123456789ab",
+      "kind": "loan_payment",
+      "account_origin_id": "01234567-89ab-7cde-8def-0123456789ab",
+      "account_destination_id": "01cccccc-89ab-7cde-8def-0123456789ab",
+      "amount": 500,
+      "occurred_at": "2026-07-15T12:00:00.000Z",
+      "loan_id": "01888888-89ab-7cde-8def-0123456789ab",
+      "principal_amount": 400,
+      "interest_amount": 100,
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ],
+  "loans": [
+    {
+      "id": "01888888-89ab-7cde-8def-0123456789ab",
+      "name": "Legit",
+      "principal_amount": 1000,
+      "monthly_payment": 100,
+      "initial_duration_months": 12,
+      "current_duration_months": 12,
+      "payment_day": 5,
+      "contract_date": "2026-07-15T12:00:00.000Z",
+      "destination_account_id": "01234567-89ab-7cde-8def-0123456789ab",
+      "created_at": "2026-07-15T12:00:00.000Z",
+      "updated_at": "2026-07-15T12:00:00.000Z"
+    }
+  ]
+}
+''';
+      expect(
+        () => backup.importFromJson(badJson),
+        throwsA(isA<BackupError>()
+            .having((e) => e.code, 'code', 'invalid_loan_data')),
+      );
     });
   });
 }

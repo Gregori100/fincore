@@ -48,6 +48,8 @@ extension AccountTypeX on AccountType {
         return isCashLike;
       case JournalKind.transfer:
         return isCashLike;
+      case JournalKind.loanPayment:
+        return isCashLike;
     }
   }
 
@@ -64,6 +66,8 @@ extension AccountTypeX on AccountType {
         return this == AccountType.credit;
       case JournalKind.transfer:
         return isCashLike;
+      case JournalKind.loanPayment:
+        return false; // loan_payment tiene destination = null (loan_id apunta al préstamo)
     }
   }
 }

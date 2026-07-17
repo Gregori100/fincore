@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
+import 'package:fincore/constants/reports_tokens.dart';
 import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/daos/categories_dao.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
@@ -4505,6 +4506,166 @@ void main() {
         report.intensityFor(DateTime(2026, 6, 2)),
         IntensityLevel.veryHigh,
       );
+    });
+  });
+
+  // ==========================================================================
+  // Sprint flutter-loans-v1 (RN-L17 + hotfix branch-quality-review B4):
+  // renglón sintético "Intereses de préstamos" en spendingByCategory.
+  // ==========================================================================
+  group('spendingByCategory — renglón sintético "Intereses de préstamos"',
+      () {
+    late String loanId;
+    setUp(() async {
+      loanId = await db.loansDao.create(
+        name: 'BBVA Test',
+        principalAmount: 10000,
+        monthlyPayment: 500,
+        initialDurationMonths: 24,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 6, 1),
+        destinationAccountId: bolsa,
+      );
+    });
+
+    test('no aparece cuando no hay loan_payments en el periodo', () async {
+      final report = await reports
+          .spendingByCategory(
+            from: DateTime.utc(2026, 6, 1),
+            to: DateTime.utc(2026, 6, 30),
+          )
+          .first;
+      final synthetic = report.buckets
+          .where((b) => b.categoryId == kLoanInterestSyntheticId);
+      expect(synthetic, isEmpty);
+    });
+
+    test(
+        'aparece con total correcto cuando hay ≥1 loan_payment con interest > 0',
+        () async {
+      // Distribuir 2 pagos monthly en 2 meses distintos (unicidad por mes).
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 500,
+        principalAmount: 300,
+        interestAmount: 200,
+        occurredAt: DateTime.utc(2026, 6, 10),
+        isMonthlyPayment: true,
+      );
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 500,
+        principalAmount: 350,
+        interestAmount: 150,
+        occurredAt: DateTime.utc(2026, 6, 15),
+        isMonthlyPayment: false, // abono capital, mismo mes: OK tras monthly.
+      );
+      final report = await reports
+          .spendingByCategory(
+            from: DateTime.utc(2026, 6, 1),
+            to: DateTime.utc(2026, 6, 30),
+          )
+          .first;
+      final synthetic = report.buckets
+          .firstWhere((b) => b.categoryId == kLoanInterestSyntheticId);
+      expect(synthetic.name, 'Intereses de préstamos');
+      expect(synthetic.total, 350); // 200 + 150
+      // Hotfix M8: count del sintético es 0 para no contaminar el header.
+      expect(synthetic.count, 0);
+    });
+
+    test('NO aparece cuando todos los pagos tienen interest_amount = 0',
+        () async {
+      // Registrar monthly (con interés) + abono capital (sin interés),
+      // luego eliminar el monthly. Sólo queda el capital → no aparece
+      // el renglón sintético porque suma de interest = 0.
+      final monthlyId = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 100,
+        principalAmount: 99,
+        interestAmount: 1,
+        occurredAt: DateTime.utc(2026, 6, 1),
+        isMonthlyPayment: true,
+      );
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 500,
+        principalAmount: 500,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 6, 10),
+        isMonthlyPayment: false,
+      );
+      await entriesDao.deleteLoanPayment(monthlyId);
+      final report = await reports
+          .spendingByCategory(
+            from: DateTime.utc(2026, 6, 1),
+            to: DateTime.utc(2026, 6, 30),
+          )
+          .first;
+      final synthetic = report.buckets
+          .where((b) => b.categoryId == kLoanInterestSyntheticId);
+      expect(synthetic, isEmpty);
+    });
+
+    test('ignora loan_payments con deleted_at != null', () async {
+      final paymentId = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 500,
+        principalAmount: 300,
+        interestAmount: 200,
+        occurredAt: DateTime.utc(2026, 6, 10),
+        isMonthlyPayment: true,
+      );
+      await entriesDao.deleteLoanPayment(paymentId);
+      final report = await reports
+          .spendingByCategory(
+            from: DateTime.utc(2026, 6, 1),
+            to: DateTime.utc(2026, 6, 30),
+          )
+          .first;
+      final synthetic = report.buckets
+          .where((b) => b.categoryId == kLoanInterestSyntheticId);
+      expect(synthetic, isEmpty);
+    });
+
+    test('respeta rango temporal from/to del reporte', () async {
+      // Pago en julio; consulta junio → no aparece.
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 500,
+        principalAmount: 300,
+        interestAmount: 200,
+        occurredAt: DateTime.utc(2026, 7, 10),
+        isMonthlyPayment: true,
+      );
+      final juneReport = await reports
+          .spendingByCategory(
+            from: DateTime.utc(2026, 6, 1),
+            to: DateTime.utc(2026, 6, 30),
+          )
+          .first;
+      expect(
+          juneReport.buckets
+              .where((b) => b.categoryId == kLoanInterestSyntheticId),
+          isEmpty);
+      // Consulta julio → sí aparece.
+      final julyReport = await reports
+          .spendingByCategory(
+            from: DateTime.utc(2026, 7, 1),
+            to: DateTime.utc(2026, 7, 31),
+          )
+          .first;
+      expect(
+          julyReport.buckets
+              .firstWhere((b) => b.categoryId == kLoanInterestSyntheticId)
+              .total,
+          200);
     });
   });
 }

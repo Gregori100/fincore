@@ -42,6 +42,10 @@ class FinancialStateService {
   _ReplayBalanceStream? _boCache;
   _ReplayBalanceStream? _deCache;
   _ReplayBalanceStream? _crCache;
+  // Sprint flutter-loans-v1: cache del stream agregado de saldos pendientes
+  // de todos los préstamos activos. Mismo patrón que BO/DE/CR (replay-1 para
+  // sobrevivir desmontes del Dashboard durante navegación).
+  _ReplayBalanceStream? _totalLoansCache;
 
   /// Saldo derivado de una cuenta específica.
   ///
@@ -109,6 +113,8 @@ class FinancialStateService {
     _deCache = null;
     _crCache?.dispose();
     _crCache = null;
+    _totalLoansCache?.dispose();
+    _totalLoansCache = null;
   }
 
   /// Versión sincrónica para validaciones (ej. archive con saldo != 0).
@@ -185,6 +191,33 @@ class FinancialStateService {
     ''';
     return _db
         .customSelect(sql, readsFrom: {_db.accounts, _db.journalEntries})
+        .map((row) => row.read<double>('total'))
+        .watchSingle();
+  }
+
+  /// Sprint flutter-loans-v1: saldo pendiente total de todos los préstamos
+  /// activos (no cerrados, no eliminados). Sumatoria de `balanceOf` de cada
+  /// préstamo. Alimenta el KPI naranja "PRÉSTAMO" del Dashboard, que sólo
+  /// se renderiza cuando el total > 0.
+  Stream<double> watchTotalLoans() {
+    return (_totalLoansCache ??=
+            _ReplayBalanceStream(_buildTotalLoansSource()))
+        .stream;
+  }
+
+  Stream<double> _buildTotalLoansSource() {
+    const sql = '''
+      SELECT COALESCE(SUM(saldo), 0) AS total FROM (
+        SELECT l.id,
+          (l.principal_amount
+          - COALESCE((SELECT SUM(principal_amount) FROM journal_entries
+                     WHERE loan_id = l.id AND kind = 'loan_payment' AND deleted_at IS NULL), 0)) AS saldo
+        FROM loans l
+        WHERE l.deleted_at IS NULL AND l.closed_at IS NULL
+      )
+    ''';
+    return _db
+        .customSelect(sql, readsFrom: {_db.loans, _db.journalEntries})
         .map((row) => row.read<double>('total'))
         .watchSingle();
   }

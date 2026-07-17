@@ -468,4 +468,140 @@ void main() {
     expect(identical(bo1, bo2), isFalse,
         reason: 'Tras invalidateAll(), watchBo() debería armar un Stream nuevo');
   });
+
+  // ==========================================================================
+  // Sprint flutter-loans-v1 (RN-L20 + hotfix branch-quality-review B5):
+  // watchTotalLoans() alimenta el KPI naranja "PRÉSTAMO" del Dashboard.
+  // Condicional: sólo se renderiza si `total > 0`.
+  // ==========================================================================
+  group('watchTotalLoans()', () {
+    test('BD vacía: total = 0 (no hay préstamos)', () async {
+      expect(await state.watchTotalLoans().first, 0);
+    });
+
+    test('sube al crear préstamo (income inicial atómico)', () async {
+      await db.loansDao.create(
+        name: 'BBVA',
+        principalAmount: 10000,
+        monthlyPayment: 500,
+        initialDurationMonths: 24,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 7, 1),
+        destinationAccountId: bolsa,
+      );
+      expect(await state.watchTotalLoans().first, 10000);
+    });
+
+    test('baja al pagar principal', () async {
+      final loanId = await db.loansDao.create(
+        name: 'BBVA',
+        principalAmount: 10000,
+        monthlyPayment: 500,
+        initialDurationMonths: 24,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 7, 1),
+        destinationAccountId: bolsa,
+      );
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 500,
+        principalAmount: 400,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      expect(await state.watchTotalLoans().first, 9600);
+    });
+
+    test('vuelve a 0 cuando el préstamo se salda (auto-cierre paid)',
+        () async {
+      final loanId = await db.loansDao.create(
+        name: 'BBVA',
+        principalAmount: 1000,
+        monthlyPayment: 1001,
+        initialDurationMonths: 1,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 7, 1),
+        destinationAccountId: bolsa,
+      );
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 1001,
+        principalAmount: 1000,
+        interestAmount: 1,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      // Auto-cierre paid → préstamo excluido de watchTotalLoans.
+      expect(await state.watchTotalLoans().first, 0);
+    });
+
+    test('no cuenta préstamos cerrados (paid o manual)', () async {
+      final loanId = await db.loansDao.create(
+        name: 'BBVA',
+        principalAmount: 5000,
+        monthlyPayment: 500,
+        initialDurationMonths: 10,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 7, 1),
+        destinationAccountId: bolsa,
+      );
+      expect(await state.watchTotalLoans().first, 5000);
+      await db.loansDao.closeManual(loanId);
+      // Patrón replay-1: el `.first` cachea el último valor. Usar
+      // `firstWhere` para esperar la re-emisión reactiva.
+      expect(
+        await state
+            .watchTotalLoans()
+            .firstWhere((v) => v == 0)
+            .timeout(const Duration(seconds: 5)),
+        0,
+      );
+    });
+
+    test('no cuenta préstamos eliminados', () async {
+      final loanId = await db.loansDao.create(
+        name: 'BBVA',
+        principalAmount: 3000,
+        monthlyPayment: 300,
+        initialDurationMonths: 10,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 7, 1),
+        destinationAccountId: bolsa,
+      );
+      expect(await state.watchTotalLoans().first, 3000);
+      await db.loansDao.deleteLoan(loanId, state);
+      expect(
+        await state
+            .watchTotalLoans()
+            .firstWhere((v) => v == 0)
+            .timeout(const Duration(seconds: 5)),
+        0,
+      );
+    });
+
+    test('suma múltiples préstamos activos', () async {
+      await db.loansDao.create(
+        name: 'A',
+        principalAmount: 1000,
+        monthlyPayment: 100,
+        initialDurationMonths: 10,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 7, 1),
+        destinationAccountId: bolsa,
+      );
+      await db.loansDao.create(
+        name: 'B',
+        principalAmount: 2500,
+        monthlyPayment: 250,
+        initialDurationMonths: 10,
+        paymentDay: 10,
+        contractDate: DateTime.utc(2026, 7, 1),
+        destinationAccountId: debit,
+      );
+      expect(await state.watchTotalLoans().first, 3500);
+    });
+  });
 }

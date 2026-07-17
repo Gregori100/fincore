@@ -37,7 +37,16 @@ class EntryWithRelations {
   });
 }
 
-const _validKinds = {'income', 'expense', 'credit_expense', 'debt_payment', 'transfer'};
+const _validKinds = {
+  'income',
+  'expense',
+  'credit_expense',
+  'debt_payment',
+  'transfer',
+  // Sprint flutter-loans-v1: pago de préstamo. Origen cash|debit, destino
+  // null, loan_id != null, principal_amount + interest_amount = amount.
+  'loan_payment',
+};
 
 // `kUncategorizedFilterToken` se movió a `lib/constants/filter_tokens.dart`
 // tras el quality review v1 (M1). El re-export al inicio del archivo
@@ -295,6 +304,464 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     });
   }
 
+  /// Sprint flutter-loans-v1: registra un pago de préstamo con split declarado
+  /// por el usuario (principal + interest = amount). El préstamo se cierra
+  /// automáticamente en `paid` si el saldo cae a ≤ 0 (RN-L11), todo en la
+  /// misma transacción.
+  Future<String> registerLoanPayment({
+    required String loanId,
+    required String accountOriginId,
+    required double amount,
+    required double principalAmount,
+    required double interestAmount,
+    required DateTime occurredAt,
+    String? description,
+    // Hotfix smoke Diego: distingue "Pago del mes" (que valida unicidad
+    // dentro del mismo mes calendario del `occurredAt`) del "Abono a
+    // capital" (múltiples permitidos por mes). Se pasa desde la UI:
+    // `LoanMonthlyPaymentForm` → true, `LoanCapitalPaymentForm` → false.
+    // La detección de "ya hubo pago del mes" usa `interest_amount > 0`
+    // como proxy — los abonos capital tienen `interest_amount = 0` por
+    // definición, así que no bloquean.
+    bool isMonthlyPayment = false,
+  }) async {
+    // Validaciones del split antes de tocar BD (RN-L08).
+    // Hotfix branch-quality-review (F-SEC-01): NaN/Infinity pasarían todas
+    // las comparaciones (`NaN <= 0 == false`) y corromperían balanceOf.
+    if (!amount.isFinite ||
+        !principalAmount.isFinite ||
+        !interestAmount.isFinite) {
+      throw const EntriesDaoError(
+        'invalid_amount',
+        'Los montos deben ser números finitos válidos.',
+      );
+    }
+    if (amount <= 0) {
+      throw const EntriesDaoError(
+        'invalid_amount',
+        'El monto debe ser mayor a 0.',
+      );
+    }
+    if (principalAmount < 0 || interestAmount < 0) {
+      throw const EntriesDaoError(
+        'invalid_loan_split',
+        'Capital e intereses no pueden ser negativos.',
+      );
+    }
+    if ((principalAmount + interestAmount - amount).abs() >= 0.005) {
+      throw const EntriesDaoError(
+        'invalid_loan_split',
+        'La suma de capital + intereses debe ser igual al monto total.',
+      );
+    }
+
+    // Validar préstamo (existe, abierto, no eliminado).
+    final loan = await (select(attachedDatabase.loans)
+          ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
+        .getSingleOrNull();
+    if (loan == null) {
+      throw const EntriesDaoError('not_found', 'El préstamo no existe.');
+    }
+    if (loan.closedAt != null) {
+      throw const EntriesDaoError(
+        'loan_closed',
+        'No se pueden registrar pagos sobre un préstamo cerrado.',
+      );
+    }
+
+    // Hotfix smoke Diego: pago no puede ser anterior a la fecha del contrato.
+    // Aceptamos futuro (Diego quiere poder pagar antes del payment_day).
+    // El contract_date se compara truncado a día para evitar off-by-ms.
+    final contractDay = DateTime(
+        loan.contractDate.year, loan.contractDate.month, loan.contractDate.day);
+    final paymentDay =
+        DateTime(occurredAt.year, occurredAt.month, occurredAt.day);
+    if (paymentDay.isBefore(contractDay)) {
+      throw const EntriesDaoError(
+        'payment_before_contract',
+        'El pago no puede ser anterior a la fecha del contrato del préstamo.',
+      );
+    }
+
+    // Hotfix smoke Diego v2: reglas de orden y unicidad por mes calendario,
+    // usando la columna `is_monthly_payment` persistida (antes era proxy
+    // `interest_amount > 0` que fallaba en pago del mes sin intereses).
+    // - `isMonthlyPayment=true` (Pago del mes) requiere unicidad: no puede
+    //   existir otro con `is_monthly_payment=1` en el mismo mes.
+    // - `isMonthlyPayment=false` (Abono a capital) requiere que YA exista
+    //   el pago del mes correspondiente en el mismo mes calendario.
+    final monthKey =
+        '${occurredAt.year.toString().padLeft(4, '0')}-${occurredAt.month.toString().padLeft(2, '0')}';
+    final monthlyCountRow = await customSelect(
+      "SELECT COUNT(*) AS c FROM journal_entries "
+      "WHERE loan_id = ? AND kind = 'loan_payment' "
+      "AND deleted_at IS NULL AND is_monthly_payment = 1 "
+      "AND strftime('%Y-%m', occurred_at) = ?",
+      variables: [
+        Variable.withString(loanId),
+        Variable.withString(monthKey),
+      ],
+    ).getSingle();
+    final monthlyCount = monthlyCountRow.read<int>('c');
+    if (isMonthlyPayment && monthlyCount > 0) {
+      throw const EntriesDaoError(
+        'duplicate_monthly_payment',
+        'Ya registraste el pago del mes para este préstamo. Si vas a pagar de más, usa "Abono a capital".',
+      );
+    }
+    if (!isMonthlyPayment && monthlyCount == 0) {
+      throw const EntriesDaoError(
+        'capital_before_monthly',
+        'Registra primero el pago del mes correspondiente antes de hacer abonos a capital.',
+      );
+    }
+
+    // Hotfix smoke Diego v3: bloqueo estricto de overpay. El capital del
+    // pago no puede exceder el saldo pendiente actual del préstamo (por
+    // sobre 0.005 de tolerancia). Sin esto el saldo caía en negativo y
+    // Diego perdía trazabilidad.
+    final currentBalance =
+        await attachedDatabase.loansDao.balanceOf(loanId);
+    if (principalAmount > currentBalance + 0.005) {
+      throw EntriesDaoError(
+        'overpay_loan',
+        'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente del préstamo (${currentBalance.toStringAsFixed(2)}).',
+      );
+    }
+
+    // Validar cuenta origen (existe, cash|debit, no archivada, no eliminada).
+    await _validateAccountTypes(
+      kind: 'loan_payment',
+      originId: accountOriginId,
+      destinationId: null,
+    );
+
+    final id = UuidV7.generate();
+    final now = DateTime.now();
+    await transaction(() async {
+      // Hotfix branch-quality-review (F-TX-02): re-leer el préstamo DENTRO
+      // de la transacción para decidir auto-close. La variable `loan` del
+      // scope externo es stale — dos taps rápidos del botón "Guardar"
+      // pueden haber cerrado el préstamo entre la validación previa y
+      // este punto. Si se re-leyó cerrado, abortamos el insert.
+      final freshLoan = await (select(attachedDatabase.loans)
+            ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
+          .getSingleOrNull();
+      if (freshLoan == null) {
+        throw const EntriesDaoError('not_found', 'El préstamo no existe.');
+      }
+      if (freshLoan.closedAt != null) {
+        throw const EntriesDaoError(
+          'loan_closed',
+          'No se pueden registrar pagos sobre un préstamo cerrado.',
+        );
+      }
+      await into(journalEntries).insert(JournalEntriesCompanion.insert(
+        id: id,
+        kind: 'loan_payment',
+        accountOriginId: Value(accountOriginId),
+        amount: amount,
+        description: Value(description),
+        occurredAt: occurredAt,
+        loanId: Value(loanId),
+        principalAmount: Value(principalAmount),
+        interestAmount: Value(interestAmount),
+        // Hotfix smoke Diego v2: persistir el flag.
+        isMonthlyPayment: Value(isMonthlyPayment),
+        createdAt: now,
+        updatedAt: now,
+      ));
+      // Auto-cierre paid si saldo ≤ 0 tras el insert (RN-L11).
+      final balance = await attachedDatabase.loansDao.balanceOf(loanId);
+      if (balance <= 0.005) {
+        await (update(attachedDatabase.loans)
+              ..where((l) => l.id.equals(loanId)))
+            .write(LoansCompanion(
+          closedAt: Value(now),
+          closeReason: const Value('paid'),
+          updatedAt: Value(now),
+        ));
+      }
+    });
+    return id;
+  }
+
+  /// Hotfix smoke Diego: edita un `loan_payment` existente. Permite cambiar
+  /// monto, split, fecha y descripción. `loan_id`, `kind`, `account_origin`
+  /// se preservan (inmutables por trazabilidad — para cambiar la cuenta
+  /// origen el usuario elimina y crea uno nuevo).
+  ///
+  /// Post-update recomputa el balance y aplica auto-close paid /
+  /// reapertura auto según los mismos criterios que register/delete.
+  ///
+  /// Regla clave: si el edit cambia el mes calendario, se re-validan las
+  /// reglas de unicidad (monthly único por mes) y orden (capital requiere
+  /// monthly del mismo mes) excluyendo el propio entry del conteo.
+  Future<void> updateLoanPayment({
+    required String entryId,
+    required double amount,
+    required double principalAmount,
+    required double interestAmount,
+    required DateTime occurredAt,
+    String? description,
+  }) async {
+    // Validación de finitos (F-SEC-01 replicada).
+    if (!amount.isFinite ||
+        !principalAmount.isFinite ||
+        !interestAmount.isFinite) {
+      throw const EntriesDaoError(
+        'invalid_amount',
+        'Los montos deben ser números finitos válidos.',
+      );
+    }
+    if (amount <= 0) {
+      throw const EntriesDaoError(
+        'invalid_amount',
+        'El monto debe ser mayor a 0.',
+      );
+    }
+    if (principalAmount < 0 || interestAmount < 0) {
+      throw const EntriesDaoError(
+        'invalid_loan_split',
+        'Capital e intereses no pueden ser negativos.',
+      );
+    }
+    if ((principalAmount + interestAmount - amount).abs() >= 0.005) {
+      throw const EntriesDaoError(
+        'invalid_loan_split',
+        'La suma de capital + intereses debe ser igual al monto total.',
+      );
+    }
+
+    final existing = await (select(journalEntries)
+          ..where((e) => e.id.equals(entryId)))
+        .getSingleOrNull();
+    if (existing == null) {
+      throw const EntriesDaoError('not_found', 'El pago no existe.');
+    }
+    if (existing.kind != 'loan_payment') {
+      throw const EntriesDaoError(
+        'not_loan_payment',
+        'Este método sólo edita pagos de préstamo.',
+      );
+    }
+    if (existing.deletedAt != null) {
+      throw const EntriesDaoError('not_found', 'El pago ya fue eliminado.');
+    }
+    final loanId = existing.loanId;
+    if (loanId == null) {
+      throw const EntriesDaoError(
+        'invalid_kind',
+        'Este pago no está ligado a un préstamo.',
+      );
+    }
+
+    // Validar préstamo abierto + fecha >= contract_date.
+    final loan = await (select(attachedDatabase.loans)
+          ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
+        .getSingleOrNull();
+    if (loan == null) {
+      throw const EntriesDaoError('not_found', 'El préstamo no existe.');
+    }
+    final contractDay = DateTime(
+        loan.contractDate.year, loan.contractDate.month, loan.contractDate.day);
+    final paymentDay =
+        DateTime(occurredAt.year, occurredAt.month, occurredAt.day);
+    if (paymentDay.isBefore(contractDay)) {
+      throw const EntriesDaoError(
+        'payment_before_contract',
+        'El pago no puede ser anterior a la fecha del contrato del préstamo.',
+      );
+    }
+
+    // Re-validar reglas de mes excluyendo el propio entry. El tipo del
+    // pago (monthly vs capital) se preserva del entry existente — el edit
+    // NO permite cambiar el tipo (para eso hay que eliminar y recrear).
+    final isMonthly = existing.isMonthlyPayment;
+    final monthKey =
+        '${occurredAt.year.toString().padLeft(4, '0')}-${occurredAt.month.toString().padLeft(2, '0')}';
+    final monthlyCountRow = await customSelect(
+      "SELECT COUNT(*) AS c FROM journal_entries "
+      "WHERE loan_id = ? AND kind = 'loan_payment' "
+      "AND deleted_at IS NULL AND is_monthly_payment = 1 "
+      "AND strftime('%Y-%m', occurred_at) = ? "
+      "AND id != ?",
+      variables: [
+        Variable.withString(loanId),
+        Variable.withString(monthKey),
+        Variable.withString(entryId),
+      ],
+    ).getSingle();
+    final otherMonthlyCount = monthlyCountRow.read<int>('c');
+    if (isMonthly && otherMonthlyCount > 0) {
+      throw const EntriesDaoError(
+        'duplicate_monthly_payment',
+        'Ya existe otro pago del mes para este préstamo en ese mes.',
+      );
+    }
+    if (!isMonthly && otherMonthlyCount == 0) {
+      throw const EntriesDaoError(
+        'capital_before_monthly',
+        'No puedes dejar un abono a capital sin pago del mes correspondiente en su mes.',
+      );
+    }
+
+    // Hotfix smoke Diego v3: overpay check en modo edit — el nuevo capital
+    // no puede exceder el saldo pendiente que existiría si se ELIMINA
+    // primero el capital actual del entry y luego se aplica el nuevo.
+    final currentBalance =
+        await attachedDatabase.loansDao.balanceOf(loanId);
+    final oldPrincipal = existing.principalAmount ?? 0;
+    final availableBalance = currentBalance + oldPrincipal;
+    if (principalAmount > availableBalance + 0.005) {
+      throw EntriesDaoError(
+        'overpay_loan',
+        'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente disponible (${availableBalance.toStringAsFixed(2)}).',
+      );
+    }
+
+    final now = DateTime.now();
+    await transaction(() async {
+      await (update(journalEntries)..where((e) => e.id.equals(entryId))).write(
+        JournalEntriesCompanion(
+          amount: Value(amount),
+          principalAmount: Value(principalAmount),
+          interestAmount: Value(interestAmount),
+          occurredAt: Value(occurredAt),
+          description: Value(description),
+          updatedAt: Value(now),
+        ),
+      );
+      // Recomputar balance y decidir transición de estado del préstamo.
+      final freshLoan = await (select(attachedDatabase.loans)
+            ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
+          .getSingleOrNull();
+      if (freshLoan == null) return;
+      final balance = await attachedDatabase.loansDao.balanceOf(loanId);
+      if (balance <= 0.005 && freshLoan.closedAt == null) {
+        // Cerrar paid.
+        await (update(attachedDatabase.loans)
+              ..where((l) => l.id.equals(loanId)))
+            .write(LoansCompanion(
+          closedAt: Value(now),
+          closeReason: const Value('paid'),
+          updatedAt: Value(now),
+        ));
+      } else if (balance > 0.005 && freshLoan.closeReason == 'paid') {
+        // Reabrir auto (mismo criterio que deleteLoanPayment).
+        await (update(attachedDatabase.loans)
+              ..where((l) => l.id.equals(loanId)))
+            .write(LoansCompanion(
+          closedAt: const Value(null),
+          closeReason: const Value(null),
+          updatedAt: Value(now),
+        ));
+      }
+    });
+  }
+
+  /// Hotfix smoke Diego v3: cuenta abonos a capital del mismo mes de un
+  /// pago del mes específico. Usado por la UI para mostrar warning de
+  /// eliminación en cascada antes de confirmar el delete de un monthly.
+  Future<int> countCapitalPaymentsInSameMonth(String monthlyEntryId) async {
+    final row = await customSelect(
+      "SELECT COUNT(*) AS c FROM journal_entries m "
+      "WHERE m.loan_id = (SELECT loan_id FROM journal_entries WHERE id = ?1) "
+      "AND m.kind = 'loan_payment' "
+      "AND m.deleted_at IS NULL "
+      "AND m.is_monthly_payment = 0 "
+      "AND strftime('%Y-%m', m.occurred_at) = "
+      "  strftime('%Y-%m', (SELECT occurred_at FROM journal_entries WHERE id = ?1))",
+      variables: [Variable.withString(monthlyEntryId)],
+    ).getSingle();
+    return row.read<int>('c');
+  }
+
+  /// Sprint flutter-loans-v1: elimina un `loan_payment`. Reabre el préstamo
+  /// automáticamente si estaba `paid` y ahora el saldo vuelve a > 0 (RN-L12).
+  /// Los cerrados manualmente (`manual`) no se tocan.
+  ///
+  /// Hotfix smoke Diego v3: si el pago eliminado es "Pago del mes" y
+  /// `cascadeCapitalInMonth=true`, elimina en cascada todos los abonos a
+  /// capital del mismo mes calendario (para no dejarlos huérfanos rompiendo
+  /// la regla `capital_before_monthly`).
+  Future<void> deleteLoanPayment(
+    String entryId, {
+    bool cascadeCapitalInMonth = false,
+  }) async {
+    final existing = await (select(journalEntries)
+          ..where((e) => e.id.equals(entryId)))
+        .getSingleOrNull();
+    if (existing == null) {
+      throw const EntriesDaoError('not_found', 'El movimiento no existe.');
+    }
+    if (existing.kind != 'loan_payment') {
+      throw const EntriesDaoError(
+        'invalid_kind',
+        'Este método sólo elimina pagos de préstamo.',
+      );
+    }
+    if (existing.deletedAt != null) {
+      // Idempotente.
+      return;
+    }
+    // Hotfix branch-quality-review (F-SEC-04): defense en profundidad
+    // contra un backup manipulado con `kind='loan_payment' AND loan_id IS NULL`.
+    final loanId = existing.loanId;
+    if (loanId == null) {
+      throw const EntriesDaoError(
+        'invalid_kind',
+        'Este pago no está ligado a un préstamo.',
+      );
+    }
+    final now = DateTime.now();
+    await transaction(() async {
+      await (update(journalEntries)..where((e) => e.id.equals(entryId))).write(
+        JournalEntriesCompanion(
+          deletedAt: Value(now),
+          updatedAt: Value(now),
+        ),
+      );
+      // Hotfix smoke Diego v3: si el pago eliminado es "Pago del mes" y
+      // el caller solicitó cascada, borrar en la misma transacción todos
+      // los abonos a capital del mismo mes calendario del préstamo.
+      // Preserva el invariante `capital_before_monthly`.
+      if (cascadeCapitalInMonth && existing.isMonthlyPayment) {
+        final monthKey =
+            '${existing.occurredAt.year.toString().padLeft(4, '0')}-${existing.occurredAt.month.toString().padLeft(2, '0')}';
+        // Hotfix smoke Diego v4: `customStatement` NO acepta `Variable<T>`
+        // — solo primitivos (null, bool, int, num, String, List<int>).
+        // Pasar `Variable.withDateTime(now)` tiraba `ArgumentError` fuera
+        // de `EntriesDaoError`, se filtraba silenciosamente por el catch
+        // de la UI y Diego veía "el modal se cerró y no borró nada".
+        final nowIso = now.toIso8601String();
+        await customStatement(
+          "UPDATE journal_entries SET deleted_at = ?, updated_at = ? "
+          "WHERE loan_id = ? AND kind = 'loan_payment' "
+          "AND is_monthly_payment = 0 AND deleted_at IS NULL "
+          "AND strftime('%Y-%m', occurred_at) = ?",
+          [nowIso, nowIso, loanId, monthKey],
+        );
+      }
+      // Reapertura auto sólo si estaba paid y ahora saldo > 0.
+      final loan = await (select(attachedDatabase.loans)
+            ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
+          .getSingleOrNull();
+      if (loan == null) return;
+      if (loan.closeReason != 'paid') return;
+      final balance = await attachedDatabase.loansDao.balanceOf(loanId);
+      if (balance > 0.005) {
+        await (update(attachedDatabase.loans)
+              ..where((l) => l.id.equals(loanId)))
+            .write(LoansCompanion(
+          closedAt: const Value(null),
+          closeReason: const Value(null),
+          updatedAt: Value(now),
+        ));
+      }
+    });
+  }
+
   Future<String> registerTransfer({
     required String accountOriginId,
     required String accountDestinationId,
@@ -378,6 +845,16 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     if (existing == null) {
       throw const EntriesDaoError('not_found', 'El movimiento no existe.');
     }
+    // Sprint flutter-loans-v1 (RN-L15): los movimientos ligados a un préstamo
+    // (income inicial + loan_payment) son inmutables desde updateEntry. La
+    // corrección es eliminar el pago y crear uno nuevo, o eliminar el
+    // préstamo entero para el income inicial.
+    if (existing.loanId != null) {
+      throw const EntriesDaoError(
+        'immutable_loan_payment',
+        'Este movimiento pertenece a un préstamo. Se administra desde /loans.',
+      );
+    }
     if (amount != null && amount <= 0) {
       throw const EntriesDaoError(
         'invalid_amount',
@@ -459,6 +936,18 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       // Idempotente: si ya estaba cancelado, no hace nada.
       return;
     }
+    // Hotfix branch-quality-review (F-TX-03): defensa en profundidad.
+    // Entries ligados a un préstamo (income inicial + loan_payment) no
+    // pueden cancelarse por esta ruta. Los pagos van por deleteLoanPayment
+    // (que dispara reapertura auto). El income inicial sólo se elimina
+    // vía LoansDao.deleteLoan (cascada completa). Bloquear cualquier
+    // caller alternativo (bulk actions, deep-links, scripts).
+    if (existing.loanId != null) {
+      throw const EntriesDaoError(
+        'immutable_loan_payment',
+        'Este movimiento pertenece a un préstamo. Se administra desde /loans.',
+      );
+    }
     await (update(journalEntries)..where((e) => e.id.equals(id))).write(
       JournalEntriesCompanion(
         deletedAt: Value(DateTime.now()),
@@ -529,6 +1018,12 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
             'Gasto a tarjeta requiere tarjeta de crédito como origen.',
           );
         }
+        if (origin.archivedAt != null) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'La cuenta origen está archivada.',
+          );
+        }
         break;
       case 'debt_payment':
         if (origin == null ||
@@ -564,6 +1059,29 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
           throw const EntriesDaoError(
             'invalid_account_type',
             'La cuenta origen y destino no pueden ser la misma.',
+          );
+        }
+        break;
+      case 'loan_payment':
+        // Sprint flutter-loans-v1: origen cash|debit no archivada, destino
+        // null (el destino es el préstamo, no una Account).
+        if (destination != null) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Pago de préstamo no lleva cuenta destino.',
+          );
+        }
+        if (origin == null ||
+            (origin.type != 'cash' && origin.type != 'debit')) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'Pago de préstamo requiere efectivo o débito como origen.',
+          );
+        }
+        if (origin.archivedAt != null) {
+          throw const EntriesDaoError(
+            'invalid_account_type',
+            'La cuenta origen está archivada.',
           );
         }
         break;

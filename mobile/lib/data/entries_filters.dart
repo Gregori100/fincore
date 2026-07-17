@@ -1,5 +1,6 @@
 import 'package:fincore/constants/date_range_presets.dart';
 import 'package:fincore/constants/filter_tokens.dart';
+import 'package:fincore/constants/kinds.dart';
 
 /// Snapshot inmutable de filtros aplicados a la lista de movimientos.
 ///
@@ -78,6 +79,22 @@ class EntriesFilters {
       to: to,
       kinds: const ['expense', 'credit_expense'],
       categoryIds: [categoryId ?? kUncategorizedFilterToken],
+    );
+  }
+
+  /// Hotfix smoke Diego: drill-down desde el bucket sintético "Intereses
+  /// de préstamos" de `spendingByCategory`. Filtra por `kind='loan_payment'`
+  /// en el rango exacto del reporte — Diego ve los pagos de préstamo del
+  /// mes con su split visible.
+  factory EntriesFilters.forLoanInterestBucket({
+    required DateTime from,
+    required DateTime to,
+  }) {
+    return EntriesFilters(
+      datePreset: DateRangePreset.custom,
+      from: from,
+      to: to,
+      kinds: const ['loan_payment'],
     );
   }
 
@@ -313,7 +330,7 @@ class EntriesFilters {
     }
 
     final kinds = _parseSavedList(json['kinds'])
-        .where(_kValidKinds.contains)
+        .where(kAllJournalKinds.contains)
         .toSet()
         .toList(growable: false);
     final accountIds = _parseSavedList(json['accountIds'])
@@ -372,7 +389,7 @@ class EntriesFilters {
     }
 
     final kinds = _parseCsv(params['kinds'])
-        .where(_kValidKinds.contains)
+        .where(kAllJournalKinds.contains)
         .toSet()
         .toList(growable: false);
 
@@ -409,14 +426,6 @@ class EntriesFilters {
 /// Dimensiones que el usuario puede quitar individualmente desde los chips
 /// de filtros activos arriba de la lista (M7 del quality review v1).
 enum FilterDimension { date, kinds, accounts, categories, amount }
-
-const _kValidKinds = {
-  'income',
-  'expense',
-  'credit_expense',
-  'debt_payment',
-  'transfer',
-};
 
 DateTime? _tryParseDate(String? raw) {
   if (raw == null || raw.isEmpty) return null;

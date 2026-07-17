@@ -37,7 +37,16 @@ class ImportReport {
   });
 }
 
-const _supportedVersion = 1;
+/// Sprint flutter-loans-v1: bump a v2 con nuevos campos:
+///   - `loans` array (opcional en v1, requerido en v2).
+///   - `accounts[].archived_at` (nullable, del sprint anterior).
+///   - `journal_entries[].loan_id`, `.principal_amount`, `.interest_amount`
+///     (opcionales, sólo poblados para income inicial y loan_payment).
+///
+/// El export SIEMPRE emite v2. El import acepta v1 y v2 (compat total
+/// hacia atrás — v1 = sin préstamos).
+const _supportedVersion = 2;
+const _minSupportedVersion = 1;
 
 /// Service de backup JSON v1.
 ///
@@ -59,7 +68,10 @@ const Set<String> _validKinds = {
   'credit_expense',
   'debt_payment',
   'transfer',
+  // Sprint flutter-loans-v1: kind nuevo en journal_entries.
+  'loan_payment',
 };
+const Set<String> _validCloseReasons = {'paid', 'manual'};
 const Set<String> _validAccountTypes = {'cash', 'debit', 'credit'};
 const Set<String> _validAppliesToTypes = {'income', 'expense', 'both'};
 
@@ -90,6 +102,12 @@ class BackupService {
     final activeEntries = await (_db.select(_db.journalEntries)
           ..where((e) => e.deletedAt.isNull()))
         .get();
+    // Sprint flutter-loans-v1: loans activos + cerrados (no eliminados) se
+    // exportan al array `loans` de v2. Los cerrados también se preservan
+    // para poder consultar histórico al reimportar.
+    final activeLoans = await (_db.select(_db.loans)
+          ..where((l) => l.deletedAt.isNull()))
+        .get();
 
     // Sprint flutter-weekly-budgets-v1 (RN-B13): las 4 tablas del planeador
     // semanal (weekly_budgets, weekly_budget_items
@@ -101,6 +119,7 @@ class BackupService {
       'accounts': activeAccounts.map(_accountToJson).toList(),
       'categories': activeCategories.map(_categoryToJson).toList(),
       'journal_entries': activeEntries.map(_entryToJson).toList(),
+      'loans': activeLoans.map(_loanToJson).toList(),
     };
 
     return const JsonEncoder.withIndent('  ').convert(payload);
@@ -139,14 +158,14 @@ class BackupService {
         'Este respaldo es de una versión más nueva (v$version) que esta app puede leer.',
       );
     }
-    if (version < _supportedVersion) {
-      // Por ahora no hay migración entre versiones; al introducir v2,
-      // este bloque manejará upgrades.
+    if (version < _minSupportedVersion) {
       throw BackupError(
         'unsupported_version',
         'Versión de respaldo no soportada (v$version).',
       );
     }
+    // v1 y v2 aceptados. v1 = sin loans (loans queda vacío tras el import).
+    // v2 = con loans + campos nuevos de journal_entries.
 
     // Sprint flutter-weekly-budgets-v1: el shape solo se valida para
     // accounts/categories/journal_entries. Si el payload trae además arrays
@@ -165,24 +184,58 @@ class BackupService {
         'Estructura del respaldo incorrecta (faltan accounts/categories/journal_entries).',
       );
     }
+    // Sprint flutter-loans-v1: `loans` es opcional en v1 (compat total). En
+    // v2 puede venir como array vacío. Si viene como algo distinto de List
+    // o ausente, tratamos como vacío en v1 y como error en v2.
+    final loansRaw = payload['loans'];
+    if (loansRaw != null && loansRaw is! List) {
+      throw const BackupError(
+        'invalid_json',
+        'El campo `loans` debe ser una lista.',
+      );
+    }
 
     // Pre-parseo (lanza si algo inválido) ANTES de tocar la BD.
     // Sprint flutter-reports-credit-cards-v1: `_accountFromJson` retorna un
     // record con el companion y un flag `adjusted` (true cuando el JSON legacy
     // traía `credit_limit=null` y fue ajustado a 0 sin romper el import).
-    final accountsParsedRaw = accountsRaw
-        .map((e) => _accountFromJson(e as Map<String, dynamic>))
-        .toList();
-    final accountsParsed =
-        accountsParsedRaw.map((r) => r.companion).toList();
-    final adjustedAccountsCount =
-        accountsParsedRaw.where((r) => r.adjusted).length;
-    final categoriesParsed = categoriesRaw
-        .map((e) => _categoryFromJson(e as Map<String, dynamic>))
-        .toList();
-    final entriesParsed = entriesRaw
-        .map((e) => _entryFromJson(e as Map<String, dynamic>))
-        .toList();
+    //
+    // Hotfix branch-quality-review (F-SEC-02): envolvemos el parseo entero
+    // en try/catch de TypeError. Los casteos `as String`, `as int`, `as num`
+    // en los parsers explotan con `_CastError` no tipado cuando el JSON
+    // trae `null` o tipo equivocado. El wrapper lo remapea a un `BackupError`
+    // amigable en vez de propagar el stack trace a la UI.
+    final List<({AccountsCompanion companion, bool adjusted})>
+        accountsParsedRaw;
+    final List<AccountsCompanion> accountsParsed;
+    final int adjustedAccountsCount;
+    final List<CategoriesCompanion> categoriesParsed;
+    final List<JournalEntriesCompanion> entriesParsed;
+    final List<LoansCompanion> loansParsed;
+    try {
+      accountsParsedRaw = accountsRaw
+          .map((e) => _accountFromJson(e as Map<String, dynamic>))
+          .toList();
+      accountsParsed = accountsParsedRaw.map((r) => r.companion).toList();
+      adjustedAccountsCount =
+          accountsParsedRaw.where((r) => r.adjusted).length;
+      categoriesParsed = categoriesRaw
+          .map((e) => _categoryFromJson(e as Map<String, dynamic>))
+          .toList();
+      entriesParsed = entriesRaw
+          .map((e) => _entryFromJson(e as Map<String, dynamic>))
+          .toList();
+      // Loans se parsean sólo si vienen; en v1 loansRaw==null → lista vacía.
+      loansParsed = (loansRaw as List?)
+              ?.map((e) => _loanFromJson(e as Map<String, dynamic>))
+              .toList() ??
+          <LoansCompanion>[];
+    } on TypeError catch (e) {
+      throw BackupError(
+        'invalid_json',
+        'El respaldo tiene un campo con tipo inválido: ${e.toString().replaceFirst('type ', '').split('\n').first}',
+      );
+    }
 
     // Debe haber al menos una Bolsa (type='cash').
     final hasBolsa = accountsParsed.any((a) => a.type.value == 'cash');
@@ -214,6 +267,17 @@ class BackupService {
     // Validación de FKs antes de la transacción.
     final accountIds = accountsParsed.map((a) => a.id.value).toSet();
     final categoryIds = categoriesParsed.map((c) => c.id.value).toSet();
+    // Sprint flutter-loans-v1: FK check para loans + loan_id de entries.
+    final loanIds = loansParsed.map((l) => l.id.value).toSet();
+    for (final loan in loansParsed) {
+      final dest = loan.destinationAccountId.value;
+      if (!accountIds.contains(dest)) {
+        throw BackupError(
+          'invalid_reference',
+          'El préstamo "${loan.name.value}" referencia una cuenta destino que no existe ($dest).',
+        );
+      }
+    }
     for (final entry in entriesParsed) {
       final origin = entry.accountOriginId.value;
       if (origin != null && !accountIds.contains(origin)) {
@@ -236,6 +300,13 @@ class BackupService {
           'El respaldo referencia una categoría que no existe ($cat).',
         );
       }
+      final loanRef = entry.loanId.value;
+      if (loanRef != null && !loanIds.contains(loanRef)) {
+        throw BackupError(
+          'invalid_reference',
+          'El movimiento referencia un préstamo que no existe ($loanRef).',
+        );
+      }
     }
 
     final importedAt = DateTime.now();
@@ -244,11 +315,13 @@ class BackupService {
       // Reemplazo total: borrar TODO físicamente. Single-user, sin tombstones.
       await _wipeTablesInternal();
 
-      // Insertar respetando orden: primero cuentas + categorías, después entries
-      // que referencian a las dos.
+      // Insertar respetando orden: primero cuentas + categorías, luego loans
+      // (que referencian cuentas), después entries (que referencian a los
+      // 3 anteriores por sus FKs opcionales).
       await _db.batch((b) {
         b.insertAll(_db.accounts, accountsParsed);
         b.insertAll(_db.categories, categoriesParsed);
+        b.insertAll(_db.loans, loansParsed);
         b.insertAll(_db.journalEntries, entriesParsed);
       });
     });
@@ -282,7 +355,10 @@ class BackupService {
     // a categories) y luego los parents.
     await _db.delete(_db.weeklyBudgetItems).go();
     await _db.delete(_db.weeklyBudgets).go();
+    // Sprint flutter-loans-v1: journal_entries → loans → accounts respetando
+    // FKs (los entries pueden referenciar loans; loans referencian accounts).
     await _db.delete(_db.journalEntries).go();
+    await _db.delete(_db.loans).go();
     await _db.delete(_db.categories).go();
     await _db.delete(_db.accounts).go();
     // Sprint `flutter-entries-saved-views-v1` (RN-V10): las vistas
@@ -311,6 +387,9 @@ class BackupService {
         'payment_day': a.paymentDay,
         'interest_rate': a.interestRate,
         'minimum_payment_pct': a.minimumPaymentPct,
+        // Sprint flutter-accounts-archive-v1: archived_at nullable.
+        if (a.archivedAt != null)
+          'archived_at': a.archivedAt!.toUtc().toIso8601String(),
         'created_at': a.createdAt.toUtc().toIso8601String(),
         'updated_at': a.updatedAt.toUtc().toIso8601String(),
       };
@@ -335,8 +414,32 @@ class BackupService {
         'description': e.description,
         'occurred_at': e.occurredAt.toUtc().toIso8601String(),
         'category_id': e.categoryId,
+        // Sprint flutter-loans-v1: campos nuevos, sólo si aplican.
+        if (e.loanId != null) 'loan_id': e.loanId,
+        if (e.principalAmount != null) 'principal_amount': e.principalAmount,
+        if (e.interestAmount != null) 'interest_amount': e.interestAmount,
         'created_at': e.createdAt.toUtc().toIso8601String(),
         'updated_at': e.updatedAt.toUtc().toIso8601String(),
+      };
+
+  /// Sprint flutter-loans-v1: serialización de préstamo. Incluye cerrados
+  /// (paid/manual). Los eliminados nunca se exportan (deleted_at IS NULL en
+  /// la query de export).
+  Map<String, dynamic> _loanToJson(Loan l) => <String, dynamic>{
+        'id': l.id,
+        'name': l.name,
+        'principal_amount': l.principalAmount,
+        'monthly_payment': l.monthlyPayment,
+        'initial_duration_months': l.initialDurationMonths,
+        'current_duration_months': l.currentDurationMonths,
+        'payment_day': l.paymentDay,
+        'contract_date': l.contractDate.toUtc().toIso8601String(),
+        'destination_account_id': l.destinationAccountId,
+        if (l.closedAt != null)
+          'closed_at': l.closedAt!.toUtc().toIso8601String(),
+        if (l.closeReason != null) 'close_reason': l.closeReason,
+        'created_at': l.createdAt.toUtc().toIso8601String(),
+        'updated_at': l.updatedAt.toUtc().toIso8601String(),
       };
 
   ({AccountsCompanion companion, bool adjusted}) _accountFromJson(
@@ -410,6 +513,8 @@ class BackupService {
       paymentDay: Value(paymentDay),
       interestRate: Value(interestRate),
       minimumPaymentPct: Value(minimumPaymentPct),
+      // Sprint flutter-accounts-archive-v1: archived_at opcional en JSON.
+      archivedAt: Value(_parseDate(json['archived_at'])),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );
@@ -461,17 +566,20 @@ class BackupService {
     final categoryId = json['category_id'] as String?;
     _validateUuid('journal_entries.id', id);
     if (!_validKinds.contains(kind)) {
+      // Hotfix branch-quality-review (F-SEC-06 / L2): mensaje derivado del
+      // set para que no se desincronice con futuros kinds nuevos.
       throw BackupError(
         'invalid_kind',
         'El kind del movimiento no es válido '
-        '(esperado: income, expense, credit_expense, debt_payment o transfer; '
-        'recibido: "$kind").',
+        '(esperado: ${_validKinds.join(", ")}; recibido: "$kind").',
       );
     }
-    if (amount <= 0) {
+    // Hotfix branch-quality-review (F-SEC-01): NaN/Infinity en JSON válido
+    // (`1e400 → Infinity`) pasarían la guarda `<= 0`. Bloquear antes.
+    if (!amount.isFinite || amount <= 0) {
       throw BackupError(
         'invalid_amount',
-        'El monto del movimiento debe ser mayor a 0 (recibido: $amount).',
+        'El monto del movimiento debe ser un número finito mayor a 0 (recibido: $amount).',
       );
     }
     _validateDescription('journal_entries.description', description);
@@ -484,6 +592,62 @@ class BackupService {
     if (categoryId != null) {
       _validateUuid('journal_entries.category_id', categoryId);
     }
+    // Sprint flutter-loans-v1: campos nuevos, opcionales en v1.
+    final loanId = json['loan_id'] as String?;
+    if (loanId != null) {
+      _validateUuid('journal_entries.loan_id', loanId);
+    }
+    final principalAmount = (json['principal_amount'] as num?)?.toDouble();
+    final interestAmount = (json['interest_amount'] as num?)?.toDouble();
+    if (kind == 'loan_payment') {
+      // Hotfix branch-quality-review (F-SEC-03): shape check equivalente
+      // a `EntriesDao._validateAccountTypes case 'loan_payment'`. Un
+      // backup manipulado con {origin=null, dest=credit-uuid, loan_id=X}
+      // pasaba el parseo y entraba a BD con RN-011 rota.
+      if (originId == null) {
+        throw const BackupError(
+          'invalid_loan_data',
+          'Un loan_payment requiere account_origin_id (cuenta cash o débito).',
+        );
+      }
+      if (destId != null) {
+        throw const BackupError(
+          'invalid_loan_data',
+          'Un loan_payment no lleva account_destination_id.',
+        );
+      }
+      if (loanId == null) {
+        throw const BackupError(
+          'invalid_loan_data',
+          'Un loan_payment debe tener loan_id.',
+        );
+      }
+      if (principalAmount == null || interestAmount == null) {
+        throw const BackupError(
+          'invalid_loan_data',
+          'Un loan_payment debe tener principal_amount e interest_amount.',
+        );
+      }
+      // Hotfix F-SEC-01: NaN/Infinity en split.
+      if (!principalAmount.isFinite || !interestAmount.isFinite) {
+        throw const BackupError(
+          'invalid_loan_split',
+          'principal_amount e interest_amount deben ser números finitos.',
+        );
+      }
+      if (principalAmount < 0 || interestAmount < 0) {
+        throw const BackupError(
+          'invalid_loan_split',
+          'principal_amount e interest_amount no pueden ser negativos.',
+        );
+      }
+      if ((principalAmount + interestAmount - amount).abs() >= 0.005) {
+        throw const BackupError(
+          'invalid_loan_split',
+          'La suma principal + interest debe ser igual al amount total.',
+        );
+      }
+    }
     return JournalEntriesCompanion.insert(
       id: id,
       kind: kind,
@@ -493,6 +657,62 @@ class BackupService {
       description: Value(description),
       occurredAt: _parseDate(json['occurred_at']) ?? DateTime.now(),
       categoryId: Value(categoryId),
+      loanId: Value(loanId),
+      principalAmount: Value(principalAmount),
+      interestAmount: Value(interestAmount),
+      createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
+      updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
+    );
+  }
+
+  /// Sprint flutter-loans-v1: parseo de un préstamo desde JSON v2. Valida
+  /// UUID, campos obligatorios y rangos.
+  LoansCompanion _loanFromJson(Map<String, dynamic> json) {
+    final id = json['id'] as String;
+    final name = json['name'] as String;
+    final principalAmount = (json['principal_amount'] as num).toDouble();
+    final monthlyPayment = (json['monthly_payment'] as num).toDouble();
+    final initialDuration = json['initial_duration_months'] as int;
+    final currentDuration = json['current_duration_months'] as int;
+    final paymentDay = json['payment_day'] as int;
+    final destinationAccountId = json['destination_account_id'] as String;
+    final closeReason = json['close_reason'] as String?;
+    _validateUuid('loans.id', id);
+    _validateLength('loans.name', name, _kMaxNameLength);
+    _validateUuid('loans.destination_account_id', destinationAccountId);
+    // Hotfix branch-quality-review (F-SEC-01): NaN/Infinity via JSON.
+    if (!principalAmount.isFinite || principalAmount <= 0) {
+      throw BackupError('invalid_loan_data',
+          'El préstamo "$name" tiene principal_amount inválido (esperado número finito > 0, recibido: $principalAmount).');
+    }
+    if (!monthlyPayment.isFinite || monthlyPayment <= 0) {
+      throw BackupError('invalid_loan_data',
+          'El préstamo "$name" tiene monthly_payment inválido (esperado número finito > 0, recibido: $monthlyPayment).');
+    }
+    if (initialDuration <= 0 || currentDuration < 0) {
+      throw BackupError('invalid_loan_data',
+          'El préstamo "$name" tiene duración inválida.');
+    }
+    if (paymentDay < 1 || paymentDay > 28) {
+      throw BackupError('invalid_payment_day',
+          'El préstamo "$name" tiene payment_day fuera de rango 1-28 (recibido: $paymentDay).');
+    }
+    if (closeReason != null && !_validCloseReasons.contains(closeReason)) {
+      throw BackupError('invalid_loan_data',
+          'El préstamo "$name" tiene close_reason inválido (recibido: "$closeReason").');
+    }
+    return LoansCompanion.insert(
+      id: id,
+      name: name,
+      principalAmount: principalAmount,
+      monthlyPayment: monthlyPayment,
+      initialDurationMonths: initialDuration,
+      currentDurationMonths: currentDuration,
+      paymentDay: paymentDay,
+      contractDate: _parseDate(json['contract_date']) ?? DateTime.now(),
+      destinationAccountId: destinationAccountId,
+      closedAt: Value(_parseDate(json['closed_at'])),
+      closeReason: Value(closeReason),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );

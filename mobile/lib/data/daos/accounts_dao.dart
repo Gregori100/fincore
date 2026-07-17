@@ -307,6 +307,18 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
         'La Bolsa no se puede eliminar.',
       );
     }
+    // Sprint flutter-loans-v1 (RN-L09): la cuenta destino de un préstamo
+    // activo o cerrado (no eliminado) no se puede eliminar; primero hay que
+    // eliminar el préstamo. Archivar sí está permitido.
+    final loanUsing = await attachedDatabase.loansDao
+        .findByDestinationAccount(id);
+    if (loanUsing != null) {
+      throw AccountsDaoError(
+        'account_in_use_by_loan',
+        'Esta cuenta está atada al préstamo "${loanUsing.name}". '
+            'Elimina el préstamo primero.',
+      );
+    }
     final now = DateTime.now();
     // Cascade soft-delete dentro de una transacción: entries + cuenta quedan
     // canceladas atómicamente. Los entries asociados a esta cuenta dejan de

@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:fincore/constants/reports_tokens.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/date_helpers.dart';
 
@@ -307,7 +308,14 @@ class ReportsService {
     // SQLite trata NULL == NULL en GROUP BY, así que todas las filas con
     // c.id IS NULL (NULL en journal o categoría archivada) caen en el mismo
     // grupo. No hace falta colapsar manualmente después.
-    const sql = '''
+    //
+    // Sprint flutter-loans-v1 (RN-L17): la query original se UNION-ALLea con
+    // un renglón sintético "Intereses de préstamos" que suma
+    // `journal_entries.interest_amount` de todos los `loan_payment` del
+    // periodo. Sólo aparece cuando el total > 0. El category_id sintético es
+    // `kLoanInterestSyntheticId` — los widgets que consumen el reporte lo
+    // tratan como "sin drill-down por category_id" (o navegación a /loans).
+    final sql = '''
       SELECT
         c.id AS category_id,
         c.name AS category_name,
@@ -325,11 +333,62 @@ class ReportsService {
         AND j.occurred_at >= ?
         AND j.occurred_at <= ?
       GROUP BY c.id, c.name, c.color_slug, c.icon_slug
+
+      UNION ALL
+
+      SELECT
+        '$kLoanInterestSyntheticId' AS category_id,
+        'Intereses de préstamos' AS category_name,
+        'orange' AS color_slug,
+        'trending-down' AS icon_slug,
+        SUM(interest_amount) AS total,
+        -- Hotfix branch-quality-review (M8 / F-SQL-02): emitimos 0 (no
+        -- COUNT(*)) porque `SpendingReport.count` representa "cantidad de
+        -- entries de gasto reales". Los loan_payments no son entries de
+        -- gasto convencionales — su parte de intereses se agrega al total
+        -- pero no debe inflar el contador del header del reporte, que
+        -- luego no coincidiría con el drill-down (que ni siquiera navega
+        -- a la lista de entries — va a /loans).
+        0 AS count
+      FROM journal_entries
+      WHERE kind = 'loan_payment'
+        AND deleted_at IS NULL
+        AND interest_amount > 0
+        AND occurred_at >= ?
+        AND occurred_at <= ?
+      -- HAVING crítico: sin él, este SELECT emite 1 fila con total=NULL
+      -- cuando no hay loan_payments en el periodo, y `_buildReport` haría
+      -- `row.read<double>('total')` sobre null → crash.
+      HAVING SUM(interest_amount) > 0
+
+      UNION ALL
+
+      -- Hotfix smoke Diego v4: renglón sintético "Pago a capital de
+      -- préstamos" análogo al de intereses pero sumando principal_amount.
+      -- Color blue para distinguirlo visualmente del naranja de intereses.
+      SELECT
+        '$kLoanCapitalSyntheticId' AS category_id,
+        'Pago a capital de préstamos' AS category_name,
+        'blue' AS color_slug,
+        'savings' AS icon_slug,
+        SUM(principal_amount) AS total,
+        0 AS count
+      FROM journal_entries
+      WHERE kind = 'loan_payment'
+        AND deleted_at IS NULL
+        AND principal_amount > 0
+        AND occurred_at >= ?
+        AND occurred_at <= ?
+      HAVING SUM(principal_amount) > 0
     ''';
     return _db
         .customSelect(
           sql,
           variables: [
+            Variable.withDateTime(from),
+            Variable.withDateTime(to),
+            Variable.withDateTime(from),
+            Variable.withDateTime(to),
             Variable.withDateTime(from),
             Variable.withDateTime(to),
           ],
