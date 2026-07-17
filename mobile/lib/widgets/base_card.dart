@@ -14,6 +14,12 @@ class BaseCard extends StatelessWidget {
   final Color? borderColor;
   final double borderWidth;
 
+  /// Sprint flutter-entries-bulk-recategorize-v1: estado seleccionado
+  /// visualmente. Cuando `true`, tinte accent + borde accent para
+  /// comunicar "esta card está en el batch". Útil para modo selección
+  /// múltiple en listados.
+  final bool isSelected;
+
   const BaseCard({
     super.key,
     required this.child,
@@ -23,13 +29,21 @@ class BaseCard extends StatelessWidget {
     this.backgroundColor,
     this.borderColor,
     this.borderWidth = 1,
+    this.isSelected = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final content = Padding(padding: padding, child: child);
+    final effectiveBackground = isSelected
+        ? FincoreColors.accent.withValues(alpha: FincoreColors.alphaTint)
+        : (backgroundColor ?? FincoreColors.surface);
+    final effectiveBorder = isSelected
+        ? FincoreColors.accent
+        : (borderColor ?? FincoreColors.border);
+    final effectiveBorderWidth = isSelected ? 1.5 : borderWidth;
     final card = Material(
-      color: backgroundColor ?? FincoreColors.surface,
+      color: effectiveBackground,
       borderRadius: BorderRadius.circular(kRadiusLg),
       child:
           (onTap == null && onLongPress == null)
@@ -56,8 +70,8 @@ class BaseCard extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(kRadiusLg),
         border: Border.all(
-          color: borderColor ?? FincoreColors.border,
-          width: borderWidth,
+          color: effectiveBorder,
+          width: effectiveBorderWidth,
         ),
       ),
       child: card,

@@ -25,6 +25,18 @@ import 'package:intl/intl.dart';
 /// El tap navega al form de edición del movimiento. Si algún caller
 /// necesita un comportamiento distinto en el futuro, se le agrega un
 /// `onTap` opcional al constructor.
+/// True si el kind acepta categoría. Sprint
+/// flutter-entries-bulk-recategorize-v1: en modo selección solo estos
+/// kinds pueden formar parte del batch. `transfer`, `debt_payment` y
+/// `loan_payment` no aceptan categoría por RN-011 y quedan disabled.
+bool isKindCategorizable(JournalKind k) => switch (k) {
+      JournalKind.income ||
+      JournalKind.expense ||
+      JournalKind.creditExpense =>
+        true,
+      _ => false,
+    };
+
 class MovementRow extends StatelessWidget {
   final EntryWithRelations item;
 
@@ -33,10 +45,33 @@ class MovementRow extends StatelessWidget {
   /// caller para conservar la diferencia sin duplicar lógica.
   final String dateFormatPattern;
 
+  /// Sprint flutter-entries-bulk-recategorize-v1: cuando `true`, la card
+  /// reemplaza el ícono leading por un checkbox visual, el tap toggle
+  /// selección (via `onTap` del caller) y las cards no-categorizables
+  /// (transfer/debt_payment/loan_payment) se ven disabled + ignoran gestos.
+  final bool selectionMode;
+
+  /// Solo aplica cuando `selectionMode` es true. Estado del checkbox
+  /// leading.
+  final bool isSelected;
+
+  /// Override del tap. Si `null`, mantiene el navigate default a
+  /// `/entries/:id/edit`. El caller pasa un handler propio para toggle
+  /// selección o dispatch a un flujo distinto.
+  final VoidCallback? onTap;
+
+  /// Handler opcional para long-press. Uso típico: entrar en modo
+  /// selección desde el listado. Si `null`, no hay long-press activo.
+  final VoidCallback? onLongPress;
+
   const MovementRow({
     super.key,
     required this.item,
     this.dateFormatPattern = 'd MMM y',
+    this.selectionMode = false,
+    this.isSelected = false,
+    this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -61,22 +96,48 @@ class MovementRow extends StatelessWidget {
     // ese movimiento se administra desde /loans, no desde /entries.
     final belongsToLoan = entry.loanId != null;
 
-    return BaseCard(
-      onTap: () => context.push('/entries/${entry.id}/edit'),
+    // Sprint flutter-entries-bulk-recategorize-v1: en modo selección los
+    // kinds no-categorizables se ven atenuados y no reciben gestos. Aparecen
+    // en la lista para no cambiar el orden ni ocultar información al usuario,
+    // pero comunican visualmente que no forman parte del batch posible.
+    final isDisabled = selectionMode && !isKindCategorizable(kind);
+
+    // Tap: en modo selección el caller provee un handler que toggle. Fuera
+    // de modo selección, navega al form de edit por default (comportamiento
+    // histórico). onTap explícito del caller siempre gana.
+    final VoidCallback? effectiveTap = isDisabled
+        ? null
+        : (onTap ?? () => context.push('/entries/${entry.id}/edit'));
+    final VoidCallback? effectiveLongPress = isDisabled ? null : onLongPress;
+
+    final card = BaseCard(
+      onTap: effectiveTap,
+      onLongPress: effectiveLongPress,
       padding: kEdgeListItem,
+      // isSelected propaga hover-tint del BaseCard cuando el row está
+      // seleccionado — sin necesidad de duplicar la lógica de highlight en
+      // este archivo. Mantiene la superficie coherente con otros usos.
+      isSelected: selectionMode && isSelected,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            // token-exception: 32 es tamaño de icono/leading, no de spacing.
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: FincoreColors.alphaTint),
-              borderRadius: BorderRadius.circular(kRadiusMd),
+          if (selectionMode)
+            _SelectionLeading(
+              isSelected: isSelected,
+              isDisabled: isDisabled,
+              kindColor: color,
+            )
+          else
+            Container(
+              // token-exception: 32 es tamaño de icono/leading, no de spacing.
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: FincoreColors.alphaTint),
+                borderRadius: BorderRadius.circular(kRadiusMd),
+              ),
+              child: Icon(_kindIcon(kind), size: 16, color: color),
             ),
-            child: Icon(_kindIcon(kind), size: 16, color: color),
-          ),
           const SizedBox(width: kSpaceMd),
           Expanded(
             child: Column(
@@ -134,6 +195,16 @@ class MovementRow extends StatelessWidget {
         ],
       ),
     );
+
+    // Kinds no-categorizables en modo selección: atenuar toda la card y
+    // dejar claro que no participa. `IgnorePointer` bloquea ripple/gestos
+    // aunque effectiveTap ya sea null (defensa en profundidad).
+    if (isDisabled) {
+      return IgnorePointer(
+        child: Opacity(opacity: FincoreColors.alphaMuted, child: card),
+      );
+    }
+    return card;
   }
 
   Color _amountColor(JournalKind k) => switch (k) {
@@ -178,6 +249,67 @@ class MovementRow extends StatelessWidget {
       iconSlug: c.iconSlug,
       monthlyLimit: c.monthlyLimit,
       deletedAt: c.deletedAt,
+    );
+  }
+}
+
+/// Sprint flutter-entries-bulk-recategorize-v1: leading 32x32 que
+/// reemplaza el ícono de kind cuando el `MovementRow` corre en modo
+/// selección. Estados:
+///
+/// - `disabled` (kind no-categorizable): ícono block muted, sin borde.
+/// - `unselected` (categorizable): círculo con contorno neutro.
+/// - `selected`: círculo relleno accent con check.
+///
+/// Mismo tamaño que el ícono default para no romper layout.
+class _SelectionLeading extends StatelessWidget {
+  final bool isSelected;
+  final bool isDisabled;
+  final Color kindColor;
+
+  const _SelectionLeading({
+    required this.isSelected,
+    required this.isDisabled,
+    required this.kindColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isDisabled) {
+      return const SizedBox(
+        width: 32,
+        height: 32,
+        child: Center(
+          child: Icon(
+            Icons.block,
+            size: 18,
+            color: FincoreColors.textSubtle,
+          ),
+        ),
+      );
+    }
+    if (isSelected) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: const BoxDecoration(
+          color: FincoreColors.accent,
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.check,
+          size: 18,
+          color: FincoreColors.canvas,
+        ),
+      );
+    }
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: FincoreColors.border, width: 1.5),
+      ),
     );
   }
 }

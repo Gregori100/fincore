@@ -24,10 +24,32 @@ class EntriesPaginatedList extends StatefulWidget {
   final EntriesFilters filters;
   final VoidCallback onClearFilters;
 
+  /// Sprint flutter-entries-bulk-recategorize-v1: modo selección múltiple.
+  /// Cuando `true`, cada `MovementRow` renderiza checkbox y delega el tap
+  /// al caller vía `onToggleSelection`. Los kinds no-categorizables
+  /// aparecen disabled.
+  final bool selectionMode;
+
+  /// Ids seleccionados actualmente. Solo relevante si `selectionMode`.
+  final Set<String> selectedIds;
+
+  /// Long-press sobre un row (fuera de modo selección) → entra en modo
+  /// selección con ese id ya seleccionado. Nullable: si el caller no
+  /// quiere soportar long-press, no pasa el handler.
+  final void Function(String id)? onEnterSelection;
+
+  /// Tap sobre un row en modo selección → toggle el id. Requerido si
+  /// `selectionMode` es true.
+  final void Function(String id)? onToggleSelection;
+
   const EntriesPaginatedList({
     super.key,
     required this.filters,
     required this.onClearFilters,
+    this.selectionMode = false,
+    this.selectedIds = const {},
+    this.onEnterSelection,
+    this.onToggleSelection,
   });
 
   @override
@@ -193,7 +215,19 @@ class _EntriesPaginatedListState extends State<EntriesPaginatedList> {
                 reachedMaxLimit: _reachedMaxLimit,
               );
             }
-            return MovementRow(item: entries[i]);
+            final row = entries[i];
+            final id = row.entry.id;
+            return MovementRow(
+              item: row,
+              selectionMode: widget.selectionMode,
+              isSelected: widget.selectedIds.contains(id),
+              onTap: widget.selectionMode
+                  ? () => widget.onToggleSelection?.call(id)
+                  : null,
+              onLongPress: widget.selectionMode
+                  ? null
+                  : () => widget.onEnterSelection?.call(id),
+            );
           },
         );
       },
