@@ -3,6 +3,7 @@ import 'package:fincore/constants/filter_tokens.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/uuid.dart';
+import 'package:fincore/widgets/amount_formatter.dart';
 
 // Re-export para que callers que ya importan `entries_dao.dart` (por
 // compatibilidad con código previo) sigan teniendo acceso al token sin
@@ -441,7 +442,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       if (principalAmount > currentBalance + 0.005) {
         throw EntriesDaoError(
           'overpay_loan',
-          'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente del préstamo (${currentBalance.toStringAsFixed(2)}).',
+          'El capital del pago (${formatAmount(principalAmount)}) excede el saldo pendiente del préstamo (${formatAmount(currentBalance)}).',
         );
       }
       await into(journalEntries).insert(JournalEntriesCompanion.insert(
@@ -597,7 +598,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       if (principalAmount > availableBalance + 0.005) {
         throw EntriesDaoError(
           'overpay_loan',
-          'El capital del pago (${principalAmount.toStringAsFixed(2)}) excede el saldo pendiente disponible (${availableBalance.toStringAsFixed(2)}).',
+          'El capital del pago (${formatAmount(principalAmount)}) excede el saldo pendiente disponible (${formatAmount(availableBalance)}).',
         );
       }
       await (update(journalEntries)..where((e) => e.id.equals(entryId))).write(

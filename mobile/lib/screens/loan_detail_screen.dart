@@ -438,27 +438,32 @@ class _Header extends StatelessWidget {
             ],
           ),
           const SizedBox(height: kSpaceLg),
-          InkWell(
-            onTap: onViewInitialIncome,
-            borderRadius: BorderRadius.circular(kRadiusMd),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: kSpaceSm),
-              child: Row(
-                children: [
-                  const Icon(Icons.receipt_long_outlined,
-                      size: 16, color: FincoreColors.accent),
-                  const SizedBox(width: kSpaceSm),
-                  Text(
-                    destAccount != null
-                        ? 'Ver ingreso inicial en ${destAccount!.name}'
-                        : 'Ver ingreso inicial',
-                    style: const TextStyle(
-                      color: FincoreColors.accent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+          // F-DES-10: minHeight 44dp (mismo patrón que _ChipShell del
+          // dashboard). Antes ~32dp; touch fallaba en mano en movimiento.
+          ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: InkWell(
+              onTap: onViewInitialIncome,
+              borderRadius: BorderRadius.circular(kRadiusMd),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: kSpaceSm),
+                child: Row(
+                  children: [
+                    const Icon(Icons.receipt_long_outlined,
+                        size: 16, color: FincoreColors.accent),
+                    const SizedBox(width: kSpaceSm),
+                    Text(
+                      destAccount != null
+                          ? 'Ver ingreso inicial en ${destAccount!.name}'
+                          : 'Ver ingreso inicial',
+                      style: const TextStyle(
+                        color: FincoreColors.accent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

@@ -250,7 +250,9 @@ class _LoanCapitalPaymentFormState extends State<LoanCapitalPaymentForm> {
               const SizedBox(height: kSpaceLg),
               TextFormField(
                 controller: _amountCtrl,
-                autofocus: true,
+                // F-DES-8: autofocus solo en alta, nunca al editar. Antes
+                // tapaba el banner de saldo pendiente y el picker de cuenta.
+                autofocus: !widget._isEdit,
                 decoration: const InputDecoration(
                   labelText: 'Monto',
                   prefixText: r'$ ',
@@ -364,24 +366,63 @@ class _CapitalBalanceBanner extends StatelessWidget {
               ],
             ),
           ),
-          // Hotfix quality-review B12: siempre visible con tooltip cuando
-          // el saldo está en 0 (préstamo saldado).
-          Tooltip(
-            message: onSaldar == null
-                ? 'El préstamo ya está saldado'
-                : 'Autocompleta monto = saldo pendiente',
-            child: OutlinedButton.icon(
-              onPressed: onSaldar,
-              icon: const Icon(Icons.done_all, size: 16),
-              label: const Text('Saldar'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: FincoreColors.accent,
-                side: const BorderSide(color: FincoreColors.accent),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: kSpaceMd, vertical: kSpaceSm),
+          // F-DES-6: chip pasivo "✓ Saldado" cuando el préstamo no tiene
+          // saldo pendiente. Tooltip solo cuando el botón es actuable.
+          if (onSaldar == null)
+            const _SaldadoChip()
+          else
+            Tooltip(
+              message: 'Autocompleta monto = saldo pendiente',
+              child: OutlinedButton.icon(
+                onPressed: onSaldar,
+                icon: const Icon(Icons.done_all, size: 16),
+                label: const Text('Saldar'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: FincoreColors.accent,
+                  side: const BorderSide(color: FincoreColors.accent),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: kSpaceMd, vertical: kSpaceSm),
+                ),
               ),
             ),
-          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// F-DES-6: chip pasivo para el estado "saldado" del banner de saldo.
+/// Duplicado local del que vive en loan_monthly_payment_form; una
+/// abstracción compartida es sobre-ingeniería para 2 sitios idénticos y
+/// pequeños.
+class _SaldadoChip extends StatelessWidget {
+  const _SaldadoChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: kSpaceMd, vertical: kSpaceSm),
+      decoration: BoxDecoration(
+        color: FincoreColors.positive
+            .withValues(alpha: FincoreColors.alphaTint),
+        borderRadius: BorderRadius.circular(kRadiusMd),
+        border: Border.all(
+          color: FincoreColors.positive
+              .withValues(alpha: FincoreColors.alphaHairline),
+        ),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle_outline,
+              size: 16, color: FincoreColors.positive),
+          SizedBox(width: kSpaceXs),
+          Text('Saldado',
+              style: TextStyle(
+                color: FincoreColors.positive,
+                fontWeight: FontWeight.w600,
+              )),
         ],
       ),
     );
