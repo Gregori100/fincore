@@ -414,6 +414,213 @@ void main() {
     });
   });
 
+  group('updateLoanPayment (hotfix quality-review B2)', () {
+    late String monthlyId;
+
+    setUp(() async {
+      monthlyId = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500,
+        principalAmount: 400,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+    });
+
+    test('happy path: cambia monto y split', () async {
+      await entriesDao.updateLoanPayment(
+        entryId: monthlyId,
+        amount: 600,
+        principalAmount: 500,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 8, 5),
+      );
+      final e = await entriesDao.findById(monthlyId);
+      expect(e?.entry.amount, 600);
+      expect(e?.entry.principalAmount, 500);
+      expect(e?.entry.interestAmount, 100);
+      expect(e?.entry.isMonthlyPayment, isTrue,
+          reason: 'isMonthlyPayment se preserva del entry original');
+      expect(await loansDao.balanceOf(loanId), 4500);
+    });
+
+    test('rechaza overpay considerando el capital previo del propio entry',
+        () async {
+      // saldo actual = 5000 - 400 (del monthly ya registrado) = 4600.
+      // Al editar, disponible = 4600 + 400 (oldPrincipal) = 5000.
+      // Nuevo principal 5001 excede.
+      expect(
+        () => entriesDao.updateLoanPayment(
+          entryId: monthlyId,
+          amount: 5002,
+          principalAmount: 5001,
+          interestAmount: 1,
+          occurredAt: DateTime.utc(2026, 8, 5),
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'overpay_loan')),
+      );
+      // Y aceptar exactamente 5000.
+      await entriesDao.updateLoanPayment(
+        entryId: monthlyId,
+        amount: 5001,
+        principalAmount: 5000,
+        interestAmount: 1,
+        occurredAt: DateTime.utc(2026, 8, 5),
+      );
+      expect(await loansDao.balanceOf(loanId), 0);
+    });
+
+    test(
+        'auto-cierre paid cuando el nuevo split salda el préstamo',
+        () async {
+      await entriesDao.updateLoanPayment(
+        entryId: monthlyId,
+        amount: 5001,
+        principalAmount: 5000,
+        interestAmount: 1,
+        occurredAt: DateTime.utc(2026, 8, 5),
+      );
+      final loan = await loansDao.findById(loanId);
+      expect(loan?.closeReason, 'paid');
+      expect(loan?.closedAt, isNotNull);
+    });
+
+    test('auto-reapertura paid cuando el edit reabre el saldo', () async {
+      // Registrar un capital extra para llegar a paid.
+      final extraCap = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 4600,
+        principalAmount: 4600,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 10),
+        isMonthlyPayment: false,
+      );
+      expect((await loansDao.findById(loanId))?.closeReason, 'paid');
+      // Editar el capital para bajarlo → reabre.
+      await entriesDao.updateLoanPayment(
+        entryId: extraCap,
+        amount: 100,
+        principalAmount: 100,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 10),
+      );
+      final loan = await loansDao.findById(loanId);
+      expect(loan?.closedAt, isNull);
+      expect(loan?.closeReason, isNull);
+    });
+
+    test('rechaza mover monthly a un mes con otro monthly existente',
+        () async {
+      // Registrar monthly de septiembre.
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500,
+        principalAmount: 400,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 9, 5),
+        isMonthlyPayment: true,
+      );
+      // Mover el de agosto a septiembre debe fallar.
+      expect(
+        () => entriesDao.updateLoanPayment(
+          entryId: monthlyId,
+          amount: 500,
+          principalAmount: 400,
+          interestAmount: 100,
+          occurredAt: DateTime.utc(2026, 9, 10),
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'duplicate_monthly_payment')),
+      );
+    });
+
+    test(
+        'rechaza mover capital a un mes sin monthly (capital_before_monthly)',
+        () async {
+      final capId = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 100,
+        principalAmount: 100,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 15),
+        isMonthlyPayment: false,
+      );
+      // Mover el capital a septiembre (no hay monthly ahí) debe fallar.
+      expect(
+        () => entriesDao.updateLoanPayment(
+          entryId: capId,
+          amount: 100,
+          principalAmount: 100,
+          interestAmount: 0,
+          occurredAt: DateTime.utc(2026, 9, 15),
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'capital_before_monthly')),
+      );
+    });
+
+    test('rechaza payment_before_contract', () async {
+      expect(
+        () => entriesDao.updateLoanPayment(
+          entryId: monthlyId,
+          amount: 500,
+          principalAmount: 400,
+          interestAmount: 100,
+          occurredAt: DateTime.utc(2026, 7, 14), // contract es 2026-07-15
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'payment_before_contract')),
+      );
+    });
+
+    test('rechaza invalid_loan_split cuando principal + interest ≠ amount',
+        () async {
+      expect(
+        () => entriesDao.updateLoanPayment(
+          entryId: monthlyId,
+          amount: 500,
+          principalAmount: 300,
+          interestAmount: 100, // 300+100 = 400 ≠ 500
+          occurredAt: DateTime.utc(2026, 8, 5),
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_loan_split')),
+      );
+    });
+
+    test('not_found sobre entry inexistente o eliminado', () async {
+      expect(
+        () => entriesDao.updateLoanPayment(
+          entryId: 'ffffffff-ffff-7fff-8fff-ffffffffffff',
+          amount: 500,
+          principalAmount: 400,
+          interestAmount: 100,
+          occurredAt: DateTime.utc(2026, 8, 5),
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'not_found')),
+      );
+      await entriesDao.deleteLoanPayment(monthlyId);
+      expect(
+        () => entriesDao.updateLoanPayment(
+          entryId: monthlyId,
+          amount: 500,
+          principalAmount: 400,
+          interestAmount: 100,
+          occurredAt: DateTime.utc(2026, 8, 5),
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'not_found')),
+      );
+    });
+  });
+
   group('updateEntry gate sobre entries con loan_id', () {
     test('rechaza edición sobre loan_payment', () async {
       final pId = await entriesDao.registerLoanPayment(
@@ -709,6 +916,192 @@ void main() {
       expect(await loansDao.hasMonthlyPaymentIn(loanId, 2026, 8), isTrue);
       await entriesDao.deleteLoanPayment(monthlyId);
       expect(await loansDao.hasMonthlyPaymentIn(loanId, 2026, 8), isFalse);
+    });
+  });
+
+  group('Bordes de tolerancia 0.005 (hotfix quality-review B7)', () {
+    test('overpay: acepta principal = balance + 0.004, rechaza + 0.006',
+        () async {
+      // balance actual = 5000.
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 100,
+        principalAmount: 0,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      // Ahora balance = 5000 (solo interés no toca capital).
+      // Aceptar +0.004 (dentro de tolerancia).
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 5000.004,
+        principalAmount: 5000.004,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 6),
+        isMonthlyPayment: false,
+      );
+      // Después de este pago el préstamo queda paid.
+      // Verificar rechazo con +0.006.
+      // Reset con otro préstamo para tener saldo limpio.
+      final loan2 = await loansDao.create(
+        name: 'X',
+        principalAmount: 1000,
+        monthlyPayment: 100,
+        initialDurationMonths: 10,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 7, 15),
+        destinationAccountId: bolsaId,
+      );
+      expect(
+        () => entriesDao.registerLoanPayment(
+          loanId: loan2,
+          accountOriginId: bolsaId,
+          amount: 1000.006,
+          principalAmount: 1000.006,
+          interestAmount: 0,
+          occurredAt: DateTime.utc(2026, 8, 5),
+          isMonthlyPayment: true,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'overpay_loan')),
+      );
+    });
+
+    test('invalid_loan_split: acepta diff 0.004, rechaza diff 0.006',
+        () async {
+      // Aceptar principal + interest fuera por 0.004 (dentro).
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500,
+        principalAmount: 400,
+        interestAmount: 100.004, // suma 500.004 vs amount 500 → diff 0.004
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      // Rechazar diff 0.006.
+      expect(
+        () => entriesDao.registerLoanPayment(
+          loanId: loanId,
+          accountOriginId: bolsaId,
+          amount: 100,
+          principalAmount: 50,
+          interestAmount: 50.006,
+          occurredAt: DateTime.utc(2026, 8, 15),
+          isMonthlyPayment: false,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'invalid_loan_split')),
+      );
+    });
+  });
+
+  group(
+      'Monthly con interest=0 (hotfix quality-review B8 — antes proxy '
+      'legacy fallaba)', () {
+    test(
+        'registrar monthly con interest=0 persiste is_monthly_payment=true '
+        'y bloquea segundo monthly del mes', () async {
+      final id = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500,
+        principalAmount: 500,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      final e = await entriesDao.findById(id);
+      expect(e?.entry.isMonthlyPayment, isTrue);
+      expect(await loansDao.hasMonthlyPaymentIn(loanId, 2026, 8), isTrue);
+      // Segundo monthly del mes: rechaza.
+      expect(
+        () => entriesDao.registerLoanPayment(
+          loanId: loanId,
+          accountOriginId: bolsaId,
+          amount: 300,
+          principalAmount: 300,
+          interestAmount: 0,
+          occurredAt: DateTime.utc(2026, 8, 20),
+          isMonthlyPayment: true,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'duplicate_monthly_payment')),
+      );
+      // Capital posterior en el mismo mes: acepta.
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 300,
+        principalAmount: 300,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 20),
+        isMonthlyPayment: false,
+      );
+    });
+  });
+
+  group('deleteLoanPayment default (hotfix quality-review B9)', () {
+    test(
+        'sin cascade preserva capitales del mes (contract: caller '
+        'responsable de decidir)', () async {
+      final m = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500,
+        principalAmount: 400,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      final c = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 100,
+        principalAmount: 100,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 15),
+        isMonthlyPayment: false,
+      );
+      await entriesDao.deleteLoanPayment(m); // default: sin cascade
+      expect((await entriesDao.findById(m))?.entry.deletedAt, isNotNull);
+      expect((await entriesDao.findById(c))?.entry.deletedAt, isNull,
+          reason: 'sin cascade el capital queda ACTIVO (aunque huérfano)');
+    });
+  });
+
+  group('cancel gate sobre loan_income y loan_payment '
+      '(hotfix quality-review B10)', () {
+    test('cancel() sobre loan_payment lanza immutable_loan_payment',
+        () async {
+      final id = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500,
+        principalAmount: 400,
+        interestAmount: 100,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      expect(
+        () => entriesDao.cancel(id),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'immutable_loan_payment')),
+      );
+    });
+
+    test('cancel() sobre income inicial del préstamo lanza '
+        'immutable_loan_payment', () async {
+      final incomeId = await loansDao.findIncomeEntryId(loanId);
+      expect(incomeId, isNotNull);
+      expect(
+        () => entriesDao.cancel(incomeId!),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'immutable_loan_payment')),
+      );
     });
   });
 }
