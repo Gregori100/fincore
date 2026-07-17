@@ -391,7 +391,16 @@ class _LoanTotalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BaseCard(
+    // F-DES-13: Semantics agrupado (patrón _TotalCard 60 líneas abajo).
+    // Sin esto TalkBack lee "PRÉSTAMO", "Saldo pendiente total", "$X" y
+    // la flecha como 4 elementos sueltos.
+    return Semantics(
+      container: true,
+      button: true,
+      label:
+          'Préstamo, saldo pendiente total ${formatAmount(total)}. Toca para ver la lista.',
+      excludeSemantics: true,
+      child: BaseCard(
       onTap: () => context.push('/loans'),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
@@ -449,6 +458,7 @@ class _LoanTotalCard extends StatelessWidget {
           const SizedBox(width: 6),
           const Icon(Icons.chevron_right, color: FincoreColors.textSubtle),
         ],
+      ),
       ),
     );
   }
@@ -560,7 +570,14 @@ class _ChipShell extends StatelessWidget {
     // Hotfix quality-review M8: minHeight 44dp para respetar el mínimo
     // táctil de Material. Antes el chip quedaba ~30dp y fallaba touch en
     // uso mobile real.
-    return ConstrainedBox(
+    // F-DES-13: Semantics agrupado — `label` compone toda la info del
+    // chip (préstamo + estado + días/meses) en un anuncio único.
+    return Semantics(
+      container: true,
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 44),
       child: InkWell(
         onTap: () => context.push('/loans/$loanId'),
@@ -591,6 +608,7 @@ class _ChipShell extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }
