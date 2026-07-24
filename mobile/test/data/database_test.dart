@@ -360,6 +360,78 @@ void main() {
       );
     });
 
+    test(
+        'UT-DPT-01: pagar saldo exacto de tarjeta con deuda acumulada por '
+        'floats NO tira overpay_debt (bug reportado por Diego 2026-07-24)',
+        () async {
+      // Setup: fondos suficientes para pagar.
+      await entriesDao.registerIncome(
+        accountDestinationId: debitId,
+        amount: 5000,
+        occurredAt: DateTime.now(),
+      );
+      // Cargos que reproducen el error IEEE 754 clásico: 0.1 + 0.2 = 0.30000...4
+      // Cinco cargos así acumulan un residuo de floats mayor al step del
+      // usuario (1 centavo). La deuda "matemática" es 1.50, pero
+      // internamente queda 1.5000000000000002 (o similar).
+      for (var i = 0; i < 5; i++) {
+        await entriesDao.registerCreditExpense(
+          accountOriginId: creditId,
+          amount: 0.1,
+          occurredAt: DateTime.now(),
+        );
+        await entriesDao.registerCreditExpense(
+          accountOriginId: creditId,
+          amount: 0.2,
+          occurredAt: DateTime.now(),
+        );
+      }
+      // El usuario pide pagar exactamente 1.50 (el saldo que ve en la UI).
+      // Sin la tolerancia +0.005, esto tira overpay_debt aunque
+      // matemáticamente sea válido.
+      final id = await entriesDao.registerDebtPayment(
+        accountOriginId: debitId,
+        accountDestinationId: creditId,
+        amount: 1.50,
+        occurredAt: DateTime.now(),
+      );
+      expect(id, isNotEmpty,
+          reason: 'Pagar el saldo exacto derivado debe funcionar');
+      // Post-pago: la deuda queda en ~0 (dentro del rango de tolerancia).
+      final saldo = await stateService.accountBalanceNow(creditId);
+      expect(saldo.abs() < 0.01, isTrue,
+          reason: 'Deuda residual esperada < 1 centavo, fue $saldo');
+    });
+
+    test(
+        'UT-DPT-02: pagar más de la deuda + margen sigue rechazando '
+        'overpay_debt (la tolerancia no abre la puerta a montos grandes)',
+        () async {
+      await entriesDao.registerIncome(
+        accountDestinationId: debitId,
+        amount: 5000,
+        occurredAt: DateTime.now(),
+      );
+      await entriesDao.registerCreditExpense(
+        accountOriginId: creditId,
+        amount: 100,
+        occurredAt: DateTime.now(),
+      );
+      // Pagar 100.01 (1 centavo más) debe seguir tirando overpay_debt.
+      // La tolerancia es 0.005, por lo que 100.006 sería aceptado pero
+      // 100.01 no.
+      expect(
+        () => entriesDao.registerDebtPayment(
+          accountOriginId: debitId,
+          accountDestinationId: creditId,
+          amount: 100.01,
+          occurredAt: DateTime.now(),
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'overpay_debt')),
+      );
+    });
+
     test('transfer mueve dinero sin cambiar BO', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsaId,

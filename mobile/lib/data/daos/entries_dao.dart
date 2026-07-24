@@ -299,7 +299,14 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     return transaction(() async {
       final deuda =
           await accountBalanceAtomic(attachedDatabase, accountDestinationId);
-      if (amount > deuda) {
+      // Tolerancia de medio centavo — mismo patrón que `overpay_loan` en
+      // registerLoanPayment/updateLoanPayment. La deuda se deriva de sumas y
+      // restas de doubles (IEEE 754); acumular decenas de cargos puede dejar
+      // el saldo en 173.7699999... cuando el usuario espera 173.77. Sin esta
+      // tolerancia, pagar el saldo exacto fallaba con overpay_debt aunque
+      // matemáticamente el pago era válido. 0.005 = mitad del step mínimo
+      // (1 centavo) del input del form.
+      if (amount > deuda + 0.005) {
         throw const EntriesDaoError(
           'overpay_debt',
           'El pago no puede ser mayor a la deuda de la tarjeta.',
