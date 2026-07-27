@@ -5,6 +5,7 @@ import 'package:drift/drift.dart';
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
+import 'package:fincore/utils/money.dart';
 
 /// Excepción al importar un backup inválido o incompatible.
 class BackupError implements Exception {
@@ -43,10 +44,28 @@ class ImportReport {
 ///   - `journal_entries[].loan_id`, `.principal_amount`, `.interest_amount`
 ///     (opcionales, sólo poblados para income inicial y loan_payment).
 ///
-/// El export SIEMPRE emite v2. El import acepta v1 y v2 (compat total
-/// hacia atrás — v1 = sin préstamos).
-const _supportedVersion = 2;
+/// Sprint flutter-integer-cents-v1: bump a v3. Todos los montos se emiten
+/// como `int` en **centavos** en vez de `double` en unidades:
+///   - `journal_entries[].amount`, `.principal_amount`, `.interest_amount`
+///   - `accounts[].credit_limit`, `.minimum_floor`
+///   - `loans[].principal_amount`, `.monthly_payment`
+///   - `categories[].monthly_limit`
+/// Los ratios 0-1 (`interest_rate`, `minimum_payment_pct`,
+/// `minimum_capital_pct`) siguen siendo `double` — no son montos (RN-IC-02).
+///
+/// Ejemplo: `{"amount": 17377}` (v3) donde v2 emitía `{"amount": 173.77}`.
+///
+/// El export SIEMPRE emite v3. El import acepta v1, v2 y v3:
+///   - v1/v2 → los montos llegan como `double` y se convierten con
+///     `centsFromDouble` (redondeo, nunca truncado).
+///   - v3 → los montos llegan como `int` y se usan tal cual. Un `double` en
+///     un payload v3 es un error de formato (`invalid_amount_format`), no se
+///     convierte silenciosamente: rompería la invariante "v3 = enteros".
+const _supportedVersion = 3;
 const _minSupportedVersion = 1;
+
+/// Primera versión del backup que expresa los montos en centavos enteros.
+const _firstIntegerCentsVersion = 3;
 
 /// Service de backup JSON v1.
 ///
@@ -214,20 +233,20 @@ class BackupService {
     final List<LoansCompanion> loansParsed;
     try {
       accountsParsedRaw = accountsRaw
-          .map((e) => _accountFromJson(e as Map<String, dynamic>))
+          .map((e) => _accountFromJson(e as Map<String, dynamic>, version))
           .toList();
       accountsParsed = accountsParsedRaw.map((r) => r.companion).toList();
       adjustedAccountsCount =
           accountsParsedRaw.where((r) => r.adjusted).length;
       categoriesParsed = categoriesRaw
-          .map((e) => _categoryFromJson(e as Map<String, dynamic>))
+          .map((e) => _categoryFromJson(e as Map<String, dynamic>, version))
           .toList();
       entriesParsed = entriesRaw
-          .map((e) => _entryFromJson(e as Map<String, dynamic>))
+          .map((e) => _entryFromJson(e as Map<String, dynamic>, version))
           .toList();
       // Loans se parsean sólo si vienen; en v1 loansRaw==null → lista vacía.
       loansParsed = (loansRaw as List?)
-              ?.map((e) => _loanFromJson(e as Map<String, dynamic>))
+              ?.map((e) => _loanFromJson(e as Map<String, dynamic>, version))
               .toList() ??
           <LoansCompanion>[];
     } on TypeError catch (e) {
@@ -481,14 +500,53 @@ class BackupService {
         'updated_at': l.updatedAt.toUtc().toIso8601String(),
       };
 
+  /// Sprint flutter-integer-cents-v1: lee un monto del payload y lo devuelve
+  /// en centavos enteros, según la versión del backup.
+  ///
+  /// - **v3+**: el valor ya viene en centavos. Debe ser `int`; un `double`
+  ///   se rechaza con `invalid_amount_format` en vez de convertirse en
+  ///   silencio — si un consumidor externo emite `173.77` en un payload v3,
+  ///   es un bug suyo y prefiero que sea ruidoso.
+  /// - **v1/v2**: el valor viene en unidades como `double`. Se convierte con
+  ///   `centsFromDouble`, que redondea (nunca trunca) para recuperar el
+  ///   centavo correcto de valores con residuo IEEE 754 (`173.7699999` →
+  ///   `17377`).
+  ///
+  /// Devuelve `null` si el campo está ausente o es null.
+  int? _moneyFromJson(String field, Object? raw, int version) {
+    if (raw == null) return null;
+    if (version >= _firstIntegerCentsVersion) {
+      if (raw is int) return raw;
+      throw BackupError(
+        'invalid_amount_format',
+        'El campo "$field" debe ser un entero en centavos en respaldos v$version '
+            '(recibido: $raw).',
+      );
+    }
+    if (raw is! num) {
+      throw BackupError(
+        'invalid_amount_format',
+        'El campo "$field" debe ser numérico (recibido: $raw).',
+      );
+    }
+    final asDouble = raw.toDouble();
+    if (!asDouble.isFinite) {
+      throw BackupError(
+        'invalid_amount',
+        'El campo "$field" no es un número finito.',
+      );
+    }
+    return centsFromDouble(asDouble);
+  }
+
   ({AccountsCompanion companion, bool adjusted}) _accountFromJson(
-      Map<String, dynamic> json) {
+      Map<String, dynamic> json, int version) {
     final id = json['id'] as String;
     final name = json['name'] as String;
     final type = json['type'] as String;
     final description = json['description'] as String?;
     final isProtected = (json['is_protected'] as bool?) ?? false;
-    var creditLimit = (json['credit_limit'] as num?)?.toDouble();
+    var creditLimit = _moneyFromJson('accounts.credit_limit', json['credit_limit'], version);
     final closingDay = json['closing_day'] as int?;
     final paymentDay = json['payment_day'] as int?;
     final interestRate = (json['interest_rate'] as num?)?.toDouble();
@@ -560,7 +618,7 @@ class BackupService {
     return (companion: companion, adjusted: adjusted);
   }
 
-  CategoriesCompanion _categoryFromJson(Map<String, dynamic> json) {
+  CategoriesCompanion _categoryFromJson(Map<String, dynamic> json, int version) {
     final id = json['id'] as String;
     final name = json['name'] as String;
     final appliesTo = json['applies_to'] as String;
@@ -589,16 +647,17 @@ class BackupService {
       appliesTo: appliesTo,
       colorSlug: colorSlug,
       iconSlug: iconSlug,
-      monthlyLimit: Value((json['monthly_limit'] as num?)?.toDouble()),
+      monthlyLimit: Value(
+          _moneyFromJson('categories.monthly_limit', json['monthly_limit'], version)),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );
   }
 
-  JournalEntriesCompanion _entryFromJson(Map<String, dynamic> json) {
+  JournalEntriesCompanion _entryFromJson(Map<String, dynamic> json, int version) {
     final id = json['id'] as String;
     final kind = json['kind'] as String;
-    final amount = (json['amount'] as num).toDouble();
+    final amount = _moneyFromJson('journal_entries.amount', json['amount'], version)!;
     final description = json['description'] as String?;
     final originId = json['account_origin_id'] as String?;
     final destId = json['account_destination_id'] as String?;
@@ -615,7 +674,7 @@ class BackupService {
     }
     // Hotfix branch-quality-review (F-SEC-01): NaN/Infinity en JSON válido
     // (`1e400 → Infinity`) pasarían la guarda `<= 0`. Bloquear antes.
-    if (!amount.isFinite || amount <= 0) {
+    if (amount <= 0) {
       throw BackupError(
         'invalid_amount',
         'El monto del movimiento debe ser un número finito mayor a 0 (recibido: $amount).',
@@ -636,8 +695,10 @@ class BackupService {
     if (loanId != null) {
       _validateUuid('journal_entries.loan_id', loanId);
     }
-    final principalAmount = (json['principal_amount'] as num?)?.toDouble();
-    final interestAmount = (json['interest_amount'] as num?)?.toDouble();
+    final principalAmount = _moneyFromJson(
+        'journal_entries.principal_amount', json['principal_amount'], version);
+    final interestAmount = _moneyFromJson(
+        'journal_entries.interest_amount', json['interest_amount'], version);
     if (kind == 'loan_payment') {
       // Hotfix branch-quality-review (F-SEC-03): shape check equivalente
       // a `EntriesDao._validateAccountTypes case 'loan_payment'`. Un
@@ -667,20 +728,18 @@ class BackupService {
           'Un loan_payment debe tener principal_amount e interest_amount.',
         );
       }
-      // Hotfix F-SEC-01: NaN/Infinity en split.
-      if (!principalAmount.isFinite || !interestAmount.isFinite) {
-        throw const BackupError(
-          'invalid_loan_split',
-          'principal_amount e interest_amount deben ser números finitos.',
-        );
-      }
+      // El guard de NaN/Infinity del hotfix F-SEC-01 se movió a
+      // `_moneyFromJson`, que valida `isFinite` sobre el `double` crudo del
+      // payload v1/v2 ANTES de convertirlo a centavos. Post-conversión los
+      // montos son `int` y la clase de bug no existe.
       if (principalAmount < 0 || interestAmount < 0) {
         throw const BackupError(
           'invalid_loan_split',
           'principal_amount e interest_amount no pueden ser negativos.',
         );
       }
-      if ((principalAmount + interestAmount - amount).abs() >= 0.005) {
+      // Igualdad exacta en centavos (RN-IC-05).
+      if (principalAmount + interestAmount != amount) {
         throw const BackupError(
           'invalid_loan_split',
           'La suma principal + interest debe ser igual al amount total.',
@@ -711,11 +770,13 @@ class BackupService {
 
   /// Sprint flutter-loans-v1: parseo de un préstamo desde JSON v2. Valida
   /// UUID, campos obligatorios y rangos.
-  LoansCompanion _loanFromJson(Map<String, dynamic> json) {
+  LoansCompanion _loanFromJson(Map<String, dynamic> json, int version) {
     final id = json['id'] as String;
     final name = json['name'] as String;
-    final principalAmount = (json['principal_amount'] as num).toDouble();
-    final monthlyPayment = (json['monthly_payment'] as num).toDouble();
+    final principalAmount =
+        _moneyFromJson('loans.principal_amount', json['principal_amount'], version)!;
+    final monthlyPayment =
+        _moneyFromJson('loans.monthly_payment', json['monthly_payment'], version)!;
     final initialDuration = json['initial_duration_months'] as int;
     final currentDuration = json['current_duration_months'] as int;
     final paymentDay = json['payment_day'] as int;
@@ -725,11 +786,11 @@ class BackupService {
     _validateLength('loans.name', name, _kMaxNameLength);
     _validateUuid('loans.destination_account_id', destinationAccountId);
     // Hotfix branch-quality-review (F-SEC-01): NaN/Infinity via JSON.
-    if (!principalAmount.isFinite || principalAmount <= 0) {
+    if (principalAmount <= 0) {
       throw BackupError('invalid_loan_data',
           'El préstamo "$name" tiene principal_amount inválido (esperado número finito > 0, recibido: $principalAmount).');
     }
-    if (!monthlyPayment.isFinite || monthlyPayment <= 0) {
+    if (monthlyPayment <= 0) {
       throw BackupError('invalid_loan_data',
           'El préstamo "$name" tiene monthly_payment inválido (esperado número finito > 0, recibido: $monthlyPayment).');
     }
