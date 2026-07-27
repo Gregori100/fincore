@@ -1,6 +1,7 @@
 import 'package:fincore/constants/date_range_presets.dart';
 import 'package:fincore/constants/filter_tokens.dart';
 import 'package:fincore/constants/kinds.dart';
+import 'package:fincore/utils/money.dart';
 
 /// Snapshot inmutable de filtros aplicados a la lista de movimientos.
 ///
@@ -33,11 +34,11 @@ class EntriesFilters {
   /// Filtro de monto mínimo (inclusivo). Null = no filtra por mínimo.
   /// Sprint `flutter-movements-amount-filter-v1`, RN-A02. Opera sobre el
   /// `amount` crudo (siempre positivo en BD — RN-A01).
-  final double? minAmount;
+  final int? minAmount;
 
   /// Filtro de monto máximo (inclusivo). Null = no filtra por máximo.
   /// Sprint `flutter-movements-amount-filter-v1`, RN-A03.
-  final double? maxAmount;
+  final int? maxAmount;
 
   EntriesFilters({
     required this.datePreset,
@@ -169,8 +170,8 @@ class EntriesFilters {
     List<String>? kinds,
     List<String>? accountIds,
     List<String>? categoryIds,
-    double? minAmount,
-    double? maxAmount,
+    int? minAmount,
+    int? maxAmount,
     bool clearMinAmount = false,
     bool clearMaxAmount = false,
   }) {
@@ -339,8 +340,8 @@ class EntriesFilters {
     final categoryIds = _parseSavedList(json['categoryIds'])
         .toSet()
         .toList(growable: false);
-    final minAmount = _tryParseDouble(json['minAmount']);
-    final maxAmount = _tryParseDouble(json['maxAmount']);
+    final minAmount = _tryParseSavedCents(json['minAmount']);
+    final maxAmount = _tryParseSavedCents(json['maxAmount']);
 
     return EntriesFilters(
       datePreset: preset,
@@ -407,8 +408,8 @@ class EntriesFilters {
         _parseCsv(params['categoryIds']).toSet().toList(growable: false);
 
     // RN-A07: negativos y no-numéricos en minAmount/maxAmount caen a null.
-    final minAmount = _tryParseNonNegativeDouble(params['minAmount']);
-    final maxAmount = _tryParseNonNegativeDouble(params['maxAmount']);
+    final minAmount = _tryParseNonNegativeCents(params['minAmount']);
+    final maxAmount = _tryParseNonNegativeCents(params['maxAmount']);
 
     return EntriesFilters(
       datePreset: preset,
@@ -432,12 +433,16 @@ DateTime? _tryParseDate(String? raw) {
   return DateTime.tryParse(raw);
 }
 
-/// Helper para `parse`: retorna el double parseado si es >= 0; null en
-/// cualquier otro caso (string vacío, no-numérico, negativo). RN-A07 del
-/// sprint `flutter-movements-amount-filter-v1`.
-double? _tryParseNonNegativeDouble(String? raw) {
+/// Helper para `parse`: retorna los **centavos** parseados si son >= 0;
+/// null en cualquier otro caso (string vacío, no-numérico, negativo).
+/// RN-A07 del sprint `flutter-movements-amount-filter-v1`.
+///
+/// Los query params son efímeros (deep link generado y consumido por la
+/// misma versión de la app vía `toQueryParams`), así que se leen siempre
+/// como centavos enteros — no hay payload legacy que tolerar.
+int? _tryParseNonNegativeCents(String? raw) {
   if (raw == null || raw.isEmpty) return null;
-  final v = double.tryParse(raw);
+  final v = int.tryParse(raw);
   if (v == null || v < 0) return null;
   return v;
 }
@@ -462,12 +467,27 @@ List<String> _parseSavedList(dynamic raw) {
       .toList(growable: false);
 }
 
-/// Sprint `flutter-entries-saved-views-v1`: parsea un double tolerante.
-/// Acepta `double` o `int` directo; null/no-numérico → null.
-double? _tryParseDouble(dynamic raw) {
+/// Sprint `flutter-entries-saved-views-v1` + `flutter-integer-cents-v1`:
+/// parsea un monto de una vista guardada a **centavos**.
+///
+/// Las vistas viven en la tabla `saved_views` como JSON y **sobreviven a la
+/// migración v14**, así que hay payloads escritos por versiones anteriores
+/// donde el monto estaba en unidades (`100.0` = cien pesos). El tipo JSON
+/// discrimina sin ambigüedad:
+///
+/// - `double` (`100.0`) → payload legacy en unidades → `centsFromDouble`.
+/// - `int` (`10000`) → payload nuevo, ya en centavos → tal cual.
+/// - `String` → tolerancia histórica; se interpreta como legacy en unidades.
+///
+/// Sin esta distinción, una vista guardada con "monto mínimo \$100" pasaría
+/// a filtrar por \$1 tras actualizar la app.
+int? _tryParseSavedCents(dynamic raw) {
   if (raw == null) return null;
-  if (raw is double) return raw;
-  if (raw is int) return raw.toDouble();
-  if (raw is String) return double.tryParse(raw);
+  if (raw is int) return raw;
+  if (raw is double) return centsFromDouble(raw);
+  if (raw is String) {
+    final asDouble = double.tryParse(raw);
+    return asDouble == null ? null : centsFromDouble(asDouble);
+  }
   return null;
 }

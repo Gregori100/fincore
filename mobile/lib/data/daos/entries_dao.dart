@@ -3,7 +3,7 @@ import 'package:fincore/constants/filter_tokens.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/uuid.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 
 // Re-export para que callers que ya importan `entries_dao.dart` (por
 // compatibilidad con código previo) sigan teniendo acceso al token sin
@@ -84,8 +84,8 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     List<String>? categoryIds,
     DateTime? from,
     DateTime? to,
-    double? minAmount,
-    double? maxAmount,
+    int? minAmount,
+    int? maxAmount,
     int offset = 0,
     int limit = 50,
   }) {
@@ -232,7 +232,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
 
   Future<String> registerIncome({
     required String accountDestinationId,
-    required double amount,
+    required int amount,
     required DateTime occurredAt,
     String? description,
     String? categoryId,
@@ -248,7 +248,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
 
   Future<String> registerExpense({
     required String accountOriginId,
-    required double amount,
+    required int amount,
     required DateTime occurredAt,
     String? description,
     String? categoryId,
@@ -264,7 +264,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
 
   Future<String> registerCreditExpense({
     required String accountOriginId,
-    required double amount,
+    required int amount,
     required DateTime occurredAt,
     String? description,
     String? categoryId,
@@ -281,7 +281,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
   Future<String> registerDebtPayment({
     required String accountOriginId,
     required String accountDestinationId,
-    required double amount,
+    required int amount,
     required DateTime occurredAt,
     String? description,
   }) async {
@@ -299,14 +299,14 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     return transaction(() async {
       final deuda =
           await accountBalanceAtomic(attachedDatabase, accountDestinationId);
-      // Tolerancia de medio centavo — mismo patrón que `overpay_loan` en
-      // registerLoanPayment/updateLoanPayment. La deuda se deriva de sumas y
-      // restas de doubles (IEEE 754); acumular decenas de cargos puede dejar
-      // el saldo en 173.7699999... cuando el usuario espera 173.77. Sin esta
-      // tolerancia, pagar el saldo exacto fallaba con overpay_debt aunque
-      // matemáticamente el pago era válido. 0.005 = mitad del step mínimo
-      // (1 centavo) del input del form.
-      if (amount > deuda + 0.005) {
+      // Comparación estricta (RN-IC-05). El sprint
+      // flutter-integer-cents-v1 eliminó la tolerancia `+ 0.005` que este
+      // check necesitaba mientras los montos eran `double`: la deuda se
+      // derivaba de sumas/restas IEEE 754 y podía quedar en 173.7699999...
+      // cuando el usuario esperaba 173.77, haciendo fallar el pago exacto.
+      // Con centavos enteros la resta es exacta y el `>` recupera su
+      // semántica literal.
+      if (amount > deuda) {
         throw const EntriesDaoError(
           'overpay_debt',
           'El pago no puede ser mayor a la deuda de la tarjeta.',
@@ -330,9 +330,9 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
   Future<String> registerLoanPayment({
     required String loanId,
     required String accountOriginId,
-    required double amount,
-    required double principalAmount,
-    required double interestAmount,
+    required int amount,
+    required int principalAmount,
+    required int interestAmount,
     required DateTime occurredAt,
     String? description,
     // Hotfix smoke Diego: distingue "Pago del mes" (que valida unicidad
@@ -345,16 +345,10 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     bool isMonthlyPayment = false,
   }) async {
     // Validaciones del split antes de tocar BD (RN-L08).
-    // Hotfix branch-quality-review (F-SEC-01): NaN/Infinity pasarían todas
-    // las comparaciones (`NaN <= 0 == false`) y corromperían balanceOf.
-    if (!amount.isFinite ||
-        !principalAmount.isFinite ||
-        !interestAmount.isFinite) {
-      throw const EntriesDaoError(
-        'invalid_amount',
-        'Los montos deben ser números finitos válidos.',
-      );
-    }
+    //
+    // El guard `isFinite` del hotfix F-SEC-01 se retiró en el sprint
+    // flutter-integer-cents-v1: con montos `int` en centavos, NaN e Infinity
+    // son inexpresables, así que la clase de bug que cubría no existe.
     if (amount <= 0) {
       throw const EntriesDaoError(
         'invalid_amount',
@@ -367,7 +361,10 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         'Capital e intereses no pueden ser negativos.',
       );
     }
-    if ((principalAmount + interestAmount - amount).abs() >= 0.005) {
+    // Igualdad exacta (RN-IC-05): en centavos enteros la suma es exacta, así
+    // que el margen `.abs() >= 0.005` que compensaba el error IEEE 754 ya no
+    // tiene sentido.
+    if (principalAmount + interestAmount != amount) {
       throw const EntriesDaoError(
         'invalid_loan_split',
         'La suma de capital + intereses debe ser igual al monto total.',
@@ -457,10 +454,10 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       }
       final currentBalance =
           await attachedDatabase.loansDao.balanceOf(loanId);
-      if (principalAmount > currentBalance + 0.005) {
+      if (principalAmount > currentBalance) {
         throw EntriesDaoError(
           'overpay_loan',
-          'El capital del pago (${formatAmount(principalAmount)}) excede el saldo pendiente del préstamo (${formatAmount(currentBalance)}).',
+          'El capital del pago (${formatCents(principalAmount)}) excede el saldo pendiente del préstamo (${formatCents(currentBalance)}).',
         );
       }
       await into(journalEntries).insert(JournalEntriesCompanion.insert(
@@ -497,21 +494,14 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
   /// monthly del mismo mes) excluyendo el propio entry del conteo.
   Future<void> updateLoanPayment({
     required String entryId,
-    required double amount,
-    required double principalAmount,
-    required double interestAmount,
+    required int amount,
+    required int principalAmount,
+    required int interestAmount,
     required DateTime occurredAt,
     String? description,
   }) async {
-    // Validación de finitos (F-SEC-01 replicada).
-    if (!amount.isFinite ||
-        !principalAmount.isFinite ||
-        !interestAmount.isFinite) {
-      throw const EntriesDaoError(
-        'invalid_amount',
-        'Los montos deben ser números finitos válidos.',
-      );
-    }
+    // El guard de finitos (F-SEC-01 replicada) se retiró en el sprint
+    // flutter-integer-cents-v1: `int` no admite NaN ni Infinity.
     if (amount <= 0) {
       throw const EntriesDaoError(
         'invalid_amount',
@@ -524,7 +514,8 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         'Capital e intereses no pueden ser negativos.',
       );
     }
-    if ((principalAmount + interestAmount - amount).abs() >= 0.005) {
+    // Igualdad exacta (RN-IC-05) — ver nota en registerLoanPayment.
+    if (principalAmount + interestAmount != amount) {
       throw const EntriesDaoError(
         'invalid_loan_split',
         'La suma de capital + intereses debe ser igual al monto total.',
@@ -613,10 +604,10 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       final currentBalance =
           await attachedDatabase.loansDao.balanceOf(loanId);
       final availableBalance = currentBalance + oldPrincipal;
-      if (principalAmount > availableBalance + 0.005) {
+      if (principalAmount > availableBalance) {
         throw EntriesDaoError(
           'overpay_loan',
-          'El capital del pago (${formatAmount(principalAmount)}) excede el saldo pendiente disponible (${formatAmount(availableBalance)}).',
+          'El capital del pago (${formatCents(principalAmount)}) excede el saldo pendiente disponible (${formatCents(availableBalance)}).',
         );
       }
       await (update(journalEntries)..where((e) => e.id.equals(entryId))).write(
@@ -729,7 +720,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
   Future<String> registerTransfer({
     required String accountOriginId,
     required String accountDestinationId,
-    required double amount,
+    required int amount,
     required DateTime occurredAt,
     String? description,
   }) {
@@ -751,7 +742,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
 
   Future<String> _register({
     required String kind,
-    required double amount,
+    required int amount,
     required DateTime occurredAt,
     String? accountOriginId,
     String? accountDestinationId,
@@ -796,7 +787,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
   /// Editar entry. kind inmutable.
   Future<void> updateEntry({
     required String id,
-    double? amount,
+    int? amount,
     String? description,
     DateTime? occurredAt,
     String? accountOriginId,

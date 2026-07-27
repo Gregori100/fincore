@@ -56,7 +56,7 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     required String appliesTo,
     required String colorSlug,
     required String iconSlug,
-    double? monthlyLimit,
+    int? monthlyLimit,
   }) async {
     _validateAppliesTo(appliesTo);
     _validateColorSlug(colorSlug);
@@ -81,7 +81,7 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
 
   /// Actualiza una categoría existente. Todos los parámetros son opcionales.
   ///
-  /// Sprint flutter-budgets-v1: `monthlyLimit` acepta `Value<double?>` para
+  /// Sprint flutter-budgets-v1: `monthlyLimit` acepta `Value<int?>` para
   /// distinguir 3 casos:
   ///   - `Value.absent()` (default): no modificar el campo.
   ///   - `Value(5000)`: setear a 5000.
@@ -92,7 +92,7 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
     String? appliesTo,
     String? colorSlug,
     String? iconSlug,
-    Value<double?> monthlyLimit = const Value.absent(),
+    Value<int?> monthlyLimit = const Value.absent(),
   }) async {
     final existing = await findById(id);
     if (existing == null) {
@@ -205,7 +205,7 @@ class CategoriesDao extends DatabaseAccessor<FincoreDatabase>
   /// que pueden recibir gastos.
   void _validateMonthlyLimit({
     required String appliesTo,
-    required double? monthlyLimit,
+    required int? monthlyLimit,
   }) {
     if (monthlyLimit == null) return;
     if (monthlyLimit < 0) {

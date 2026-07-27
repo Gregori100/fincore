@@ -12,7 +12,7 @@ import 'package:fincore/data/date_helpers.dart';
 /// - `buckets`: agrupación por categoría con orden RF-005 (monto desc,
 ///   tiebreak alfabético asc).
 class SpendingReport {
-  final double total;
+  final int total;
   final int count;
   final DateTime from;
   final DateTime to;
@@ -35,7 +35,7 @@ class SpendingReport {
 /// Simétrico a [SpendingReport] pero para `kind='income'`. Cubre RF-001 del
 /// sprint: `total`, `count`, `from`, `to`, `buckets`.
 class IncomeReport {
-  final double total;
+  final int total;
   final int count;
   final DateTime from;
   final DateTime to;
@@ -67,7 +67,7 @@ class IncomeBucket {
   final String name;
   final String? colorSlug;
   final String? iconSlug;
-  final double total;
+  final int total;
   final double percent;
   final int count;
 
@@ -96,7 +96,7 @@ class SpendingBucket {
   final String name;
   final String? colorSlug;
   final String? iconSlug;
-  final double total;
+  final int total;
   final double percent;
   final int count;
 
@@ -175,8 +175,8 @@ enum IntensityLevel { none, low, medium, high, veryHigh }
 /// - `p50 < total ≤ p75` → [IntensityLevel.high].
 /// - `total > p75` → [IntensityLevel.veryHigh].
 class SpendingHeatmap {
-  final Map<DateTime, double> daySpending;
-  final double total;
+  final Map<DateTime, int> daySpending;
+  final int total;
   final int daysWithSpending;
   final double p25;
   final double p50;
@@ -218,8 +218,8 @@ class SpendingHeatmap {
 ///
 /// Reusa el enum [IntensityLevel] (5 niveles) del heatmap gastos.
 class IncomeHeatmap {
-  final Map<DateTime, double> dayIncome;
-  final double total;
+  final Map<DateTime, int> dayIncome;
+  final int total;
   final int daysWithIncome;
   final double p25;
   final double p50;
@@ -250,7 +250,11 @@ class IncomeHeatmap {
 /// (RN-HM05): con tan pocos datos los cuartiles no son estadísticamente
 /// significativos, así que todos los días con gasto se pintan como
 /// `veryHigh` (visualmente uniforme).
-(double, double, double) _computeQuartiles(List<double> sortedValues) {
+/// Sprint flutter-integer-cents-v1: la entrada son montos en centavos
+/// (`int`), pero la salida sigue siendo `double` porque los percentiles se
+/// **interpolan** entre dos valores adyacentes — el resultado es un umbral
+/// estadístico, no un monto real que el usuario vea o que se persista.
+(double, double, double) _computeQuartiles(List<int> sortedValues) {
   if (sortedValues.isEmpty) return (0, 0, 0);
   if (sortedValues.length < 4) {
     // RN-HM05: con < 4 datos los cuartiles no son significativos.
@@ -262,7 +266,7 @@ class IncomeHeatmap {
     final rank = (sortedValues.length - 1) * p;
     final lower = rank.floor();
     final upper = rank.ceil();
-    if (lower == upper) return sortedValues[lower];
+    if (lower == upper) return sortedValues[lower].toDouble();
     final weight = rank - lower;
     return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
   }
@@ -358,7 +362,7 @@ class ReportsService {
         AND occurred_at <= ?
       -- HAVING crítico: sin él, este SELECT emite 1 fila con total=NULL
       -- cuando no hay loan_payments en el periodo, y `_buildReport` haría
-      -- `row.read<double>('total')` sobre null → crash.
+      -- `row.read<int>('total')` sobre null → crash.
       HAVING SUM(interest_amount) > 0
 
       UNION ALL
@@ -471,20 +475,20 @@ class ReportsService {
     required DateTime from,
     required DateTime to,
   }) {
-    final byKey = <String, ({double income, double expense})>{};
+    final byKey = <String, ({int income, int expense})>{};
     for (final row in rows) {
       final key = row.read<String>('month_key');
-      final income = row.read<double>('income');
-      final expense = row.read<double>('expense');
+      final income = row.read<int>('income');
+      final expense = row.read<int>('expense');
       byKey[key] = (income: income, expense: expense);
     }
     final months = <MonthCashflow>[];
-    var totalIncome = 0.0;
-    var totalExpense = 0.0;
+    var totalIncome = 0;
+    var totalExpense = 0;
     for (final first in _iterateMonthsBetween(from, to)) {
       final key =
           '${first.year.toString().padLeft(4, '0')}-${first.month.toString().padLeft(2, '0')}';
-      final data = byKey[key] ?? (income: 0.0, expense: 0.0);
+      final data = byKey[key] ?? (income: 0, expense: 0);
       final income = data.income;
       final expense = data.expense;
       totalIncome += income;
@@ -587,7 +591,7 @@ class ReportsService {
     final previousExpense = <String?, _BreakdownAccumulator>{};
 
     for (final row in rows) {
-      final total = row.read<double>('total');
+      final total = row.read<int>('total');
       // CB-P03/CB-P04: filtrar buckets con amount <= 0 (edge legacy).
       if (total <= 0) continue;
 
@@ -652,18 +656,18 @@ class ReportsService {
     }
 
     final totalIncome =
-        currentIncome.values.fold<double>(0, (a, b) => a + b.amount);
+        currentIncome.values.fold<int>(0, (a, b) => a + b.amount);
     final totalExpense =
-        currentExpense.values.fold<double>(0, (a, b) => a + b.amount);
+        currentExpense.values.fold<int>(0, (a, b) => a + b.amount);
     final previousTotalIncome =
-        previousIncome.values.fold<double>(0, (a, b) => a + b.amount);
+        previousIncome.values.fold<int>(0, (a, b) => a + b.amount);
     final previousTotalExpense =
-        previousExpense.values.fold<double>(0, (a, b) => a + b.amount);
+        previousExpense.values.fold<int>(0, (a, b) => a + b.amount);
 
     List<CategoryFlow> flowsFrom(
       Map<String?, _BreakdownAccumulator> current,
       Map<String?, _BreakdownAccumulator> previous,
-      double total,
+      int total,
     ) {
       final list = current.values.map((a) {
         final prev = previous[a.categoryId];
@@ -705,8 +709,9 @@ class ReportsService {
   /// Comparación % entre `current` y `previous` (RN-CP03..CP04, CP09).
   ///
   /// - `previous <= 0` → `null` (RN-CP09 evita `+∞%`/`+100%` engañoso).
-  /// - `abs(diff) < 0.01` → `flat` con `percent = 0` (RN-CP04, blindaje
-  ///   contra floating-point drift).
+  /// - `diff == 0` → `flat` con `percent = 0` (RN-CP04). Antes era
+  ///   `abs(diff) < 0.01` como blindaje contra floating-point drift; con
+  ///   montos `int` en centavos la igualdad exacta es suficiente.
   /// - `current > previous` → `up`, `percent = |(c-p)/|p|| × 100`.
   /// - `current < previous` → `down`, percent con misma fórmula.
   ///
@@ -714,10 +719,10 @@ class ReportsService {
   /// negativo también dispara la guard `previous <= 0` → `null`. Esa es
   /// la decisión conservadora — no interpretar "empeoré de +100 a -50"
   /// como "-150% del previo" porque el usuario podría confundirse.
-  DeltaPercent? _computeDelta(double current, double previous) {
+  DeltaPercent? _computeDelta(int current, int previous) {
     if (previous <= 0) return null;
     final diff = current - previous;
-    if (diff.abs() < 0.01) {
+    if (diff == 0) {
       return const DeltaPercent(percent: 0, direction: DeltaDirection.flat);
     }
     final magnitude = diff.abs() / previous.abs() * 100;
@@ -776,8 +781,8 @@ class ReportsService {
         .watch()
         .map((rows) {
       final row = rows.isEmpty ? null : rows.first;
-      final income = row?.read<double>('income') ?? 0.0;
-      final expense = row?.read<double>('expense') ?? 0.0;
+      final income = row?.read<int>('income') ?? 0;
+      final expense = row?.read<int>('expense') ?? 0;
       return TodaySummary(
         day: day,
         totalIncome: income,
@@ -918,20 +923,20 @@ class ReportsService {
       final id = row.read<String>('account_id');
       initialByAccount[id] = _AccountBalanceMeta(
         type: row.read<String>('account_type'),
-        creditLimit: row.read<double>('credit_limit'),
-        balance: row.read<double>('initial_balance'),
+        creditLimit: row.read<int>('credit_limit'),
+        balance: row.read<int>('initial_balance'),
       );
     }
 
     // Deltas por (accountId, day_key). day_key puede ser null si la
     // cuenta no tiene movimientos en el rango (LEFT JOIN).
-    final deltasByAccount = <String, Map<String, double>>{};
+    final deltasByAccount = <String, Map<String, int>>{};
     for (final row in changeRows) {
       final id = row.read<String>('account_id');
       final dayKey = row.readNullable<String>('day_key');
       if (dayKey == null) continue; // fila vacía del LEFT JOIN.
-      final delta = row.read<double>('delta');
-      deltasByAccount.putIfAbsent(id, () => <String, double>{})[dayKey] = delta;
+      final delta = row.read<int>('delta');
+      deltasByAccount.putIfAbsent(id, () => <String, int>{})[dayKey] = delta;
 
       // Asegurar que la cuenta esté en initial (por si no tuvo mov
       // pre-rango; el sqlInitial la trajo con balance 0).
@@ -939,7 +944,7 @@ class ReportsService {
         id,
         () => _AccountBalanceMeta(
           type: row.read<String>('account_type'),
-          creditLimit: row.read<double>('credit_limit'),
+          creditLimit: row.read<int>('credit_limit'),
           balance: 0,
         ),
       );
@@ -948,7 +953,7 @@ class ReportsService {
     // Backfill día a día por cuenta y agregar al total según kind.
     final result = <DailyBalance>[];
     // Balance actual por cuenta (arranca en initial).
-    final runningBalance = <String, double>{};
+    final runningBalance = <String, int>{};
     for (final entry in initialByAccount.entries) {
       runningBalance[entry.key] = entry.value.balance;
     }
@@ -960,12 +965,12 @@ class ReportsService {
 
       // Aplicar deltas del día a cada cuenta.
       for (final acctId in runningBalance.keys) {
-        final delta = deltasByAccount[acctId]?[dayKey] ?? 0.0;
+        final delta = deltasByAccount[acctId]?[dayKey] ?? 0;
         runningBalance[acctId] = runningBalance[acctId]! + delta;
       }
 
       // Colapsar al agregado según kind.
-      double aggregated = 0.0;
+      int aggregated = 0;
       for (final entry in runningBalance.entries) {
         final meta = initialByAccount[entry.key]!;
         final rawBalance = entry.value;
@@ -1014,7 +1019,7 @@ class ReportsService {
         buckets: const [],
       );
     }
-    double total = 0;
+    int total = 0;
     int count = 0;
     final raws = <_RawBucket>[];
     for (final row in rows) {
@@ -1022,7 +1027,7 @@ class ReportsService {
       final categoryName = row.read<String?>('category_name');
       final colorSlug = row.read<String?>('color_slug');
       final iconSlug = row.read<String?>('icon_slug');
-      final bucketTotal = row.read<double>('total');
+      final bucketTotal = row.read<int>('total');
       final bucketCount = row.read<int>('count');
       total += bucketTotal;
       count += bucketCount;
@@ -1135,7 +1140,7 @@ class ReportsService {
         buckets: const [],
       );
     }
-    double total = 0;
+    int total = 0;
     int count = 0;
     final raws = <_RawBucket>[];
     for (final row in rows) {
@@ -1143,7 +1148,7 @@ class ReportsService {
       final categoryName = row.read<String?>('category_name');
       final colorSlug = row.read<String?>('color_slug');
       final iconSlug = row.read<String?>('icon_slug');
-      final bucketTotal = row.read<double>('total');
+      final bucketTotal = row.read<int>('total');
       final bucketCount = row.read<int>('count');
       total += bucketTotal;
       count += bucketCount;
@@ -1279,7 +1284,7 @@ class ReportsService {
       entries.add(TopMovementEntry(
         id: row.read<String>('j_id'),
         kind: row.read<String>('j_kind'),
-        amount: row.read<double>('j_amount'),
+        amount: row.read<int>('j_amount'),
         occurredAt: row.read<DateTime>('j_occurred_at'),
         description: row.read<String?>('j_description'),
         category: category,
@@ -1398,21 +1403,21 @@ class ReportsService {
     List<QueryRow> rows, {
     required DateTime asOf,
   }) {
-    var bo = 0.0;
-    var de = 0.0;
-    var cr = 0.0;
-    var boNow = 0.0;
-    var deNow = 0.0;
-    var crNow = 0.0;
+    var bo = 0;
+    var de = 0;
+    var cr = 0;
+    var boNow = 0;
+    var deNow = 0;
+    var crNow = 0;
     final accounts = <AccountBalanceAtDate>[];
     for (final row in rows) {
       final type = row.read<String>('a_type');
-      final balance = row.read<double>('balance');
-      final balanceNow = row.read<double>('balance_now');
+      final balance = row.read<int>('balance');
+      final balanceNow = row.read<int>('balance_now');
       // Post-schema v5 (sprint flutter-reports-credit-cards-v1), `credit_limit`
       // es NOT NULL DEFAULT 0. Toda tarjeta contribuye a CR con
       // `creditLimit - balance` (puede ser negativo si `debt > limit`).
-      final creditLimit = row.read<double>('a_credit_limit');
+      final creditLimit = row.read<int>('a_credit_limit');
       if (type == 'cash' || type == 'debit') {
         bo += balance;
         boNow += balanceNow;
@@ -1581,8 +1586,8 @@ class ReportsService {
     // Por categoría: (monthKey → total) de filas históricas + total del mes
     // actual.
     final historicalByCategory =
-        <String, Map<String, double>>{}; // catKey → (monthKey → total)
-    final currentByCategory = <String, double>{}; // catKey → total
+        <String, Map<String, int>>{}; // catKey → (monthKey → total)
+    final currentByCategory = <String, int>{}; // catKey → total
     // Metadata por categoría (solo se setea la primera vez que aparece).
     final categoryMeta = <String, _MonthlyAverageCategoryMeta>{};
     final currentMonthKey = _monthKey(firstDayOfCurrentMonth);
@@ -1594,7 +1599,7 @@ class ReportsService {
       final categoryName = row.read<String?>('category_name');
       final colorSlug = row.read<String?>('color_slug');
       final iconSlug = row.read<String?>('icon_slug');
-      final total = row.read<double>('total');
+      final total = row.read<int>('total');
       final isUncategorized = categoryId == null || categoryName == null;
       final catKey = isUncategorized ? uncategorizedKey : categoryId;
       categoryMeta.putIfAbsent(
@@ -1646,8 +1651,8 @@ class ReportsService {
       ...currentByCategory.keys,
     };
     final breakdown = <CategoryAverageDelta>[];
-    var globalHistoricalSum = 0.0;
-    var globalCurrent = 0.0;
+    var globalHistoricalSum = 0;
+    var globalCurrent = 0;
     for (final catKey in allCategoryKeys) {
       final perMonth = historicalByCategory[catKey] ?? const {};
       // Suma del histórico de esta categoría dividida por el N **global**
@@ -1656,9 +1661,13 @@ class ReportsService {
       // tratando los meses sin gasto como 0 (consistencia con global).
       // Si monthsAvailable == 0, la división se omite (historicalAverage=0).
       final categoryHistoricalSum =
-          perMonth.values.fold<double>(0, (a, b) => a + b);
-      final categoryHistoricalAverage =
-          monthsAvailable == 0 ? 0.0 : categoryHistoricalSum / monthsAvailable;
+          perMonth.values.fold<int>(0, (a, b) => a + b);
+      // Sprint flutter-integer-cents-v1: el promedio es un monto que la
+      // UI muestra, así que se redondea al centavo entero más cercano para
+      // no reintroducir fracciones en el dominio (RN-IC-01).
+      final categoryHistoricalAverage = monthsAvailable == 0
+          ? 0
+          : (categoryHistoricalSum / monthsAvailable).round();
       final categoryCurrent = currentByCategory[catKey] ?? 0;
       final categoryDelta = categoryCurrent - categoryHistoricalAverage;
       final double? categoryPercent;
@@ -1691,8 +1700,9 @@ class ReportsService {
       return a.name.compareTo(b.name);
     });
 
-    final globalHistoricalAverage =
-        monthsAvailable == 0 ? 0.0 : globalHistoricalSum / monthsAvailable;
+    final globalHistoricalAverage = monthsAvailable == 0
+        ? 0
+        : (globalHistoricalSum / monthsAvailable).round();
     final globalDelta = globalCurrent - globalHistoricalAverage;
     final double? globalPercent;
     if (globalHistoricalAverage == 0) {
@@ -1772,8 +1782,8 @@ class ReportsService {
           accountId: row.read<String>('account_id'),
           name: row.read<String>('name'),
           description: row.readNullable<String>('description'),
-          creditLimit: row.read<double>('credit_limit'),
-          debt: row.read<double>('debt'),
+          creditLimit: row.read<int>('credit_limit'),
+          debt: row.read<int>('debt'),
           closingDay: row.readNullable<int>('closing_day'),
           paymentDay: row.readNullable<int>('payment_day'),
           today: referenceDate,
@@ -1848,8 +1858,8 @@ class ReportsService {
           categoryName: row.read<String>('category_name'),
           colorSlug: row.read<String>('color_slug'),
           iconSlug: row.read<String>('icon_slug'),
-          monthlyLimit: row.read<double>('monthly_limit'),
-          spent: row.read<double>('spent'),
+          monthlyLimit: row.read<int>('monthly_limit'),
+          spent: row.read<int>('spent'),
         );
       }).toList();
       progresses.sort(BudgetProgress.compareForReport);
@@ -1998,11 +2008,11 @@ class ReportsService {
   }
 
   SpendingHeatmap _buildSpendingHeatmap(List<QueryRow> rows) {
-    final daySpending = <DateTime, double>{};
-    var total = 0.0;
+    final daySpending = <DateTime, int>{};
+    var total = 0;
     for (final row in rows) {
       final dayStr = row.read<String>('day');
-      final dayTotal = row.read<double>('total');
+      final dayTotal = row.read<int>('total');
       // Un día con SUM=0 (edge legacy con amount=0) NO entra al Map — el
       // heatmap solo cuenta días con gasto real.
       if (dayTotal <= 0) continue;
@@ -2072,11 +2082,11 @@ class ReportsService {
   }
 
   IncomeHeatmap _buildIncomeHeatmap(List<QueryRow> rows) {
-    final dayIncome = <DateTime, double>{};
-    var total = 0.0;
+    final dayIncome = <DateTime, int>{};
+    var total = 0;
     for (final row in rows) {
       final dayStr = row.read<String>('day');
-      final dayTotal = row.read<double>('total');
+      final dayTotal = row.read<int>('total');
       // Un día con SUM=0 (edge legacy con amount=0) NO entra al Map.
       if (dayTotal <= 0) continue;
       final parts = dayStr.split('-');
@@ -2113,8 +2123,8 @@ class ReportsService {
 /// Sprint `flutter-dashboard-bundle-v1`.
 class _AccountBalanceMeta {
   final String type;
-  final double creditLimit;
-  final double balance;
+  final int creditLimit;
+  final int balance;
   const _AccountBalanceMeta({
     required this.type,
     required this.creditLimit,
@@ -2127,7 +2137,7 @@ class _BreakdownAccumulator {
   final String label;
   final String? colorSlug;
   final String? iconSlug;
-  final double amount;
+  final int amount;
 
   const _BreakdownAccumulator({
     required this.categoryId,
@@ -2137,7 +2147,7 @@ class _BreakdownAccumulator {
     required this.amount,
   });
 
-  _BreakdownAccumulator plus(double delta) => _BreakdownAccumulator(
+  _BreakdownAccumulator plus(int delta) => _BreakdownAccumulator(
         categoryId: categoryId,
         label: label,
         colorSlug: colorSlug,
@@ -2161,9 +2171,9 @@ class _DayBucket {
 class CashflowReport {
   final DateTime from;
   final DateTime to;
-  final double totalIncome;
-  final double totalExpense;
-  final double net;
+  final int totalIncome;
+  final int totalExpense;
+  final int net;
   final List<MonthCashflow> months;
 
   const CashflowReport({
@@ -2191,9 +2201,9 @@ class CashflowReport {
 class MonthCashflow {
   final String monthKey;
   final DateTime firstDay;
-  final double income;
-  final double expense;
-  final double net;
+  final int income;
+  final int expense;
+  final int net;
 
   const MonthCashflow({
     required this.monthKey,
@@ -2212,9 +2222,9 @@ class MonthCashflow {
 /// (RN-CB07). Los totales se calculan sobre los buckets efectivos.
 class MonthBreakdown {
   final DateTime firstDay;
-  final double totalIncome;
-  final double totalExpense;
-  final double net;
+  final int totalIncome;
+  final int totalExpense;
+  final int net;
   final List<CategoryFlow> incomeBuckets;
   final List<CategoryFlow> expenseBuckets;
   /// Sprint flutter-cashflow-breakdown-prev-comparison-v1: delta % del
@@ -2247,7 +2257,7 @@ class CategoryFlow {
   final String label;
   final String? colorSlug;
   final String? iconSlug;
-  final double amount;
+  final int amount;
   final double percent;
   /// Sprint flutter-cashflow-breakdown-prev-comparison-v1: comparación vs
   /// el mismo bucket (mismo `categoryId`, incluso null para "Sin
@@ -2292,9 +2302,9 @@ class DeltaPercent {
 /// y `debt_payment` (movimientos internos).
 class TodaySummary {
   final DateTime day;
-  final double totalIncome;
-  final double totalExpense;
-  final double net;
+  final int totalIncome;
+  final int totalExpense;
+  final int net;
 
   const TodaySummary({
     required this.day,
@@ -2309,7 +2319,7 @@ class TodaySummary {
 /// (fecha calendario); `balance` es el saldo agregado al fin de ese día.
 class DailyBalance {
   final DateTime day;
-  final double balance;
+  final int balance;
 
   const DailyBalance({required this.day, required this.balance});
 }
@@ -2338,7 +2348,7 @@ class TopMovementsReport {
 class TopMovementEntry {
   final String id;
   final String kind;
-  final double amount;
+  final int amount;
   final DateTime occurredAt;
   final String? description;
   final TopMovementCategory? category;
@@ -2377,16 +2387,16 @@ class TopMovementCategory {
 /// contra estados de cuenta del banco a fecha de corte.
 class BalanceAtDateReport {
   final DateTime asOf;
-  final double bo;
-  final double de;
-  final double cr;
+  final int bo;
+  final int de;
+  final int cr;
   /// Saldos a hoy (`DateTime.now()` al construir el reporte). Permiten
   /// calcular el delta sin que el usuario tenga que ir al dashboard.
   /// Patch v1 (decisión post-smoke con Diego — eliminar comparación
   /// mental).
-  final double boNow;
-  final double deNow;
-  final double crNow;
+  final int boNow;
+  final int deNow;
+  final int crNow;
   final List<AccountBalanceAtDate> accounts;
 
   const BalanceAtDateReport({
@@ -2406,9 +2416,9 @@ class BalanceAtDateReport {
 
   /// Delta hoy menos fecha. Positivo = el indicador subió. La
   /// interpretación buena/mala depende del indicador (RN-B09).
-  double get boDelta => boNow - bo;
-  double get deDelta => deNow - de;
-  double get crDelta => crNow - cr;
+  int get boDelta => boNow - bo;
+  int get deDelta => deNow - de;
+  int get crDelta => crNow - cr;
 }
 
 /// Saldo individual de una cuenta a la fecha del reporte.
@@ -2422,11 +2432,11 @@ class AccountBalanceAtDate {
   final String id;
   final String name;
   final String type;
-  final double? creditLimit;
-  final double balance;
+  final int? creditLimit;
+  final int balance;
   /// Saldo a hoy de la cuenta (patch v1). Permite delta automático en
   /// la lista de cuentas.
-  final double balanceNow;
+  final int balanceNow;
 
   const AccountBalanceAtDate({
     required this.id,
@@ -2440,7 +2450,7 @@ class AccountBalanceAtDate {
   /// Delta hoy menos fecha. Para cash/debit: positivo = ganó plata,
   /// negativo = gastó. Para credit: positivo = más deuda, negativo =
   /// pagó deuda.
-  double get balanceDelta => balanceNow - balance;
+  int get balanceDelta => balanceNow - balance;
 }
 
 /// Reporte de promedio mensual prorrateado al día actual.
@@ -2463,9 +2473,9 @@ class MonthlyAverageReport {
   final DateTime windowFrom;
   final DateTime windowTo;
   final int currentDayOfMonth;
-  final double historicalAverage;
-  final double currentMonthSpent;
-  final double deltaAbsolute;
+  final int historicalAverage;
+  final int currentMonthSpent;
+  final int deltaAbsolute;
   final double? deltaPercent;
   final List<CategoryAverageDelta> categoryBreakdown;
 
@@ -2506,9 +2516,9 @@ class CategoryAverageDelta {
   final String name;
   final String? colorSlug;
   final String? iconSlug;
-  final double historicalAverage;
-  final double currentMonthSpent;
-  final double deltaAbsolute;
+  final int historicalAverage;
+  final int currentMonthSpent;
+  final int deltaAbsolute;
   final double? deltaPercent;
 
   const CategoryAverageDelta({
@@ -2544,7 +2554,7 @@ class _RawBucket {
   final String name;
   final String? colorSlug;
   final String? iconSlug;
-  final double total;
+  final int total;
   final int count;
 
   const _RawBucket({
@@ -2576,9 +2586,9 @@ class CreditCardStatus {
   final String accountId;
   final String name;
   final String? description;
-  final double creditLimit;
-  final double debt;
-  final double availableCredit;
+  final int creditLimit;
+  final int debt;
+  final int availableCredit;
   final double? usedPct;
   final int? closingDay;
   final int? paymentDay;
@@ -2611,15 +2621,15 @@ class CreditCardStatus {
     required String accountId,
     required String name,
     required String? description,
-    required double creditLimit,
-    required double debt,
+    required int creditLimit,
+    required int debt,
     required int? closingDay,
     required int? paymentDay,
     required DateTime today,
   }) {
-    final normalizedDebt = debt < 0 ? 0.0 : debt;
+    final normalizedDebt = debt < 0 ? 0 : debt;
     final available = creditLimit - normalizedDebt;
-    final availableCredit = available < 0 ? 0.0 : available;
+    final availableCredit = available < 0 ? 0 : available;
 
     double? usedPct;
     if (creditLimit > 0) {
@@ -2717,11 +2727,11 @@ class BudgetProgress {
   final String categoryName;
   final String colorSlug;
   final String iconSlug;
-  final double monthlyLimit;
-  final double spent;
-  final double available;
+  final int monthlyLimit;
+  final int spent;
+  final int available;
   final double? usedPct;
-  final double? overBy;
+  final int? overBy;
   final bool isOverBudget;
   final bool isWarning;
   final bool isNoSpend;
@@ -2746,12 +2756,12 @@ class BudgetProgress {
     required String categoryName,
     required String colorSlug,
     required String iconSlug,
-    required double monthlyLimit,
-    required double spent,
+    required int monthlyLimit,
+    required int spent,
   }) {
-    final normalizedSpent = spent < 0 ? 0.0 : spent;
+    final normalizedSpent = spent < 0 ? 0 : spent;
     final available = monthlyLimit - normalizedSpent;
-    final availableClamped = available < 0 ? 0.0 : available;
+    final availableClamped = available < 0 ? 0 : available;
 
     double? usedPct;
     if (monthlyLimit > 0) {
@@ -2769,7 +2779,7 @@ class BudgetProgress {
         usedPct != null &&
         usedPct >= 80;
 
-    double? overBy;
+    int? overBy;
     if (isOverBudget) {
       overBy = normalizedSpent - monthlyLimit;
     }

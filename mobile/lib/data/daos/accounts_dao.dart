@@ -84,7 +84,7 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
     required String name,
     required String type, // 'debit' | 'credit'
     String? description,
-    double? creditLimit,
+    int? creditLimit,
     int? closingDay,
     int? paymentDay,
     double? interestRate,
@@ -176,7 +176,7 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
     required String id,
     String? name,
     String? description,
-    double? creditLimit,
+    int? creditLimit,
     int? closingDay,
     int? paymentDay,
     double? interestRate,
@@ -374,7 +374,7 @@ class AccountsDao extends DatabaseAccessor<FincoreDatabase>
   void _validateCreditMetadata({
     int? closingDay,
     int? paymentDay,
-    double? creditLimit,
+    int? creditLimit,
   }) {
     if (closingDay != null && (closingDay < 1 || closingDay > 31)) {
       throw const AccountsDaoError(

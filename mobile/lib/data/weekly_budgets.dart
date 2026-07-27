@@ -122,8 +122,8 @@ Map<BudgetSection, List<WeeklyBudgetRow>> groupBudgetsByRange({
 /// Ignora defensivamente cualquier item con `kind` distinto de
 /// `'income'`/`'expense'` (no debería ocurrir dado que el DAO valida el
 /// kind al crear/editar, pero este helper no depende de esa garantía).
-double calculateBalance(List<WeeklyBudgetItemRow> items) {
-  var balance = 0.0;
+int calculateBalance(List<WeeklyBudgetItemRow> items) {
+  var balance = 0;
   for (final item in items) {
     if (item.kind == 'income') {
       balance += item.amount;

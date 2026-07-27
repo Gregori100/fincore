@@ -128,7 +128,7 @@ class WeeklyBudgetsDao extends DatabaseAccessor<FincoreDatabase>
     required String budgetId,
     required String name,
     String? categoryId,
-    required double amount,
+    required int amount,
     required String kind,
   }) async {
     final budget = await findById(budgetId);
@@ -179,7 +179,7 @@ class WeeklyBudgetsDao extends DatabaseAccessor<FincoreDatabase>
     String itemId, {
     String? name,
     String? categoryId,
-    double? amount,
+    int? amount,
     String? kind,
     int? sortOrder,
     bool clearCategory = false,
@@ -296,7 +296,7 @@ class WeeklyBudgetsDao extends DatabaseAccessor<FincoreDatabase>
   /// Balance del presupuesto: Σ ingresos − Σ gastos de sus renglones. Stream
   /// reactivo cacheado por drift (se invalida solo cuando cambia
   /// `weekly_budget_items`).
-  Stream<double> watchBudgetBalance(String budgetId) {
+  Stream<int> watchBudgetBalance(String budgetId) {
     const sql = '''
 SELECT COALESCE(SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END), 0)
      - COALESCE(SUM(CASE WHEN kind = 'expense' THEN amount ELSE 0 END), 0)
@@ -308,7 +308,7 @@ WHERE budget_id = ?
       sql,
       variables: [Variable.withString(budgetId)],
       readsFrom: {weeklyBudgetItems},
-    ).watchSingle().map((row) => row.read<double>('balance'));
+    ).watchSingle().map((row) => row.read<int>('balance'));
   }
 
   // ===========================================================================
@@ -481,7 +481,7 @@ WHERE budget_id = ?
     }
   }
 
-  void _validateItemAmount(double amount) {
+  void _validateItemAmount(int amount) {
     // Fix A3 (branch-quality-review flutter-weekly-budgets-v1): `amount <= 0`
     // por sí solo evalúa a `false` para NaN e Infinity, dejándolos pasar.
     // `isFinite` cubre NaN, +Infinity y -Infinity en un solo check.

@@ -71,7 +71,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
   /// el `.getSingle()` — es metadata que sólo aplica a `.watch()`. En un
   /// one-shot es ruido y confunde a lectores futuros. La reactividad vive
   /// en `watchBalance`.
-  Future<double> balanceOf(String id) async {
+  Future<int> balanceOf(String id) async {
     final row = await customSelect(
       'SELECT (SELECT principal_amount FROM loans WHERE id = ?1 AND deleted_at IS NULL) '
       '- COALESCE((SELECT SUM(principal_amount) FROM journal_entries '
@@ -79,12 +79,12 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
       'AS balance',
       variables: [Variable.withString(id)],
     ).getSingle();
-    return row.read<double?>('balance') ?? 0;
+    return row.read<int?>('balance') ?? 0;
   }
 
   /// Stream reactivo del saldo. Reemite cuando cambian `loans` o
   /// `journal_entries`.
-  Stream<double> watchBalance(String id) {
+  Stream<int> watchBalance(String id) {
     return customSelect(
       'SELECT (SELECT principal_amount FROM loans WHERE id = ?1 AND deleted_at IS NULL) '
       '- COALESCE((SELECT SUM(principal_amount) FROM journal_entries '
@@ -92,7 +92,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
       'AS balance',
       variables: [Variable.withString(id)],
       readsFrom: {loans, attachedDatabase.journalEntries},
-    ).watchSingle().map((row) => row.read<double?>('balance') ?? 0);
+    ).watchSingle().map((row) => row.read<int?>('balance') ?? 0);
   }
 
   /// Cuenta los pagos activos de un préstamo. Usado por el DestructiveDialog
@@ -121,8 +121,8 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
   ///   - `destinationAccountId` existe, tipo cash|debit, no archivada, no eliminada.
   Future<String> create({
     required String name,
-    required double principalAmount,
-    required double monthlyPayment,
+    required int principalAmount,
+    required int monthlyPayment,
     required int initialDurationMonths,
     required int paymentDay,
     required DateTime contractDate,
@@ -135,17 +135,18 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         'El nombre del préstamo es requerido (máx. 100 caracteres).',
       );
     }
-    // Hotfix branch-quality-review (F-SEC-01): NaN e Infinity no fallan
-    // ninguna guarda `<= 0` (NaN vs 0 siempre es false). Chequear `isFinite`
-    // ANTES de cualquier comparación numérica corrompería `balanceOf` con
-    // valores NaN persistidos en BD.
-    if (!principalAmount.isFinite || principalAmount <= 0) {
+    // El guard `isFinite` del hotfix F-SEC-01 (branch-quality-review) ya no
+    // hace falta: desde el sprint flutter-integer-cents-v1 los montos son
+    // `int` en centavos, y un `int` de Dart nunca puede ser NaN ni Infinity.
+    // La clase entera de bug "NaN persistido en BD que corrompe balanceOf"
+    // desaparece con el cambio de tipo. Queda sólo la guarda de dominio.
+    if (principalAmount <= 0) {
       throw const LoansDaoError(
         'invalid_loan_data',
         'El monto del préstamo debe ser un número mayor a cero.',
       );
     }
-    if (!monthlyPayment.isFinite || monthlyPayment <= 0) {
+    if (monthlyPayment <= 0) {
       throw const LoansDaoError(
         'invalid_loan_data',
         'El pago mensual debe ser un número mayor a cero.',
@@ -226,7 +227,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
   Future<void> updateLoan({
     required String id,
     String? name,
-    double? monthlyPayment,
+    int? monthlyPayment,
     int? currentDurationMonths,
     int? paymentDay,
     DateTime? contractDate,

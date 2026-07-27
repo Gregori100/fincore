@@ -51,7 +51,7 @@ class FinancialStateService {
   ///
   /// - cash/debit: saldo = Σ destination − Σ origin (intuitivo: ingreso suma, gasto resta).
   /// - credit:     saldo = Σ origin − Σ destination (deuda actual; cargos suben, pagos bajan).
-  Stream<double> watchAccountBalance(String accountId, String accountType) {
+  Stream<int> watchAccountBalance(String accountId, String accountType) {
     final key = '$accountId:$accountType';
     final cached = _balanceCache[key];
     if (cached != null) return cached.stream;
@@ -78,7 +78,7 @@ class FinancialStateService {
           variables: [Variable.withString(accountId), Variable.withString(accountId)],
           readsFrom: {_db.journalEntries},
         )
-        .map((row) => row.read<double>('balance'))
+        .map((row) => row.read<int>('balance'))
         .watchSingle();
     final entry = _ReplayBalanceStream(source);
     _balanceCache[key] = entry;
@@ -121,16 +121,16 @@ class FinancialStateService {
   /// Wrapper del helper top-level [accountBalanceAtomic] preservado por
   /// compatibilidad de API: los tests existentes y otros callers siguen
   /// usando `state.accountBalanceNow(id)` sin cambios.
-  Future<double> accountBalanceNow(String accountId) =>
+  Future<int> accountBalanceNow(String accountId) =>
       accountBalanceAtomic(_db, accountId);
 
   /// BO = Σ saldo de cuentas (cash + debit) activas.
   /// Wrappeado en `_ReplayBalanceStream` (RF-007 v4) para replay-1.
-  Stream<double> watchBo() {
+  Stream<int> watchBo() {
     return (_boCache ??= _ReplayBalanceStream(_buildBoSource())).stream;
   }
 
-  Stream<double> _buildBoSource() {
+  Stream<int> _buildBoSource() {
     const sql = '''
       SELECT COALESCE(SUM(saldo), 0) AS total FROM (
         SELECT a.id,
@@ -144,16 +144,16 @@ class FinancialStateService {
     ''';
     return _db
         .customSelect(sql, readsFrom: {_db.accounts, _db.journalEntries})
-        .map((row) => row.read<double>('total'))
+        .map((row) => row.read<int>('total'))
         .watchSingle();
   }
 
   /// DE = Σ deuda de cuentas credit activas.
-  Stream<double> watchDe() {
+  Stream<int> watchDe() {
     return (_deCache ??= _ReplayBalanceStream(_buildDeSource())).stream;
   }
 
-  Stream<double> _buildDeSource() {
+  Stream<int> _buildDeSource() {
     const sql = '''
       SELECT COALESCE(SUM(deuda), 0) AS total FROM (
         SELECT a.id,
@@ -167,16 +167,16 @@ class FinancialStateService {
     ''';
     return _db
         .customSelect(sql, readsFrom: {_db.accounts, _db.journalEntries})
-        .map((row) => row.read<double>('total'))
+        .map((row) => row.read<int>('total'))
         .watchSingle();
   }
 
   /// CR = Σ (credit_limit − deuda) para cuentas credit activas con credit_limit set.
-  Stream<double> watchCr() {
+  Stream<int> watchCr() {
     return (_crCache ??= _ReplayBalanceStream(_buildCrSource())).stream;
   }
 
-  Stream<double> _buildCrSource() {
+  Stream<int> _buildCrSource() {
     const sql = '''
       SELECT COALESCE(SUM(libre), 0) AS total FROM (
         SELECT a.id,
@@ -191,7 +191,7 @@ class FinancialStateService {
     ''';
     return _db
         .customSelect(sql, readsFrom: {_db.accounts, _db.journalEntries})
-        .map((row) => row.read<double>('total'))
+        .map((row) => row.read<int>('total'))
         .watchSingle();
   }
 
@@ -199,13 +199,13 @@ class FinancialStateService {
   /// activos (no cerrados, no eliminados). Sumatoria de `balanceOf` de cada
   /// préstamo. Alimenta el KPI naranja "PRÉSTAMO" del Dashboard, que sólo
   /// se renderiza cuando el total > 0.
-  Stream<double> watchTotalLoans() {
+  Stream<int> watchTotalLoans() {
     return (_totalLoansCache ??=
             _ReplayBalanceStream(_buildTotalLoansSource()))
         .stream;
   }
 
-  Stream<double> _buildTotalLoansSource() {
+  Stream<int> _buildTotalLoansSource() {
     const sql = '''
       SELECT COALESCE(SUM(saldo), 0) AS total FROM (
         SELECT l.id,
@@ -218,7 +218,7 @@ class FinancialStateService {
     ''';
     return _db
         .customSelect(sql, readsFrom: {_db.loans, _db.journalEntries})
-        .map((row) => row.read<double>('total'))
+        .map((row) => row.read<int>('total'))
         .watchSingle();
   }
 }
@@ -238,7 +238,7 @@ class FinancialStateService {
 /// - cuenta no encontrada o archivada → 0.
 /// - cash/debit: Σ destination − Σ origin.
 /// - credit: Σ origin − Σ destination (deuda).
-Future<double> accountBalanceAtomic(
+Future<int> accountBalanceAtomic(
   GeneratedDatabase db,
   String accountId,
 ) async {
@@ -272,7 +272,7 @@ Future<double> accountBalanceAtomic(
         ],
       )
       .getSingle();
-  return row.read<double>('balance');
+  return row.read<int>('balance');
 }
 
 /// Cache de stream replay-1: envuelve un `customSelect.watchSingle()` (single
@@ -301,20 +301,20 @@ Future<double> accountBalanceAtomic(
 ///   explícita, así que reutilizar `watchAccountBalance(...)` después sigue
 ///   retornando el último valor.
 class _ReplayBalanceStream {
-  final Stream<double> _source;
+  final Stream<int> _source;
   // Cacheamos `stream` para preservar identidad referencial: los tests del
   // sprint anterior (cache de streams) se apoyan en `identical(s1, s2)`.
-  late final Stream<double> stream;
-  final Set<MultiStreamController<double>> _listeners = {};
-  StreamSubscription<double>? _upstreamSub;
-  double? _last;
+  late final Stream<int> stream;
+  final Set<MultiStreamController<int>> _listeners = {};
+  StreamSubscription<int>? _upstreamSub;
+  int? _last;
   bool _disposed = false;
 
   _ReplayBalanceStream(this._source) {
-    stream = Stream<double>.multi(_handleListen, isBroadcast: true);
+    stream = Stream<int>.multi(_handleListen, isBroadcast: true);
   }
 
-  void _handleListen(MultiStreamController<double> controller) {
+  void _handleListen(MultiStreamController<int> controller) {
     if (_disposed) {
       controller.closeSync();
       return;
