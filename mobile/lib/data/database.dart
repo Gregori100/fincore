@@ -30,9 +30,13 @@ class Accounts extends Table {
   // el campo se materializa como 0 sin efecto funcional (nunca se lee).
   // Los otros campos siguen nullable — son opcionales aún cuando la cuenta
   // es credit (permiten cargar tarjetas sin saber corte/pago/mínimo).
-  RealColumn get creditLimit => real().withDefault(const Constant(0))();
+  // Sprint flutter-integer-cents-v1 (schemaVersion 14): monto en centavos
+  // (int) para eliminar la clase de bugs de precisión IEEE 754 (RN-IC-01).
+  IntColumn get creditLimit => integer().withDefault(const Constant(0))();
   IntColumn get closingDay => integer().nullable()();
   IntColumn get paymentDay => integer().nullable()();
+  // `interest_rate`, `minimum_payment_pct` y `minimum_capital_pct` son
+  // ratios 0-1, NO montos: quedan como REAL (RN-IC-02, decidido en P-003).
   RealColumn get interestRate => real().nullable()();
   RealColumn get minimumPaymentPct => real().nullable()();
   // Sprint flutter-schema-v6-forward-compat-v1: columnas "dead" preservadas
@@ -47,7 +51,9 @@ class Accounts extends Table {
   // `minimumPaymentPct`).
   RealColumn get minimumCapitalPct =>
       real().withDefault(const Constant(0.015))();
-  RealColumn get minimumFloor => real().withDefault(const Constant(150))();
+  // Sprint flutter-integer-cents-v1: monto en centavos. El default preserva
+  // el equivalente de $150 (era `150.0` REAL, ahora `15000` centavos).
+  IntColumn get minimumFloor => integer().withDefault(const Constant(15000))();
   // Timestamps + soft delete.
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
@@ -78,7 +84,8 @@ class Categories extends Table {
   // monthly_limit se acepta por compatibilidad con el formato JSON v1 del backend
   // (sprint respaldos). La UI del MVP local no lo expone, pero el schema lo
   // preserva para no perder dato al importar/exportar.
-  RealColumn get monthlyLimit => real().nullable()();
+  // Sprint flutter-integer-cents-v1: monto en centavos (int).
+  IntColumn get monthlyLimit => integer().nullable()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -102,7 +109,8 @@ class JournalEntries extends Table {
       text().nullable().references(Accounts, #id)();
   // amount > 0 se valida en el DAO. SQLite CHECK declarativo causa
   // recursive_getter warning; preferimos validación explícita en cada Action.
-  RealColumn get amount => real()();
+  // Sprint flutter-integer-cents-v1: monto en centavos (int).
+  IntColumn get amount => integer()();
   TextColumn get description => text().nullable()();
   DateTimeColumn get occurredAt => dateTime()();
   TextColumn get categoryId =>
@@ -118,8 +126,9 @@ class JournalEntries extends Table {
   // `kind == 'loan_payment'` (split declarado por el usuario que suma amount).
   TextColumn get loanId =>
       text().nullable().references(Loans, #id)();
-  RealColumn get principalAmount => real().nullable()();
-  RealColumn get interestAmount => real().nullable()();
+  // Sprint flutter-integer-cents-v1: montos en centavos (int).
+  IntColumn get principalAmount => integer().nullable()();
+  IntColumn get interestAmount => integer().nullable()();
   // Hotfix smoke Diego v2: distingue "Pago del mes" (monthly obligatorio,
   // único por mes calendario) de "Abono a capital" (extra, múltiples
   // permitidos tras el monthly). El proxy anterior `interest_amount > 0`
@@ -163,8 +172,9 @@ class JournalEntries extends Table {
 class Loans extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
-  RealColumn get principalAmount => real()();
-  RealColumn get monthlyPayment => real()();
+  // Sprint flutter-integer-cents-v1: montos en centavos (int).
+  IntColumn get principalAmount => integer()();
+  IntColumn get monthlyPayment => integer()();
   IntColumn get initialDurationMonths => integer()();
   IntColumn get currentDurationMonths => integer()();
   IntColumn get paymentDay => integer()(); // 1-28
@@ -264,7 +274,8 @@ class WeeklyBudgetItems extends Table {
   TextColumn get name => text()();
   TextColumn get categoryId =>
       text().nullable().references(Categories, #id)();
-  RealColumn get amount => real()();
+  // Sprint flutter-integer-cents-v1: monto en centavos (int).
+  IntColumn get amount => integer()();
   TextColumn get kind => text()(); // 'income' | 'expense'
   IntColumn get sortOrder => integer()();
   BoolColumn get isDone => boolean().withDefault(const Constant(false))();
@@ -347,7 +358,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -1162,6 +1173,97 @@ class FincoreDatabase extends _$FincoreDatabase {
             );
             return;
           }
+          // Migración 13 → 14 (sprint flutter-integer-cents-v1): convierte
+          // todas las columnas monetarias de REAL (double IEEE 754) a
+          // INTEGER (centavos). Elimina de raíz la clase de bugs de
+          // precisión que hoy se mitigaba con tolerancias `+ 0.005`.
+          //
+          // Los ratios 0-1 (`interest_rate`, `minimum_payment_pct`,
+          // `minimum_capital_pct`) NO se tocan: siguen como REAL (RN-IC-02).
+          if (from == 13 && to == 14) {
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          // Ramas defensivas X → 14: componen la cadena de migraciones
+          // intermedias y cierran con la conversión a centavos. Mismo patrón
+          // que las X→13 y X→12. Todos los helpers son idempotentes.
+          if (from == 12 && to == 14) {
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          if (from == 11 && to == 14) {
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          if (from == 10 && to == 14) {
+            await _maybeAddColumn(
+                'journal_entries',
+                'is_monthly_payment',
+                'INTEGER NOT NULL DEFAULT 0 CHECK (is_monthly_payment IN (0, 1))');
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          if (from == 9 && to == 14) {
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          if (from == 8 && to == 14) {
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          if (from == 7 && to == 14) {
+            await _maybeAddColumn('weekly_budgets', 'is_template',
+                'INTEGER NOT NULL DEFAULT 0 CHECK (is_template IN (0, 1))');
+            await customStatement(
+                'DROP TABLE IF EXISTS budget_template_items');
+            await customStatement('DROP TABLE IF EXISTS budget_templates');
+            await customStatement(
+                'DROP INDEX IF EXISTS idx_bt_items_template_sort');
+            await customStatement(
+              'CREATE INDEX IF NOT EXISTS idx_weekly_budgets_template '
+              'ON weekly_budgets(is_template) WHERE is_template = 1',
+            );
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          if (from == 6 && to == 14) {
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
+          if (from == 5 && to == 14) {
+            await _maybeAddColumn('accounts', 'minimum_capital_pct',
+                'REAL NOT NULL DEFAULT 0.015');
+            await _maybeAddColumn(
+                'accounts', 'minimum_floor', 'REAL NOT NULL DEFAULT 150');
+            await _createWeeklyBudgetTablesRefactored();
+            await _maybeAddColumn('accounts', 'archived_at', 'TEXT');
+            await _createLoansSchema();
+            await _createLoansIndexes();
+            await _addIsDoneColumn();
+            await _convertMoneyColumnsToInteger(m);
+            return;
+          }
           // Guardrail (RN-H02 + RF-009): cualquier futura migración debe
           // implementarse explícitamente como rama `if (from == X && to == Y)`
           // ANTES de este throw. Sin esto, un bump accidental de
@@ -1296,5 +1398,121 @@ class FincoreDatabase extends _$FincoreDatabase {
       'CREATE INDEX IF NOT EXISTS idx_loans_dest_account '
       'ON loans(destination_account_id) WHERE deleted_at IS NULL',
     );
+  }
+
+  /// Sprint flutter-integer-cents-v1 (schemaVersion 14): convierte las 9
+  /// columnas monetarias de REAL a INTEGER (centavos).
+  ///
+  /// **Por qué `alterTable` y no un `UPDATE`**: SQLite aplica *type affinity*
+  /// por columna. En una columna declarada `REAL`, un `UPDATE ... SET amount =
+  /// CAST(ROUND(amount * 100) AS INTEGER)` vuelve a guardar el valor como
+  /// REAL (`17377.0`), y drift al leerlo con `read<int>()` explota. La única
+  /// forma correcta es recrear la tabla con la declaración nueva. `alterTable`
+  /// de drift hace exactamente eso: `CREATE TABLE _new` con el schema Dart
+  /// vigente (ya INTEGER) + `INSERT INTO _new SELECT <transform> FROM old` +
+  /// `DROP old` + `RENAME`.
+  ///
+  /// `ROUND` y no `CAST` directo: truncar perdería el centavo en valores con
+  /// residuo IEEE 754 (`173.7699999 * 100 = 17376.99999` → truncado daría
+  /// `17376`, redondeado da `17377`).
+  ///
+  /// NULL propaga limpio: `ROUND(NULL * 100)` es NULL, así que las columnas
+  /// nullables (`principal_amount`, `interest_amount`, `monthly_limit`) no
+  /// necesitan un `CASE WHEN`.
+  ///
+  /// Idempotente por probe de `pragma_table_info`: si `journal_entries.amount`
+  /// ya está declarada INTEGER, la conversión ya corrió (reintento tras crash
+  /// a mitad de migración) y la función es no-op.
+  ///
+  /// `alterTable` pierde los índices creados por `customStatement` en
+  /// `onCreate` (no están declarados en el schema Dart), así que se recrean
+  /// explícitamente al final — mismo caveat que la migración 4→5 documenta
+  /// para `idx_accounts_deleted`.
+  Future<void> _convertMoneyColumnsToInteger(Migrator m) async {
+    final probe = await customSelect(
+      "SELECT type FROM pragma_table_info('journal_entries') "
+      "WHERE name = 'amount'",
+    ).getSingleOrNull();
+    if (probe != null &&
+        probe.read<String>('type').toUpperCase() == 'INTEGER') {
+      return;
+    }
+
+    const toCents = 'CAST(ROUND(%s * 100) AS INTEGER)';
+    CustomExpression<int> cents(String column) =>
+        CustomExpression<int>(toCents.replaceAll('%s', column));
+
+    await m.alterTable(TableMigration(
+      journalEntries,
+      columnTransformer: {
+        journalEntries.amount: cents('amount'),
+        journalEntries.principalAmount: cents('principal_amount'),
+        journalEntries.interestAmount: cents('interest_amount'),
+      },
+    ));
+    await m.alterTable(TableMigration(
+      accounts,
+      columnTransformer: {
+        accounts.creditLimit: cents('credit_limit'),
+        accounts.minimumFloor: cents('minimum_floor'),
+      },
+    ));
+    await m.alterTable(TableMigration(
+      loans,
+      columnTransformer: {
+        loans.principalAmount: cents('principal_amount'),
+        loans.monthlyPayment: cents('monthly_payment'),
+      },
+    ));
+    await m.alterTable(TableMigration(
+      weeklyBudgetItems,
+      columnTransformer: {
+        weeklyBudgetItems.amount: cents('amount'),
+      },
+    ));
+    await m.alterTable(TableMigration(
+      categories,
+      columnTransformer: {
+        categories.monthlyLimit: cents('monthly_limit'),
+      },
+    ));
+
+    // Re-crear índices que viven fuera del schema Dart (customStatement en
+    // onCreate) y que `alterTable` dropea junto con la tabla original.
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_origin '
+      'ON journal_entries(account_origin_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_dest '
+      'ON journal_entries(account_destination_id)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_deleted '
+      'ON journal_entries(deleted_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_kind ON journal_entries(kind)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_occurred_active '
+      'ON journal_entries(occurred_at DESC) WHERE deleted_at IS NULL',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_entries_loan '
+      'ON journal_entries(loan_id) WHERE loan_id IS NOT NULL',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_accounts_deleted ON accounts(deleted_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_categories_deleted '
+      'ON categories(deleted_at)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_wb_items_budget_sort '
+      'ON weekly_budget_items(budget_id, sort_order)',
+    );
+    await _createLoansIndexes();
   }
 }

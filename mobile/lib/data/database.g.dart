@@ -65,11 +65,11 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     'creditLimit',
   );
   @override
-  late final GeneratedColumn<double> creditLimit = GeneratedColumn<double>(
+  late final GeneratedColumn<int> creditLimit = GeneratedColumn<int>(
     'credit_limit',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
@@ -135,13 +135,13 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
     'minimumFloor',
   );
   @override
-  late final GeneratedColumn<double> minimumFloor = GeneratedColumn<double>(
+  late final GeneratedColumn<int> minimumFloor = GeneratedColumn<int>(
     'minimum_floor',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
-    defaultValue: const Constant(150),
+    defaultValue: const Constant(15000),
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
@@ -377,7 +377,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
           )!,
       creditLimit:
           attachedDatabase.typeMapping.read(
-            DriftSqlType.double,
+            DriftSqlType.int,
             data['${effectivePrefix}credit_limit'],
           )!,
       closingDay: attachedDatabase.typeMapping.read(
@@ -403,7 +403,7 @@ class $AccountsTable extends Accounts with TableInfo<$AccountsTable, Account> {
           )!,
       minimumFloor:
           attachedDatabase.typeMapping.read(
-            DriftSqlType.double,
+            DriftSqlType.int,
             data['${effectivePrefix}minimum_floor'],
           )!,
       createdAt:
@@ -439,13 +439,13 @@ class Account extends DataClass implements Insertable<Account> {
   final String type;
   final String? description;
   final bool isProtected;
-  final double creditLimit;
+  final int creditLimit;
   final int? closingDay;
   final int? paymentDay;
   final double? interestRate;
   final double? minimumPaymentPct;
   final double minimumCapitalPct;
-  final double minimumFloor;
+  final int minimumFloor;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -478,7 +478,7 @@ class Account extends DataClass implements Insertable<Account> {
       map['description'] = Variable<String>(description);
     }
     map['is_protected'] = Variable<bool>(isProtected);
-    map['credit_limit'] = Variable<double>(creditLimit);
+    map['credit_limit'] = Variable<int>(creditLimit);
     if (!nullToAbsent || closingDay != null) {
       map['closing_day'] = Variable<int>(closingDay);
     }
@@ -492,7 +492,7 @@ class Account extends DataClass implements Insertable<Account> {
       map['minimum_payment_pct'] = Variable<double>(minimumPaymentPct);
     }
     map['minimum_capital_pct'] = Variable<double>(minimumCapitalPct);
-    map['minimum_floor'] = Variable<double>(minimumFloor);
+    map['minimum_floor'] = Variable<int>(minimumFloor);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     if (!nullToAbsent || deletedAt != null) {
@@ -557,7 +557,7 @@ class Account extends DataClass implements Insertable<Account> {
       type: serializer.fromJson<String>(json['type']),
       description: serializer.fromJson<String?>(json['description']),
       isProtected: serializer.fromJson<bool>(json['isProtected']),
-      creditLimit: serializer.fromJson<double>(json['creditLimit']),
+      creditLimit: serializer.fromJson<int>(json['creditLimit']),
       closingDay: serializer.fromJson<int?>(json['closingDay']),
       paymentDay: serializer.fromJson<int?>(json['paymentDay']),
       interestRate: serializer.fromJson<double?>(json['interestRate']),
@@ -565,7 +565,7 @@ class Account extends DataClass implements Insertable<Account> {
         json['minimumPaymentPct'],
       ),
       minimumCapitalPct: serializer.fromJson<double>(json['minimumCapitalPct']),
-      minimumFloor: serializer.fromJson<double>(json['minimumFloor']),
+      minimumFloor: serializer.fromJson<int>(json['minimumFloor']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -581,13 +581,13 @@ class Account extends DataClass implements Insertable<Account> {
       'type': serializer.toJson<String>(type),
       'description': serializer.toJson<String?>(description),
       'isProtected': serializer.toJson<bool>(isProtected),
-      'creditLimit': serializer.toJson<double>(creditLimit),
+      'creditLimit': serializer.toJson<int>(creditLimit),
       'closingDay': serializer.toJson<int?>(closingDay),
       'paymentDay': serializer.toJson<int?>(paymentDay),
       'interestRate': serializer.toJson<double?>(interestRate),
       'minimumPaymentPct': serializer.toJson<double?>(minimumPaymentPct),
       'minimumCapitalPct': serializer.toJson<double>(minimumCapitalPct),
-      'minimumFloor': serializer.toJson<double>(minimumFloor),
+      'minimumFloor': serializer.toJson<int>(minimumFloor),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -601,13 +601,13 @@ class Account extends DataClass implements Insertable<Account> {
     String? type,
     Value<String?> description = const Value.absent(),
     bool? isProtected,
-    double? creditLimit,
+    int? creditLimit,
     Value<int?> closingDay = const Value.absent(),
     Value<int?> paymentDay = const Value.absent(),
     Value<double?> interestRate = const Value.absent(),
     Value<double?> minimumPaymentPct = const Value.absent(),
     double? minimumCapitalPct,
-    double? minimumFloor,
+    int? minimumFloor,
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
@@ -742,13 +742,13 @@ class AccountsCompanion extends UpdateCompanion<Account> {
   final Value<String> type;
   final Value<String?> description;
   final Value<bool> isProtected;
-  final Value<double> creditLimit;
+  final Value<int> creditLimit;
   final Value<int?> closingDay;
   final Value<int?> paymentDay;
   final Value<double?> interestRate;
   final Value<double?> minimumPaymentPct;
   final Value<double> minimumCapitalPct;
-  final Value<double> minimumFloor;
+  final Value<int> minimumFloor;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
@@ -802,13 +802,13 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Expression<String>? type,
     Expression<String>? description,
     Expression<bool>? isProtected,
-    Expression<double>? creditLimit,
+    Expression<int>? creditLimit,
     Expression<int>? closingDay,
     Expression<int>? paymentDay,
     Expression<double>? interestRate,
     Expression<double>? minimumPaymentPct,
     Expression<double>? minimumCapitalPct,
-    Expression<double>? minimumFloor,
+    Expression<int>? minimumFloor,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
@@ -842,13 +842,13 @@ class AccountsCompanion extends UpdateCompanion<Account> {
     Value<String>? type,
     Value<String?>? description,
     Value<bool>? isProtected,
-    Value<double>? creditLimit,
+    Value<int>? creditLimit,
     Value<int?>? closingDay,
     Value<int?>? paymentDay,
     Value<double?>? interestRate,
     Value<double?>? minimumPaymentPct,
     Value<double>? minimumCapitalPct,
-    Value<double>? minimumFloor,
+    Value<int>? minimumFloor,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
@@ -895,7 +895,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       map['is_protected'] = Variable<bool>(isProtected.value);
     }
     if (creditLimit.present) {
-      map['credit_limit'] = Variable<double>(creditLimit.value);
+      map['credit_limit'] = Variable<int>(creditLimit.value);
     }
     if (closingDay.present) {
       map['closing_day'] = Variable<int>(closingDay.value);
@@ -913,7 +913,7 @@ class AccountsCompanion extends UpdateCompanion<Account> {
       map['minimum_capital_pct'] = Variable<double>(minimumCapitalPct.value);
     }
     if (minimumFloor.present) {
-      map['minimum_floor'] = Variable<double>(minimumFloor.value);
+      map['minimum_floor'] = Variable<int>(minimumFloor.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -1019,11 +1019,11 @@ class $CategoriesTable extends Categories
     'monthlyLimit',
   );
   @override
-  late final GeneratedColumn<double> monthlyLimit = GeneratedColumn<double>(
+  late final GeneratedColumn<int> monthlyLimit = GeneratedColumn<int>(
     'monthly_limit',
     aliasedName,
     true,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
@@ -1186,7 +1186,7 @@ class $CategoriesTable extends Categories
             data['${effectivePrefix}icon_slug'],
           )!,
       monthlyLimit: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
+        DriftSqlType.int,
         data['${effectivePrefix}monthly_limit'],
       ),
       createdAt:
@@ -1218,7 +1218,7 @@ class Category extends DataClass implements Insertable<Category> {
   final String appliesTo;
   final String colorSlug;
   final String iconSlug;
-  final double? monthlyLimit;
+  final int? monthlyLimit;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? deletedAt;
@@ -1242,7 +1242,7 @@ class Category extends DataClass implements Insertable<Category> {
     map['color_slug'] = Variable<String>(colorSlug);
     map['icon_slug'] = Variable<String>(iconSlug);
     if (!nullToAbsent || monthlyLimit != null) {
-      map['monthly_limit'] = Variable<double>(monthlyLimit);
+      map['monthly_limit'] = Variable<int>(monthlyLimit);
     }
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
@@ -1283,7 +1283,7 @@ class Category extends DataClass implements Insertable<Category> {
       appliesTo: serializer.fromJson<String>(json['appliesTo']),
       colorSlug: serializer.fromJson<String>(json['colorSlug']),
       iconSlug: serializer.fromJson<String>(json['iconSlug']),
-      monthlyLimit: serializer.fromJson<double?>(json['monthlyLimit']),
+      monthlyLimit: serializer.fromJson<int?>(json['monthlyLimit']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
@@ -1298,7 +1298,7 @@ class Category extends DataClass implements Insertable<Category> {
       'appliesTo': serializer.toJson<String>(appliesTo),
       'colorSlug': serializer.toJson<String>(colorSlug),
       'iconSlug': serializer.toJson<String>(iconSlug),
-      'monthlyLimit': serializer.toJson<double?>(monthlyLimit),
+      'monthlyLimit': serializer.toJson<int?>(monthlyLimit),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
@@ -1311,7 +1311,7 @@ class Category extends DataClass implements Insertable<Category> {
     String? appliesTo,
     String? colorSlug,
     String? iconSlug,
-    Value<double?> monthlyLimit = const Value.absent(),
+    Value<int?> monthlyLimit = const Value.absent(),
     DateTime? createdAt,
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
@@ -1392,7 +1392,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
   final Value<String> appliesTo;
   final Value<String> colorSlug;
   final Value<String> iconSlug;
-  final Value<double?> monthlyLimit;
+  final Value<int?> monthlyLimit;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
@@ -1433,7 +1433,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Expression<String>? appliesTo,
     Expression<String>? colorSlug,
     Expression<String>? iconSlug,
-    Expression<double>? monthlyLimit,
+    Expression<int>? monthlyLimit,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
@@ -1459,7 +1459,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
     Value<String>? appliesTo,
     Value<String>? colorSlug,
     Value<String>? iconSlug,
-    Value<double?>? monthlyLimit,
+    Value<int?>? monthlyLimit,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
@@ -1498,7 +1498,7 @@ class CategoriesCompanion extends UpdateCompanion<Category> {
       map['icon_slug'] = Variable<String>(iconSlug.value);
     }
     if (monthlyLimit.present) {
-      map['monthly_limit'] = Variable<double>(monthlyLimit.value);
+      map['monthly_limit'] = Variable<int>(monthlyLimit.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
@@ -1560,22 +1560,22 @@ class $LoansTable extends Loans with TableInfo<$LoansTable, Loan> {
     'principalAmount',
   );
   @override
-  late final GeneratedColumn<double> principalAmount = GeneratedColumn<double>(
+  late final GeneratedColumn<int> principalAmount = GeneratedColumn<int>(
     'principal_amount',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _monthlyPaymentMeta = const VerificationMeta(
     'monthlyPayment',
   );
   @override
-  late final GeneratedColumn<double> monthlyPayment = GeneratedColumn<double>(
+  late final GeneratedColumn<int> monthlyPayment = GeneratedColumn<int>(
     'monthly_payment',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _initialDurationMonthsMeta =
@@ -1863,12 +1863,12 @@ class $LoansTable extends Loans with TableInfo<$LoansTable, Loan> {
           )!,
       principalAmount:
           attachedDatabase.typeMapping.read(
-            DriftSqlType.double,
+            DriftSqlType.int,
             data['${effectivePrefix}principal_amount'],
           )!,
       monthlyPayment:
           attachedDatabase.typeMapping.read(
-            DriftSqlType.double,
+            DriftSqlType.int,
             data['${effectivePrefix}monthly_payment'],
           )!,
       initialDurationMonths:
@@ -1930,8 +1930,8 @@ class $LoansTable extends Loans with TableInfo<$LoansTable, Loan> {
 class Loan extends DataClass implements Insertable<Loan> {
   final String id;
   final String name;
-  final double principalAmount;
-  final double monthlyPayment;
+  final int principalAmount;
+  final int monthlyPayment;
   final int initialDurationMonths;
   final int currentDurationMonths;
   final int paymentDay;
@@ -1963,8 +1963,8 @@ class Loan extends DataClass implements Insertable<Loan> {
     final map = <String, Expression>{};
     map['id'] = Variable<String>(id);
     map['name'] = Variable<String>(name);
-    map['principal_amount'] = Variable<double>(principalAmount);
-    map['monthly_payment'] = Variable<double>(monthlyPayment);
+    map['principal_amount'] = Variable<int>(principalAmount);
+    map['monthly_payment'] = Variable<int>(monthlyPayment);
     map['initial_duration_months'] = Variable<int>(initialDurationMonths);
     map['current_duration_months'] = Variable<int>(currentDurationMonths);
     map['payment_day'] = Variable<int>(paymentDay);
@@ -2020,8 +2020,8 @@ class Loan extends DataClass implements Insertable<Loan> {
     return Loan(
       id: serializer.fromJson<String>(json['id']),
       name: serializer.fromJson<String>(json['name']),
-      principalAmount: serializer.fromJson<double>(json['principalAmount']),
-      monthlyPayment: serializer.fromJson<double>(json['monthlyPayment']),
+      principalAmount: serializer.fromJson<int>(json['principalAmount']),
+      monthlyPayment: serializer.fromJson<int>(json['monthlyPayment']),
       initialDurationMonths: serializer.fromJson<int>(
         json['initialDurationMonths'],
       ),
@@ -2046,8 +2046,8 @@ class Loan extends DataClass implements Insertable<Loan> {
     return <String, dynamic>{
       'id': serializer.toJson<String>(id),
       'name': serializer.toJson<String>(name),
-      'principalAmount': serializer.toJson<double>(principalAmount),
-      'monthlyPayment': serializer.toJson<double>(monthlyPayment),
+      'principalAmount': serializer.toJson<int>(principalAmount),
+      'monthlyPayment': serializer.toJson<int>(monthlyPayment),
       'initialDurationMonths': serializer.toJson<int>(initialDurationMonths),
       'currentDurationMonths': serializer.toJson<int>(currentDurationMonths),
       'paymentDay': serializer.toJson<int>(paymentDay),
@@ -2064,8 +2064,8 @@ class Loan extends DataClass implements Insertable<Loan> {
   Loan copyWith({
     String? id,
     String? name,
-    double? principalAmount,
-    double? monthlyPayment,
+    int? principalAmount,
+    int? monthlyPayment,
     int? initialDurationMonths,
     int? currentDurationMonths,
     int? paymentDay,
@@ -2192,8 +2192,8 @@ class Loan extends DataClass implements Insertable<Loan> {
 class LoansCompanion extends UpdateCompanion<Loan> {
   final Value<String> id;
   final Value<String> name;
-  final Value<double> principalAmount;
-  final Value<double> monthlyPayment;
+  final Value<int> principalAmount;
+  final Value<int> monthlyPayment;
   final Value<int> initialDurationMonths;
   final Value<int> currentDurationMonths;
   final Value<int> paymentDay;
@@ -2225,8 +2225,8 @@ class LoansCompanion extends UpdateCompanion<Loan> {
   LoansCompanion.insert({
     required String id,
     required String name,
-    required double principalAmount,
-    required double monthlyPayment,
+    required int principalAmount,
+    required int monthlyPayment,
     required int initialDurationMonths,
     required int currentDurationMonths,
     required int paymentDay,
@@ -2252,8 +2252,8 @@ class LoansCompanion extends UpdateCompanion<Loan> {
   static Insertable<Loan> custom({
     Expression<String>? id,
     Expression<String>? name,
-    Expression<double>? principalAmount,
-    Expression<double>? monthlyPayment,
+    Expression<int>? principalAmount,
+    Expression<int>? monthlyPayment,
     Expression<int>? initialDurationMonths,
     Expression<int>? currentDurationMonths,
     Expression<int>? paymentDay,
@@ -2291,8 +2291,8 @@ class LoansCompanion extends UpdateCompanion<Loan> {
   LoansCompanion copyWith({
     Value<String>? id,
     Value<String>? name,
-    Value<double>? principalAmount,
-    Value<double>? monthlyPayment,
+    Value<int>? principalAmount,
+    Value<int>? monthlyPayment,
     Value<int>? initialDurationMonths,
     Value<int>? currentDurationMonths,
     Value<int>? paymentDay,
@@ -2336,10 +2336,10 @@ class LoansCompanion extends UpdateCompanion<Loan> {
       map['name'] = Variable<String>(name.value);
     }
     if (principalAmount.present) {
-      map['principal_amount'] = Variable<double>(principalAmount.value);
+      map['principal_amount'] = Variable<int>(principalAmount.value);
     }
     if (monthlyPayment.present) {
-      map['monthly_payment'] = Variable<double>(monthlyPayment.value);
+      map['monthly_payment'] = Variable<int>(monthlyPayment.value);
     }
     if (initialDurationMonths.present) {
       map['initial_duration_months'] = Variable<int>(
@@ -2460,11 +2460,11 @@ class $JournalEntriesTable extends JournalEntries
       );
   static const VerificationMeta _amountMeta = const VerificationMeta('amount');
   @override
-  late final GeneratedColumn<double> amount = GeneratedColumn<double>(
+  late final GeneratedColumn<int> amount = GeneratedColumn<int>(
     'amount',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _descriptionMeta = const VerificationMeta(
@@ -2552,22 +2552,22 @@ class $JournalEntriesTable extends JournalEntries
     'principalAmount',
   );
   @override
-  late final GeneratedColumn<double> principalAmount = GeneratedColumn<double>(
+  late final GeneratedColumn<int> principalAmount = GeneratedColumn<int>(
     'principal_amount',
     aliasedName,
     true,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _interestAmountMeta = const VerificationMeta(
     'interestAmount',
   );
   @override
-  late final GeneratedColumn<double> interestAmount = GeneratedColumn<double>(
+  late final GeneratedColumn<int> interestAmount = GeneratedColumn<int>(
     'interest_amount',
     aliasedName,
     true,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
   static const VerificationMeta _isMonthlyPaymentMeta = const VerificationMeta(
@@ -2761,7 +2761,7 @@ class $JournalEntriesTable extends JournalEntries
       ),
       amount:
           attachedDatabase.typeMapping.read(
-            DriftSqlType.double,
+            DriftSqlType.int,
             data['${effectivePrefix}amount'],
           )!,
       description: attachedDatabase.typeMapping.read(
@@ -2796,11 +2796,11 @@ class $JournalEntriesTable extends JournalEntries
         data['${effectivePrefix}loan_id'],
       ),
       principalAmount: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
+        DriftSqlType.int,
         data['${effectivePrefix}principal_amount'],
       ),
       interestAmount: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
+        DriftSqlType.int,
         data['${effectivePrefix}interest_amount'],
       ),
       isMonthlyPayment:
@@ -2822,7 +2822,7 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
   final String kind;
   final String? accountOriginId;
   final String? accountDestinationId;
-  final double amount;
+  final int amount;
   final String? description;
   final DateTime occurredAt;
   final String? categoryId;
@@ -2830,8 +2830,8 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
   final DateTime updatedAt;
   final DateTime? deletedAt;
   final String? loanId;
-  final double? principalAmount;
-  final double? interestAmount;
+  final int? principalAmount;
+  final int? interestAmount;
   final bool isMonthlyPayment;
   const JournalEntry({
     required this.id,
@@ -2861,7 +2861,7 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     if (!nullToAbsent || accountDestinationId != null) {
       map['account_destination_id'] = Variable<String>(accountDestinationId);
     }
-    map['amount'] = Variable<double>(amount);
+    map['amount'] = Variable<int>(amount);
     if (!nullToAbsent || description != null) {
       map['description'] = Variable<String>(description);
     }
@@ -2878,10 +2878,10 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       map['loan_id'] = Variable<String>(loanId);
     }
     if (!nullToAbsent || principalAmount != null) {
-      map['principal_amount'] = Variable<double>(principalAmount);
+      map['principal_amount'] = Variable<int>(principalAmount);
     }
     if (!nullToAbsent || interestAmount != null) {
-      map['interest_amount'] = Variable<double>(interestAmount);
+      map['interest_amount'] = Variable<int>(interestAmount);
     }
     map['is_monthly_payment'] = Variable<bool>(isMonthlyPayment);
     return map;
@@ -2941,7 +2941,7 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       accountDestinationId: serializer.fromJson<String?>(
         json['accountDestinationId'],
       ),
-      amount: serializer.fromJson<double>(json['amount']),
+      amount: serializer.fromJson<int>(json['amount']),
       description: serializer.fromJson<String?>(json['description']),
       occurredAt: serializer.fromJson<DateTime>(json['occurredAt']),
       categoryId: serializer.fromJson<String?>(json['categoryId']),
@@ -2949,8 +2949,8 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
       deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
       loanId: serializer.fromJson<String?>(json['loanId']),
-      principalAmount: serializer.fromJson<double?>(json['principalAmount']),
-      interestAmount: serializer.fromJson<double?>(json['interestAmount']),
+      principalAmount: serializer.fromJson<int?>(json['principalAmount']),
+      interestAmount: serializer.fromJson<int?>(json['interestAmount']),
       isMonthlyPayment: serializer.fromJson<bool>(json['isMonthlyPayment']),
     );
   }
@@ -2962,7 +2962,7 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       'kind': serializer.toJson<String>(kind),
       'accountOriginId': serializer.toJson<String?>(accountOriginId),
       'accountDestinationId': serializer.toJson<String?>(accountDestinationId),
-      'amount': serializer.toJson<double>(amount),
+      'amount': serializer.toJson<int>(amount),
       'description': serializer.toJson<String?>(description),
       'occurredAt': serializer.toJson<DateTime>(occurredAt),
       'categoryId': serializer.toJson<String?>(categoryId),
@@ -2970,8 +2970,8 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
       'deletedAt': serializer.toJson<DateTime?>(deletedAt),
       'loanId': serializer.toJson<String?>(loanId),
-      'principalAmount': serializer.toJson<double?>(principalAmount),
-      'interestAmount': serializer.toJson<double?>(interestAmount),
+      'principalAmount': serializer.toJson<int?>(principalAmount),
+      'interestAmount': serializer.toJson<int?>(interestAmount),
       'isMonthlyPayment': serializer.toJson<bool>(isMonthlyPayment),
     };
   }
@@ -2981,7 +2981,7 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     String? kind,
     Value<String?> accountOriginId = const Value.absent(),
     Value<String?> accountDestinationId = const Value.absent(),
-    double? amount,
+    int? amount,
     Value<String?> description = const Value.absent(),
     DateTime? occurredAt,
     Value<String?> categoryId = const Value.absent(),
@@ -2989,8 +2989,8 @@ class JournalEntry extends DataClass implements Insertable<JournalEntry> {
     DateTime? updatedAt,
     Value<DateTime?> deletedAt = const Value.absent(),
     Value<String?> loanId = const Value.absent(),
-    Value<double?> principalAmount = const Value.absent(),
-    Value<double?> interestAmount = const Value.absent(),
+    Value<int?> principalAmount = const Value.absent(),
+    Value<int?> interestAmount = const Value.absent(),
     bool? isMonthlyPayment,
   }) => JournalEntry(
     id: id ?? this.id,
@@ -3119,7 +3119,7 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
   final Value<String> kind;
   final Value<String?> accountOriginId;
   final Value<String?> accountDestinationId;
-  final Value<double> amount;
+  final Value<int> amount;
   final Value<String?> description;
   final Value<DateTime> occurredAt;
   final Value<String?> categoryId;
@@ -3127,8 +3127,8 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
   final Value<DateTime> updatedAt;
   final Value<DateTime?> deletedAt;
   final Value<String?> loanId;
-  final Value<double?> principalAmount;
-  final Value<double?> interestAmount;
+  final Value<int?> principalAmount;
+  final Value<int?> interestAmount;
   final Value<bool> isMonthlyPayment;
   final Value<int> rowid;
   const JournalEntriesCompanion({
@@ -3154,7 +3154,7 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     required String kind,
     this.accountOriginId = const Value.absent(),
     this.accountDestinationId = const Value.absent(),
-    required double amount,
+    required int amount,
     this.description = const Value.absent(),
     required DateTime occurredAt,
     this.categoryId = const Value.absent(),
@@ -3177,7 +3177,7 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     Expression<String>? kind,
     Expression<String>? accountOriginId,
     Expression<String>? accountDestinationId,
-    Expression<double>? amount,
+    Expression<int>? amount,
     Expression<String>? description,
     Expression<DateTime>? occurredAt,
     Expression<String>? categoryId,
@@ -3185,8 +3185,8 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     Expression<DateTime>? updatedAt,
     Expression<DateTime>? deletedAt,
     Expression<String>? loanId,
-    Expression<double>? principalAmount,
-    Expression<double>? interestAmount,
+    Expression<int>? principalAmount,
+    Expression<int>? interestAmount,
     Expression<bool>? isMonthlyPayment,
     Expression<int>? rowid,
   }) {
@@ -3216,7 +3216,7 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     Value<String>? kind,
     Value<String?>? accountOriginId,
     Value<String?>? accountDestinationId,
-    Value<double>? amount,
+    Value<int>? amount,
     Value<String?>? description,
     Value<DateTime>? occurredAt,
     Value<String?>? categoryId,
@@ -3224,8 +3224,8 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
     Value<DateTime>? updatedAt,
     Value<DateTime?>? deletedAt,
     Value<String?>? loanId,
-    Value<double?>? principalAmount,
-    Value<double?>? interestAmount,
+    Value<int?>? principalAmount,
+    Value<int?>? interestAmount,
     Value<bool>? isMonthlyPayment,
     Value<int>? rowid,
   }) {
@@ -3267,7 +3267,7 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
       );
     }
     if (amount.present) {
-      map['amount'] = Variable<double>(amount.value);
+      map['amount'] = Variable<int>(amount.value);
     }
     if (description.present) {
       map['description'] = Variable<String>(description.value);
@@ -3291,10 +3291,10 @@ class JournalEntriesCompanion extends UpdateCompanion<JournalEntry> {
       map['loan_id'] = Variable<String>(loanId.value);
     }
     if (principalAmount.present) {
-      map['principal_amount'] = Variable<double>(principalAmount.value);
+      map['principal_amount'] = Variable<int>(principalAmount.value);
     }
     if (interestAmount.present) {
-      map['interest_amount'] = Variable<double>(interestAmount.value);
+      map['interest_amount'] = Variable<int>(interestAmount.value);
     }
     if (isMonthlyPayment.present) {
       map['is_monthly_payment'] = Variable<bool>(isMonthlyPayment.value);
@@ -4333,11 +4333,11 @@ class $WeeklyBudgetItemsTable extends WeeklyBudgetItems
   );
   static const VerificationMeta _amountMeta = const VerificationMeta('amount');
   @override
-  late final GeneratedColumn<double> amount = GeneratedColumn<double>(
+  late final GeneratedColumn<int> amount = GeneratedColumn<int>(
     'amount',
     aliasedName,
     false,
-    type: DriftSqlType.double,
+    type: DriftSqlType.int,
     requiredDuringInsert: true,
   );
   static const VerificationMeta _kindMeta = const VerificationMeta('kind');
@@ -4523,7 +4523,7 @@ class $WeeklyBudgetItemsTable extends WeeklyBudgetItems
       ),
       amount:
           attachedDatabase.typeMapping.read(
-            DriftSqlType.double,
+            DriftSqlType.int,
             data['${effectivePrefix}amount'],
           )!,
       kind:
@@ -4566,7 +4566,7 @@ class WeeklyBudgetItemRow extends DataClass
   final String budgetId;
   final String name;
   final String? categoryId;
-  final double amount;
+  final int amount;
   final String kind;
   final int sortOrder;
   final bool isDone;
@@ -4593,7 +4593,7 @@ class WeeklyBudgetItemRow extends DataClass
     if (!nullToAbsent || categoryId != null) {
       map['category_id'] = Variable<String>(categoryId);
     }
-    map['amount'] = Variable<double>(amount);
+    map['amount'] = Variable<int>(amount);
     map['kind'] = Variable<String>(kind);
     map['sort_order'] = Variable<int>(sortOrder);
     map['is_done'] = Variable<bool>(isDone);
@@ -4630,7 +4630,7 @@ class WeeklyBudgetItemRow extends DataClass
       budgetId: serializer.fromJson<String>(json['budgetId']),
       name: serializer.fromJson<String>(json['name']),
       categoryId: serializer.fromJson<String?>(json['categoryId']),
-      amount: serializer.fromJson<double>(json['amount']),
+      amount: serializer.fromJson<int>(json['amount']),
       kind: serializer.fromJson<String>(json['kind']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       isDone: serializer.fromJson<bool>(json['isDone']),
@@ -4646,7 +4646,7 @@ class WeeklyBudgetItemRow extends DataClass
       'budgetId': serializer.toJson<String>(budgetId),
       'name': serializer.toJson<String>(name),
       'categoryId': serializer.toJson<String?>(categoryId),
-      'amount': serializer.toJson<double>(amount),
+      'amount': serializer.toJson<int>(amount),
       'kind': serializer.toJson<String>(kind),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'isDone': serializer.toJson<bool>(isDone),
@@ -4660,7 +4660,7 @@ class WeeklyBudgetItemRow extends DataClass
     String? budgetId,
     String? name,
     Value<String?> categoryId = const Value.absent(),
-    double? amount,
+    int? amount,
     String? kind,
     int? sortOrder,
     bool? isDone,
@@ -4745,7 +4745,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
   final Value<String> budgetId;
   final Value<String> name;
   final Value<String?> categoryId;
-  final Value<double> amount;
+  final Value<int> amount;
   final Value<String> kind;
   final Value<int> sortOrder;
   final Value<bool> isDone;
@@ -4770,7 +4770,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     required String budgetId,
     required String name,
     this.categoryId = const Value.absent(),
-    required double amount,
+    required int amount,
     required String kind,
     required int sortOrder,
     this.isDone = const Value.absent(),
@@ -4790,7 +4790,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     Expression<String>? budgetId,
     Expression<String>? name,
     Expression<String>? categoryId,
-    Expression<double>? amount,
+    Expression<int>? amount,
     Expression<String>? kind,
     Expression<int>? sortOrder,
     Expression<bool>? isDone,
@@ -4818,7 +4818,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
     Value<String>? budgetId,
     Value<String>? name,
     Value<String?>? categoryId,
-    Value<double>? amount,
+    Value<int>? amount,
     Value<String>? kind,
     Value<int>? sortOrder,
     Value<bool>? isDone,
@@ -4857,7 +4857,7 @@ class WeeklyBudgetItemsCompanion extends UpdateCompanion<WeeklyBudgetItemRow> {
       map['category_id'] = Variable<String>(categoryId.value);
     }
     if (amount.present) {
-      map['amount'] = Variable<double>(amount.value);
+      map['amount'] = Variable<int>(amount.value);
     }
     if (kind.present) {
       map['kind'] = Variable<String>(kind.value);
@@ -4952,13 +4952,13 @@ typedef $$AccountsTableCreateCompanionBuilder =
       required String type,
       Value<String?> description,
       Value<bool> isProtected,
-      Value<double> creditLimit,
+      Value<int> creditLimit,
       Value<int?> closingDay,
       Value<int?> paymentDay,
       Value<double?> interestRate,
       Value<double?> minimumPaymentPct,
       Value<double> minimumCapitalPct,
-      Value<double> minimumFloor,
+      Value<int> minimumFloor,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
@@ -4972,13 +4972,13 @@ typedef $$AccountsTableUpdateCompanionBuilder =
       Value<String> type,
       Value<String?> description,
       Value<bool> isProtected,
-      Value<double> creditLimit,
+      Value<int> creditLimit,
       Value<int?> closingDay,
       Value<int?> paymentDay,
       Value<double?> interestRate,
       Value<double?> minimumPaymentPct,
       Value<double> minimumCapitalPct,
-      Value<double> minimumFloor,
+      Value<int> minimumFloor,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
@@ -5046,7 +5046,7 @@ class $$AccountsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get creditLimit => $composableBuilder(
+  ColumnFilters<int> get creditLimit => $composableBuilder(
     column: $table.creditLimit,
     builder: (column) => ColumnFilters(column),
   );
@@ -5076,7 +5076,7 @@ class $$AccountsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get minimumFloor => $composableBuilder(
+  ColumnFilters<int> get minimumFloor => $composableBuilder(
     column: $table.minimumFloor,
     builder: (column) => ColumnFilters(column),
   );
@@ -5161,7 +5161,7 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get creditLimit => $composableBuilder(
+  ColumnOrderings<int> get creditLimit => $composableBuilder(
     column: $table.creditLimit,
     builder: (column) => ColumnOrderings(column),
   );
@@ -5191,7 +5191,7 @@ class $$AccountsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get minimumFloor => $composableBuilder(
+  ColumnOrderings<int> get minimumFloor => $composableBuilder(
     column: $table.minimumFloor,
     builder: (column) => ColumnOrderings(column),
   );
@@ -5245,7 +5245,7 @@ class $$AccountsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get creditLimit => $composableBuilder(
+  GeneratedColumn<int> get creditLimit => $composableBuilder(
     column: $table.creditLimit,
     builder: (column) => column,
   );
@@ -5275,7 +5275,7 @@ class $$AccountsTableAnnotationComposer
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get minimumFloor => $composableBuilder(
+  GeneratedColumn<int> get minimumFloor => $composableBuilder(
     column: $table.minimumFloor,
     builder: (column) => column,
   );
@@ -5353,13 +5353,13 @@ class $$AccountsTableTableManager
                 Value<String> type = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<bool> isProtected = const Value.absent(),
-                Value<double> creditLimit = const Value.absent(),
+                Value<int> creditLimit = const Value.absent(),
                 Value<int?> closingDay = const Value.absent(),
                 Value<int?> paymentDay = const Value.absent(),
                 Value<double?> interestRate = const Value.absent(),
                 Value<double?> minimumPaymentPct = const Value.absent(),
                 Value<double> minimumCapitalPct = const Value.absent(),
-                Value<double> minimumFloor = const Value.absent(),
+                Value<int> minimumFloor = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -5391,13 +5391,13 @@ class $$AccountsTableTableManager
                 required String type,
                 Value<String?> description = const Value.absent(),
                 Value<bool> isProtected = const Value.absent(),
-                Value<double> creditLimit = const Value.absent(),
+                Value<int> creditLimit = const Value.absent(),
                 Value<int?> closingDay = const Value.absent(),
                 Value<int?> paymentDay = const Value.absent(),
                 Value<double?> interestRate = const Value.absent(),
                 Value<double?> minimumPaymentPct = const Value.absent(),
                 Value<double> minimumCapitalPct = const Value.absent(),
-                Value<double> minimumFloor = const Value.absent(),
+                Value<int> minimumFloor = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -5486,7 +5486,7 @@ typedef $$CategoriesTableCreateCompanionBuilder =
       required String appliesTo,
       required String colorSlug,
       required String iconSlug,
-      Value<double?> monthlyLimit,
+      Value<int?> monthlyLimit,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
@@ -5499,7 +5499,7 @@ typedef $$CategoriesTableUpdateCompanionBuilder =
       Value<String> appliesTo,
       Value<String> colorSlug,
       Value<String> iconSlug,
-      Value<double?> monthlyLimit,
+      Value<int?> monthlyLimit,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
@@ -5591,7 +5591,7 @@ class $$CategoriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get monthlyLimit => $composableBuilder(
+  ColumnFilters<int> get monthlyLimit => $composableBuilder(
     column: $table.monthlyLimit,
     builder: (column) => ColumnFilters(column),
   );
@@ -5696,7 +5696,7 @@ class $$CategoriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get monthlyLimit => $composableBuilder(
+  ColumnOrderings<int> get monthlyLimit => $composableBuilder(
     column: $table.monthlyLimit,
     builder: (column) => ColumnOrderings(column),
   );
@@ -5741,7 +5741,7 @@ class $$CategoriesTableAnnotationComposer
   GeneratedColumn<String> get iconSlug =>
       $composableBuilder(column: $table.iconSlug, builder: (column) => column);
 
-  GeneratedColumn<double> get monthlyLimit => $composableBuilder(
+  GeneratedColumn<int> get monthlyLimit => $composableBuilder(
     column: $table.monthlyLimit,
     builder: (column) => column,
   );
@@ -5843,7 +5843,7 @@ class $$CategoriesTableTableManager
                 Value<String> appliesTo = const Value.absent(),
                 Value<String> colorSlug = const Value.absent(),
                 Value<String> iconSlug = const Value.absent(),
-                Value<double?> monthlyLimit = const Value.absent(),
+                Value<int?> monthlyLimit = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -5867,7 +5867,7 @@ class $$CategoriesTableTableManager
                 required String appliesTo,
                 required String colorSlug,
                 required String iconSlug,
-                Value<double?> monthlyLimit = const Value.absent(),
+                Value<int?> monthlyLimit = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
@@ -5980,8 +5980,8 @@ typedef $$LoansTableCreateCompanionBuilder =
     LoansCompanion Function({
       required String id,
       required String name,
-      required double principalAmount,
-      required double monthlyPayment,
+      required int principalAmount,
+      required int monthlyPayment,
       required int initialDurationMonths,
       required int currentDurationMonths,
       required int paymentDay,
@@ -5998,8 +5998,8 @@ typedef $$LoansTableUpdateCompanionBuilder =
     LoansCompanion Function({
       Value<String> id,
       Value<String> name,
-      Value<double> principalAmount,
-      Value<double> monthlyPayment,
+      Value<int> principalAmount,
+      Value<int> monthlyPayment,
       Value<int> initialDurationMonths,
       Value<int> currentDurationMonths,
       Value<int> paymentDay,
@@ -6077,12 +6077,12 @@ class $$LoansTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get principalAmount => $composableBuilder(
+  ColumnFilters<int> get principalAmount => $composableBuilder(
     column: $table.principalAmount,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get monthlyPayment => $composableBuilder(
+  ColumnFilters<int> get monthlyPayment => $composableBuilder(
     column: $table.monthlyPayment,
     builder: (column) => ColumnFilters(column),
   );
@@ -6200,12 +6200,12 @@ class $$LoansTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get principalAmount => $composableBuilder(
+  ColumnOrderings<int> get principalAmount => $composableBuilder(
     column: $table.principalAmount,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get monthlyPayment => $composableBuilder(
+  ColumnOrderings<int> get monthlyPayment => $composableBuilder(
     column: $table.monthlyPayment,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6294,12 +6294,12 @@ class $$LoansTableAnnotationComposer
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<double> get principalAmount => $composableBuilder(
+  GeneratedColumn<int> get principalAmount => $composableBuilder(
     column: $table.principalAmount,
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get monthlyPayment => $composableBuilder(
+  GeneratedColumn<int> get monthlyPayment => $composableBuilder(
     column: $table.monthlyPayment,
     builder: (column) => column,
   );
@@ -6423,8 +6423,8 @@ class $$LoansTableTableManager
               ({
                 Value<String> id = const Value.absent(),
                 Value<String> name = const Value.absent(),
-                Value<double> principalAmount = const Value.absent(),
-                Value<double> monthlyPayment = const Value.absent(),
+                Value<int> principalAmount = const Value.absent(),
+                Value<int> monthlyPayment = const Value.absent(),
                 Value<int> initialDurationMonths = const Value.absent(),
                 Value<int> currentDurationMonths = const Value.absent(),
                 Value<int> paymentDay = const Value.absent(),
@@ -6457,8 +6457,8 @@ class $$LoansTableTableManager
               ({
                 required String id,
                 required String name,
-                required double principalAmount,
-                required double monthlyPayment,
+                required int principalAmount,
+                required int monthlyPayment,
                 required int initialDurationMonths,
                 required int currentDurationMonths,
                 required int paymentDay,
@@ -6588,7 +6588,7 @@ typedef $$JournalEntriesTableCreateCompanionBuilder =
       required String kind,
       Value<String?> accountOriginId,
       Value<String?> accountDestinationId,
-      required double amount,
+      required int amount,
       Value<String?> description,
       required DateTime occurredAt,
       Value<String?> categoryId,
@@ -6596,8 +6596,8 @@ typedef $$JournalEntriesTableCreateCompanionBuilder =
       required DateTime updatedAt,
       Value<DateTime?> deletedAt,
       Value<String?> loanId,
-      Value<double?> principalAmount,
-      Value<double?> interestAmount,
+      Value<int?> principalAmount,
+      Value<int?> interestAmount,
       Value<bool> isMonthlyPayment,
       Value<int> rowid,
     });
@@ -6607,7 +6607,7 @@ typedef $$JournalEntriesTableUpdateCompanionBuilder =
       Value<String> kind,
       Value<String?> accountOriginId,
       Value<String?> accountDestinationId,
-      Value<double> amount,
+      Value<int> amount,
       Value<String?> description,
       Value<DateTime> occurredAt,
       Value<String?> categoryId,
@@ -6615,8 +6615,8 @@ typedef $$JournalEntriesTableUpdateCompanionBuilder =
       Value<DateTime> updatedAt,
       Value<DateTime?> deletedAt,
       Value<String?> loanId,
-      Value<double?> principalAmount,
-      Value<double?> interestAmount,
+      Value<int?> principalAmount,
+      Value<int?> interestAmount,
       Value<bool> isMonthlyPayment,
       Value<int> rowid,
     });
@@ -6730,7 +6730,7 @@ class $$JournalEntriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get amount => $composableBuilder(
+  ColumnFilters<int> get amount => $composableBuilder(
     column: $table.amount,
     builder: (column) => ColumnFilters(column),
   );
@@ -6760,12 +6760,12 @@ class $$JournalEntriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get principalAmount => $composableBuilder(
+  ColumnFilters<int> get principalAmount => $composableBuilder(
     column: $table.principalAmount,
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get interestAmount => $composableBuilder(
+  ColumnFilters<int> get interestAmount => $composableBuilder(
     column: $table.interestAmount,
     builder: (column) => ColumnFilters(column),
   );
@@ -6887,7 +6887,7 @@ class $$JournalEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get amount => $composableBuilder(
+  ColumnOrderings<int> get amount => $composableBuilder(
     column: $table.amount,
     builder: (column) => ColumnOrderings(column),
   );
@@ -6917,12 +6917,12 @@ class $$JournalEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get principalAmount => $composableBuilder(
+  ColumnOrderings<int> get principalAmount => $composableBuilder(
     column: $table.principalAmount,
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get interestAmount => $composableBuilder(
+  ColumnOrderings<int> get interestAmount => $composableBuilder(
     column: $table.interestAmount,
     builder: (column) => ColumnOrderings(column),
   );
@@ -7040,7 +7040,7 @@ class $$JournalEntriesTableAnnotationComposer
   GeneratedColumn<String> get kind =>
       $composableBuilder(column: $table.kind, builder: (column) => column);
 
-  GeneratedColumn<double> get amount =>
+  GeneratedColumn<int> get amount =>
       $composableBuilder(column: $table.amount, builder: (column) => column);
 
   GeneratedColumn<String> get description => $composableBuilder(
@@ -7062,12 +7062,12 @@ class $$JournalEntriesTableAnnotationComposer
   GeneratedColumn<DateTime> get deletedAt =>
       $composableBuilder(column: $table.deletedAt, builder: (column) => column);
 
-  GeneratedColumn<double> get principalAmount => $composableBuilder(
+  GeneratedColumn<int> get principalAmount => $composableBuilder(
     column: $table.principalAmount,
     builder: (column) => column,
   );
 
-  GeneratedColumn<double> get interestAmount => $composableBuilder(
+  GeneratedColumn<int> get interestAmount => $composableBuilder(
     column: $table.interestAmount,
     builder: (column) => column,
   );
@@ -7213,7 +7213,7 @@ class $$JournalEntriesTableTableManager
                 Value<String> kind = const Value.absent(),
                 Value<String?> accountOriginId = const Value.absent(),
                 Value<String?> accountDestinationId = const Value.absent(),
-                Value<double> amount = const Value.absent(),
+                Value<int> amount = const Value.absent(),
                 Value<String?> description = const Value.absent(),
                 Value<DateTime> occurredAt = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
@@ -7221,8 +7221,8 @@ class $$JournalEntriesTableTableManager
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<String?> loanId = const Value.absent(),
-                Value<double?> principalAmount = const Value.absent(),
-                Value<double?> interestAmount = const Value.absent(),
+                Value<int?> principalAmount = const Value.absent(),
+                Value<int?> interestAmount = const Value.absent(),
                 Value<bool> isMonthlyPayment = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => JournalEntriesCompanion(
@@ -7249,7 +7249,7 @@ class $$JournalEntriesTableTableManager
                 required String kind,
                 Value<String?> accountOriginId = const Value.absent(),
                 Value<String?> accountDestinationId = const Value.absent(),
-                required double amount,
+                required int amount,
                 Value<String?> description = const Value.absent(),
                 required DateTime occurredAt,
                 Value<String?> categoryId = const Value.absent(),
@@ -7257,8 +7257,8 @@ class $$JournalEntriesTableTableManager
                 required DateTime updatedAt,
                 Value<DateTime?> deletedAt = const Value.absent(),
                 Value<String?> loanId = const Value.absent(),
-                Value<double?> principalAmount = const Value.absent(),
-                Value<double?> interestAmount = const Value.absent(),
+                Value<int?> principalAmount = const Value.absent(),
+                Value<int?> interestAmount = const Value.absent(),
                 Value<bool> isMonthlyPayment = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => JournalEntriesCompanion.insert(
@@ -8110,7 +8110,7 @@ typedef $$WeeklyBudgetItemsTableCreateCompanionBuilder =
       required String budgetId,
       required String name,
       Value<String?> categoryId,
-      required double amount,
+      required int amount,
       required String kind,
       required int sortOrder,
       Value<bool> isDone,
@@ -8124,7 +8124,7 @@ typedef $$WeeklyBudgetItemsTableUpdateCompanionBuilder =
       Value<String> budgetId,
       Value<String> name,
       Value<String?> categoryId,
-      Value<double> amount,
+      Value<int> amount,
       Value<String> kind,
       Value<int> sortOrder,
       Value<bool> isDone,
@@ -8207,7 +8207,7 @@ class $$WeeklyBudgetItemsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get amount => $composableBuilder(
+  ColumnFilters<int> get amount => $composableBuilder(
     column: $table.amount,
     builder: (column) => ColumnFilters(column),
   );
@@ -8303,7 +8303,7 @@ class $$WeeklyBudgetItemsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get amount => $composableBuilder(
+  ColumnOrderings<int> get amount => $composableBuilder(
     column: $table.amount,
     builder: (column) => ColumnOrderings(column),
   );
@@ -8395,7 +8395,7 @@ class $$WeeklyBudgetItemsTableAnnotationComposer
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
 
-  GeneratedColumn<double> get amount =>
+  GeneratedColumn<int> get amount =>
       $composableBuilder(column: $table.amount, builder: (column) => column);
 
   GeneratedColumn<String> get kind =>
@@ -8503,7 +8503,7 @@ class $$WeeklyBudgetItemsTableTableManager
                 Value<String> budgetId = const Value.absent(),
                 Value<String> name = const Value.absent(),
                 Value<String?> categoryId = const Value.absent(),
-                Value<double> amount = const Value.absent(),
+                Value<int> amount = const Value.absent(),
                 Value<String> kind = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<bool> isDone = const Value.absent(),
@@ -8529,7 +8529,7 @@ class $$WeeklyBudgetItemsTableTableManager
                 required String budgetId,
                 required String name,
                 Value<String?> categoryId = const Value.absent(),
-                required double amount,
+                required int amount,
                 required String kind,
                 required int sortOrder,
                 Value<bool> isDone = const Value.absent(),
