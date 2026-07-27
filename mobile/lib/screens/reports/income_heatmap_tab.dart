@@ -8,7 +8,7 @@ import 'package:fincore/data/reports.dart';
 import 'package:fincore/screens/reports/spending_heatmap_tab.dart'
     show heatmapDayForMonthPosition;
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -337,7 +337,7 @@ class _MonthDetailSheet extends StatelessWidget {
     final totalCells = (firstWeekday - 1) + daysInMonth;
     final rows = (totalCells / _columns).ceil();
 
-    var monthTotal = 0.0;
+    var monthTotal = 0;
     for (var d = 1; d <= daysInMonth; d++) {
       monthTotal += heatmap.dayIncome[DateTime(year, month, d)] ?? 0;
     }
@@ -422,7 +422,7 @@ class _MonthDetailSheet extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              'Ingreso del mes: ${formatAmount(monthTotal)}',
+              'Ingreso del mes: ${formatCents(monthTotal)}',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: FincoreColors.textSubtle,
@@ -650,7 +650,7 @@ class _Legend extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Total: ${formatAmount(heatmap.total)}'
+          'Total: ${formatCents(heatmap.total)}'
           ' · ${heatmap.daysWithIncome} '
           '${heatmap.daysWithIncome == 1 ? 'día' : 'días'} con ingreso',
           textAlign: TextAlign.center,

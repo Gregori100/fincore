@@ -3,7 +3,7 @@ import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/theme/fincore_typography.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 
@@ -39,7 +39,7 @@ class AccountBalanceHint extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(top: kSpaceSm, left: kSpaceMd),
-      child: StreamBuilder<double>(
+      child: StreamBuilder<int>(
         stream: deps.stateService.watchAccountBalance(selected.id, selected.type),
         builder: (context, snapshot) {
           // Hotfix post-smoke 2026-06-19 (bug "saldo en 0" al abrir el form
@@ -84,7 +84,7 @@ class AccountBalanceHint extends StatelessWidget {
 
 class _Chip extends StatelessWidget {
   final String labelText;
-  final double value;
+  final int value;
   final Color color;
   const _Chip({required this.labelText, required this.value, required this.color});
 
@@ -101,7 +101,7 @@ class _Chip extends StatelessWidget {
           ),
         ),
         Text(
-          formatAmount(value),
+          formatCents(value),
           style: label.copyWith(color: color),
         ),
       ],

@@ -1,3 +1,4 @@
+import 'package:fincore/utils/money.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
@@ -107,24 +108,33 @@ class AmountInputFormatter extends TextInputFormatter {
   }
 }
 
-/// Convierte un string formateado (`"1,234.56"`) a `double` para persistir.
-/// Retorna `null` si el string no es parseable.
+/// Convierte un string formateado (`"1,234.56"`) a **centavos** (`int`) para
+/// persistir. Retorna `null` si el string no es parseable — los forms usan
+/// `null` como señal de "monto inválido" y muestran su propio error, así que
+/// esta función traga la `FormatException` de `parseCents` en vez de
+/// propagarla.
+///
+/// Sprint flutter-integer-cents-v1: antes retornaba `double` en unidades.
 ///
 /// Se usa en `entry_form_screen._submit()` al leer el `_amountCtrl.text`.
-double? parseFormattedAmount(String formatted) {
-  final normalized = formatted.replaceAll(',', '').trim();
-  if (normalized.isEmpty) return null;
-  return double.tryParse(normalized);
+int? parseFormattedAmount(String formatted) {
+  try {
+    return parseCents(formatted);
+  } on FormatException {
+    return null;
+  }
 }
 
-/// Formatea un `double` para hidratar el TextField en modo edit.
-/// Ejemplos: `1000` → `"1,000"`, `1500.5` → `"1,500.50"`.
+/// Formatea **centavos** (`int`) para hidratar el TextField en modo edit.
+/// Ejemplos: `100000` → `"1,000"`, `150050` → `"1,500.50"`.
+///
+/// No usa `formatCents` porque el input NO lleva símbolo `$` — el usuario
+/// edita el número crudo con separadores de miles.
 ///
 /// Se usa en `entry_form_screen._bootstrap()` cuando se carga un entry existente.
-String formatAmountForInput(double amount) {
-  final rounded = (amount * 100).round() / 100;
-  final intPart = rounded.truncate();
-  final decimals = ((rounded - intPart) * 100).round().abs();
+String formatAmountForInput(int cents) {
+  final intPart = cents ~/ 100;
+  final decimals = (cents % 100).abs();
   final intFormatted = AmountInputFormatter._thousandsFormat.format(intPart);
   if (decimals == 0) return intFormatted;
   return '$intFormatted.${decimals.toString().padLeft(2, '0')}';

@@ -3,7 +3,7 @@ import 'package:fincore/data/daos/accounts_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/destructive_dialog.dart';
@@ -205,7 +205,7 @@ class _AccountRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: kSpaceSm),
-          StreamBuilder<double>(
+          StreamBuilder<int>(
             stream: deps.stateService
                 .watchAccountBalance(account.id, account.type),
             builder: (context, snap) {
@@ -233,7 +233,7 @@ class _AccountRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    formatAmount(balance),
+                    formatCents(balance),
                     style: TextStyle(
                       color: isArchived ? FincoreColors.textSubtle : color,
                       fontWeight: FontWeight.w700,
@@ -241,7 +241,7 @@ class _AccountRow extends StatelessWidget {
                   ),
                   if (account.type == 'credit')
                     Text(
-                      'de ${formatAmount(account.creditLimit)}',
+                      'de ${formatCents(account.creditLimit)}',
                       style: const TextStyle(
                           color: FincoreColors.textSubtle, fontSize: 11),
                     ),

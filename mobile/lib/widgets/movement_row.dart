@@ -6,7 +6,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/theme/fincore_typography.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/category_badge.dart' as cb;
 import 'package:fincore/widgets/entry_account_label.dart';
@@ -229,15 +229,15 @@ class MovementRow extends StatelessWidget {
         JournalKind.loanPayment => Icons.request_quote_outlined,
       };
 
-  String _signedAmount(JournalKind k, double amount) => switch (k) {
-        JournalKind.income => formatAmount(amount, showSign: true),
+  String _signedAmount(JournalKind k, int amount) => switch (k) {
+        JournalKind.income => formatCents(amount, showSign: true),
         JournalKind.expense ||
         JournalKind.creditExpense =>
-          '-${formatAmount(amount)}',
+          '-${formatCents(amount)}',
         JournalKind.debtPayment ||
         JournalKind.transfer ||
         JournalKind.loanPayment =>
-          formatAmount(amount),
+          formatCents(amount),
       };
 
   model.Category _toModelCategory(db.Category c) {

@@ -2,7 +2,7 @@ import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
@@ -106,7 +106,7 @@ class _LoanActionsMenuState extends State<LoanActionsMenu> {
       (a) => a.id == widget.loan.destinationAccountId,
       orElse: () => widget.accounts.first,
     );
-    // Hotfix quality-review M7: formatAmount() en vez de toStringAsFixed(0),
+    // Hotfix quality-review M7: formatCents() en vez de toStringAsFixed(0),
     // que pintaba "150000" sin identidad de moneda ni miles justo en el
     // dialog más crítico del flujo.
     final impacts = <DestructiveImpact>[
@@ -120,7 +120,7 @@ class _LoanActionsMenuState extends State<LoanActionsMenu> {
       DestructiveImpact(
         icon: Icons.account_balance_wallet_outlined,
         label:
-            'El ingreso inicial de ${formatAmount(widget.loan.principalAmount)} '
+            'El ingreso inicial de ${formatCents(widget.loan.principalAmount)} '
             'en ${destAccount.name} se cancela',
       ),
       const DestructiveImpact(

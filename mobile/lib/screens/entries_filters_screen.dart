@@ -13,6 +13,7 @@ import 'package:fincore/widgets/save_view_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:fincore/widgets/amount_input_formatter.dart';
 
 /// Panel full-screen de filtros de movimientos (sprint
 /// `flutter-movements-filters-v1`).
@@ -183,8 +184,8 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
   void _apply() {
     final minText = _minAmountCtrl.text.trim();
     final maxText = _maxAmountCtrl.text.trim();
-    final min = minText.isEmpty ? null : double.tryParse(minText);
-    final max = maxText.isEmpty ? null : double.tryParse(maxText);
+    final min = minText.isEmpty ? null : parseFormattedAmount(minText);
+    final max = maxText.isEmpty ? null : parseFormattedAmount(maxText);
 
     if (min != null && max != null && min > max) {
       showWarningSnackbar(
@@ -220,8 +221,8 @@ class _EntriesFiltersScreenState extends State<EntriesFiltersScreen> {
     // (parsea controllers). Reutilizamos la misma lógica de `_apply`.
     final minText = _minAmountCtrl.text.trim();
     final maxText = _maxAmountCtrl.text.trim();
-    final min = minText.isEmpty ? null : double.tryParse(minText);
-    final max = maxText.isEmpty ? null : double.tryParse(maxText);
+    final min = minText.isEmpty ? null : parseFormattedAmount(minText);
+    final max = maxText.isEmpty ? null : parseFormattedAmount(maxText);
     if (min != null && max != null && min > max) {
       showWarningSnackbar(
         context,

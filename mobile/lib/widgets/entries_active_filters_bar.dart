@@ -7,7 +7,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/theme/fincore_typography.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -84,14 +84,14 @@ class EntriesActiveFiltersBar extends StatelessWidget {
     );
   }
 
-  String _amountLabel(double? min, double? max) {
+  String _amountLabel(int? min, int? max) {
     if (min != null && max != null) {
-      return '${formatAmount(min)} – ${formatAmount(max)}';
+      return '${formatCents(min)} – ${formatCents(max)}';
     }
     if (min != null) {
-      return '≥ ${formatAmount(min)}';
+      return '≥ ${formatCents(min)}';
     }
-    return '≤ ${formatAmount(max!)}';
+    return '≤ ${formatCents(max!)}';
   }
 
   String _kindsLabel(List<String> kinds) {

@@ -5,7 +5,7 @@ import 'package:fincore/data/entries_filters.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/widgets/delta_chip.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/date_field_outlined.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
@@ -243,19 +243,19 @@ class _CashflowHeader extends StatelessWidget {
         children: [
           _HeaderMetric(
             label: 'Ingresos',
-            value: formatAmount(report.totalIncome),
+            value: formatCents(report.totalIncome),
             color: FincoreColors.positive,
           ),
           _HeaderMetric(
             label: 'Gastos',
-            value: formatAmount(report.totalExpense),
+            value: formatCents(report.totalExpense),
             color: FincoreColors.negative,
           ),
           _HeaderMetric(
             label: 'Neto',
             value: report.net >= 0
-                ? formatAmount(report.net)
-                : '-${formatAmount(report.net.abs())}',
+                ? formatCents(report.net)
+                : '-${formatCents(report.net.abs())}',
             color: netColor,
           ),
         ],
@@ -317,7 +317,7 @@ class _CashflowChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final maxValue = report.months.fold<double>(0, (acc, m) {
+    final maxValue = report.months.fold<int>(0, (acc, m) {
       final localMax = m.income > m.expense ? m.income : m.expense;
       return localMax > acc ? localMax : acc;
     });
@@ -367,7 +367,7 @@ class _CashflowChart extends StatelessWidget {
 
 class _ChartColumn extends StatelessWidget {
   final MonthCashflow month;
-  final double maxValue;
+  final int maxValue;
 
   const _ChartColumn({required this.month, required this.maxValue});
 
@@ -484,7 +484,7 @@ class _BreakdownRow extends StatelessWidget {
               ),
               Expanded(
                 child: Text(
-                  formatAmount(month.income),
+                  formatCents(month.income),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                     color: FincoreColors.positive,
@@ -495,7 +495,7 @@ class _BreakdownRow extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  formatAmount(month.expense),
+                  formatCents(month.expense),
                   textAlign: TextAlign.right,
                   style: const TextStyle(
                     color: FincoreColors.negative,
@@ -507,8 +507,8 @@ class _BreakdownRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   month.net >= 0
-                      ? formatAmount(month.net)
-                      : '-${formatAmount(month.net.abs())}',
+                      ? formatCents(month.net)
+                      : '-${formatCents(month.net.abs())}',
                   textAlign: TextAlign.right,
                   style: TextStyle(
                     color: netColor,
@@ -793,8 +793,8 @@ class _BreakdownSummary extends StatelessWidget {
         ? FincoreColors.positive
         : FincoreColors.negative;
     final netLabel = breakdown.net >= 0
-        ? formatAmount(breakdown.net)
-        : '-${formatAmount(breakdown.net.abs())}';
+        ? formatCents(breakdown.net)
+        : '-${formatCents(breakdown.net.abs())}';
     return BaseCard(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
@@ -812,7 +812,7 @@ class _BreakdownSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  formatAmount(breakdown.totalIncome),
+                  formatCents(breakdown.totalIncome),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -842,7 +842,7 @@ class _BreakdownSummary extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  formatAmount(breakdown.totalExpense),
+                  formatCents(breakdown.totalExpense),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -972,7 +972,7 @@ class _CategoryFlowRow extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                formatAmount(flow.amount),
+                formatCents(flow.amount),
                 style: const TextStyle(
                   color: FincoreColors.textPrimary,
                   fontSize: 13,

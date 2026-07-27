@@ -1,7 +1,7 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/date_field_outlined.dart';
 import 'package:flutter/material.dart';
@@ -162,9 +162,9 @@ class _BalanceCards extends StatelessWidget {
 
 class _BalanceCard extends StatelessWidget {
   final String label;
-  final double amountNow;
-  final double amountAtDate;
-  final double delta;
+  final int amountNow;
+  final int amountAtDate;
+  final int delta;
   final Color color;
   final String asOfLabel;
   final bool deltaUpIsGood;
@@ -192,8 +192,8 @@ class _BalanceCard extends StatelessWidget {
     final deltaSign = isFlat
         ? '0'
         : (isUp
-            ? '+${formatAmount(delta)}'
-            : '-${formatAmount(delta.abs())}');
+            ? '+${formatCents(delta)}'
+            : '-${formatCents(delta.abs())}');
     return BaseCard(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
       child: Column(
@@ -210,7 +210,7 @@ class _BalanceCard extends StatelessWidget {
           const SizedBox(height: 6),
           // A fecha: tamaño principal (el tab pide "saldo a fecha").
           Text(
-            formatAmount(amountAtDate),
+            formatCents(amountAtDate),
             style: TextStyle(
               color: color,
               fontSize: 15,
@@ -230,7 +230,7 @@ class _BalanceCard extends StatelessWidget {
           const SizedBox(height: 6),
           // Hoy: contexto comparativo.
           Text(
-            formatAmount(amountNow),
+            formatCents(amountNow),
             style: const TextStyle(
               color: FincoreColors.textPrimary,
               fontSize: 12,
@@ -320,11 +320,11 @@ class _AccountRow extends StatelessWidget {
     final deltaSign = isFlat
         ? '0'
         : (isUp
-            ? '+${formatAmount(visualDelta)}'
-            : '-${formatAmount(visualDelta.abs())}');
+            ? '+${formatCents(visualDelta)}'
+            : '-${formatCents(visualDelta.abs())}');
 
-    String formatVisible(double v, {String suffix = ''}) {
-      return '${v < 0 ? '-' : ''}${formatAmount(v.abs())}$suffix';
+    String formatVisible(int v, {String suffix = ''}) {
+      return '${v < 0 ? '-' : ''}${formatCents(v.abs())}$suffix';
     }
 
     final suffixAtDate =

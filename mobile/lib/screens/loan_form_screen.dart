@@ -7,6 +7,7 @@ import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_picker.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/loan_actions_menu.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -90,8 +91,15 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
     }
   }
 
-  double? _parseDecimal(String text) =>
-      double.tryParse(text.trim().replaceAll(',', '.'));
+  /// Parsea el input del usuario a **centavos**. `null` si no es un monto
+  /// válido — el validador del form muestra el error correspondiente.
+  int? _parseDecimal(String text) {
+    try {
+      return parseCents(text);
+    } on FormatException {
+      return null;
+    }
+  }
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(

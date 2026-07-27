@@ -3,7 +3,7 @@ import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
@@ -192,7 +192,7 @@ class _LoanRow extends StatelessWidget {
                 ),
                 const SizedBox(height: kSpace2xs),
                 Text(
-                  '${formatAmount(loan.monthlyPayment)} · día ${loan.paymentDay}',
+                  '${formatCents(loan.monthlyPayment)} · día ${loan.paymentDay}',
                   style: const TextStyle(
                       color: FincoreColors.textSubtle, fontSize: 12),
                   overflow: TextOverflow.ellipsis,
@@ -201,7 +201,7 @@ class _LoanRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: kSpaceSm),
-          StreamBuilder<double>(
+          StreamBuilder<int>(
             stream: deps.loansDao.watchBalance(loan.id),
             builder: (context, snap) {
               if (!snap.hasData) {
@@ -212,7 +212,7 @@ class _LoanRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    formatAmount(balance),
+                    formatCents(balance),
                     style: TextStyle(
                       color: isClosed
                           ? FincoreColors.textSubtle
@@ -221,7 +221,7 @@ class _LoanRow extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    'de ${formatAmount(loan.principalAmount)}',
+                    'de ${formatCents(loan.principalAmount)}',
                     style: const TextStyle(
                         color: FincoreColors.textSubtle, fontSize: 11),
                   ),

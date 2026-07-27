@@ -9,6 +9,7 @@ import 'package:fincore/widgets/color_picker.dart';
 import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/icon_picker.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -130,10 +131,14 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
     }
   }
 
-  /// Parsea un decimal aceptando `,` o `.` como separador. Normaliza a `.`
-  /// antes de `double.tryParse`.
-  double? _parseDecimalInput(String text) {
-    return double.tryParse(text.trim().replaceAll(',', '.'));
+  /// Parsea el input del usuario a **centavos**. `null` si no es un monto
+  /// válido — el validador del form muestra el error correspondiente.
+  int? _parseDecimalInput(String text) {
+    try {
+      return parseCents(text);
+    } on FormatException {
+      return null;
+    }
   }
 
   Future<void> _archive() async {

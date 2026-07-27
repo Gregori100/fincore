@@ -2,7 +2,7 @@ import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/weekly_budgets.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
@@ -204,8 +204,8 @@ enum _RedirectKind { error, warning }
 class _CompareHeader extends StatelessWidget {
   final String labelA;
   final String labelB;
-  final double balanceA;
-  final double balanceB;
+  final int balanceA;
+  final int balanceB;
 
   const _CompareHeader({
     required this.labelA,
@@ -234,7 +234,7 @@ class _CompareHeader extends StatelessWidget {
 
 class _MiniBudgetHeader extends StatelessWidget {
   final String label;
-  final double balance;
+  final int balance;
 
   const _MiniBudgetHeader({required this.label, required this.balance});
 
@@ -243,10 +243,10 @@ class _MiniBudgetHeader extends StatelessWidget {
     final String balanceLabel;
     final Color color;
     if (balance > 0) {
-      balanceLabel = 'Sobra ${formatAmount(balance)}';
+      balanceLabel = 'Sobra ${formatCents(balance)}';
       color = FincoreColors.positive;
     } else if (balance < 0) {
-      balanceLabel = 'Faltan ${formatAmount(balance.abs())}';
+      balanceLabel = 'Faltan ${formatCents(balance.abs())}';
       color = FincoreColors.negative;
     } else {
       balanceLabel = r'$0';
@@ -376,7 +376,7 @@ class _CompareItemRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    double? delta;
+    int? delta;
     final itemA = row.itemA;
     final itemB = row.itemB;
     if (itemA != null && itemB != null) {
@@ -397,7 +397,7 @@ class _CompareItemRow extends StatelessWidget {
               // Si B > A, delta positivo se muestra junto a B; si B < A,
               // delta negativo (magnitud A-B) se muestra junto a A.
               deltaText: (delta != null && delta < 0)
-                  ? '−${formatAmount(delta.abs())}'
+                  ? '−${formatCents(delta.abs())}'
                   : null,
               deltaColor: FincoreColors.warning,
             ),
@@ -409,7 +409,7 @@ class _CompareItemRow extends StatelessWidget {
             child: _ItemCell(
               item: itemB,
               deltaText: (delta != null && delta > 0)
-                  ? '+${formatAmount(delta)}'
+                  ? '+${formatCents(delta)}'
                   : null,
               deltaColor: FincoreColors.accent,
             ),
@@ -460,7 +460,7 @@ class _ItemCell extends StatelessWidget {
           spacing: 6,
           children: [
             Text(
-              formatAmount(currentItem.amount),
+              formatCents(currentItem.amount),
               style: const TextStyle(
                 color: FincoreColors.textMuted,
                 fontSize: 13,
@@ -488,8 +488,8 @@ class _CompareFooter extends StatelessWidget {
 
   const _CompareFooter({required this.itemsA, required this.itemsB});
 
-  double _sum(List<WeeklyBudgetItemRow> items, String kind) =>
-      items.where((i) => i.kind == kind).fold(0.0, (sum, i) => sum + i.amount);
+  int _sum(List<WeeklyBudgetItemRow> items, String kind) =>
+      items.where((i) => i.kind == kind).fold(0, (sum, i) => sum + i.amount);
 
   @override
   Widget build(BuildContext context) {
@@ -540,8 +540,8 @@ class _CompareFooter extends StatelessWidget {
 
 class _TotalRow extends StatelessWidget {
   final String label;
-  final double valueA;
-  final double valueB;
+  final int valueA;
+  final int valueB;
   final bool emphasized;
 
   const _TotalRow({
@@ -560,10 +560,10 @@ class _TotalRow extends StatelessWidget {
       deltaText = null;
       deltaColor = FincoreColors.textMuted;
     } else if (delta > 0) {
-      deltaText = '+${formatAmount(delta)}';
+      deltaText = '+${formatCents(delta)}';
       deltaColor = FincoreColors.accent;
     } else {
-      deltaText = '−${formatAmount(delta.abs())}';
+      deltaText = '−${formatCents(delta.abs())}';
       deltaColor = FincoreColors.warning;
     }
 
@@ -577,7 +577,7 @@ class _TotalRow extends StatelessWidget {
         children: [
           TextSpan(
             text:
-                '$label: A ${formatAmount(valueA)} vs B ${formatAmount(valueB)}',
+                '$label: A ${formatCents(valueA)} vs B ${formatCents(valueB)}',
           ),
           if (deltaText != null)
             TextSpan(

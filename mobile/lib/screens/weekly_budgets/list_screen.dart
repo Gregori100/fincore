@@ -4,7 +4,7 @@ import 'package:fincore/data/database.dart';
 import 'package:fincore/data/weekly_budgets.dart';
 import 'package:fincore/screens/weekly_budgets/widgets/edit_label_dialog.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
@@ -765,7 +765,7 @@ class _BudgetCard extends StatelessWidget {
                   },
                 ),
               ),
-              StreamBuilder<double>(
+              StreamBuilder<int>(
                 stream: deps.weeklyBudgetsDao.watchBudgetBalance(budget.id),
                 builder: (context, snap) {
                   if (!snap.hasData) {
@@ -775,10 +775,10 @@ class _BudgetCard extends StatelessWidget {
                   final String label;
                   final Color color;
                   if (balance > 0) {
-                    label = 'Sobra ${formatAmount(balance)}';
+                    label = 'Sobra ${formatCents(balance)}';
                     color = FincoreColors.positive;
                   } else if (balance < 0) {
-                    label = 'Faltan ${formatAmount(balance.abs())}';
+                    label = 'Faltan ${formatCents(balance.abs())}';
                     color = FincoreColors.negative;
                   } else {
                     label = 'En equilibrio';
@@ -873,7 +873,7 @@ class _BudgetCard extends StatelessWidget {
                       sibling.label,
                       style: const TextStyle(color: FincoreColors.textPrimary),
                     ),
-                    subtitle: StreamBuilder<double>(
+                    subtitle: StreamBuilder<int>(
                       stream: deps.weeklyBudgetsDao.watchBudgetBalance(
                         sibling.id,
                       ),
@@ -885,10 +885,10 @@ class _BudgetCard extends StatelessWidget {
                         final String label;
                         final Color color;
                         if (balance > 0) {
-                          label = 'Sobra ${formatAmount(balance)}';
+                          label = 'Sobra ${formatCents(balance)}';
                           color = FincoreColors.positive;
                         } else if (balance < 0) {
-                          label = 'Faltan ${formatAmount(balance.abs())}';
+                          label = 'Faltan ${formatCents(balance.abs())}';
                           color = FincoreColors.negative;
                         } else {
                           label = 'En equilibrio';
@@ -1115,7 +1115,7 @@ class _TemplatePickerSheetState extends State<_TemplatePickerSheet> {
                                 ),
                               ),
                               Text(
-                                formatAmount(item.amount),
+                                formatCents(item.amount),
                                 style: TextStyle(
                                   color:
                                       item.kind == 'income'

@@ -1,7 +1,7 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
@@ -324,7 +324,7 @@ class _UsedRing extends StatelessWidget {
 
 class _MoneyRow extends StatelessWidget {
   final String label;
-  final double amount;
+  final int amount;
   final Color amountColor;
   const _MoneyRow({
     required this.label,
@@ -345,7 +345,7 @@ class _MoneyRow extends StatelessWidget {
           ),
         ),
         Text(
-          formatAmount(amount),
+          formatCents(amount),
           style: TextStyle(
             color: amountColor,
             fontSize: 14,
@@ -466,7 +466,7 @@ class _DebtFreeBadge extends StatelessWidget {
 }
 
 class _OverdueBadge extends StatelessWidget {
-  final double exceededBy;
+  final int exceededBy;
   const _OverdueBadge({required this.exceededBy});
 
   @override
@@ -487,7 +487,7 @@ class _OverdueBadge extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Excedido por ${formatAmount(exceededBy)}',
+              'Excedido por ${formatCents(exceededBy)}',
               style: const TextStyle(
                 color: FincoreColors.negative,
                 fontSize: 12,

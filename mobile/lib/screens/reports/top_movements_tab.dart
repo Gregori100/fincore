@@ -4,7 +4,7 @@ import 'package:fincore/constants/kinds.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/models/category.dart' as model;
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/category_badge.dart' as cb;
 import 'package:fincore/widgets/date_field_outlined.dart';
@@ -405,15 +405,15 @@ class _TopMovementRow extends StatelessWidget {
         JournalKind.loanPayment => Icons.request_quote_outlined,
       };
 
-  String _signed(JournalKind k, double amount) => switch (k) {
-        JournalKind.income => formatAmount(amount, showSign: true),
+  String _signed(JournalKind k, int amount) => switch (k) {
+        JournalKind.income => formatCents(amount, showSign: true),
         JournalKind.expense ||
         JournalKind.creditExpense =>
-          '-${formatAmount(amount)}',
+          '-${formatCents(amount)}',
         JournalKind.debtPayment ||
         JournalKind.transfer ||
         JournalKind.loanPayment =>
-          formatAmount(amount),
+          formatCents(amount),
       };
 }
 

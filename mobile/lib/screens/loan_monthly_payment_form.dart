@@ -8,7 +8,7 @@ import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_balance_hint.dart';
 import 'package:fincore/widgets/account_picker.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,11 +46,12 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
   Loan? _loan;
 
   // Estado interno sincronizado del split. Guardamos los valores como
-  // double y los reflejamos en los controllers cuando cambia el slider o
-  // uno de los TextFields (sin disparar loops recursivos gracias a `_syncing`).
-  double _amount = 0;
-  double _principal = 0;
-  double _interest = 0;
+  // centavos enteros (sprint flutter-integer-cents-v1) y los reflejamos en
+  // los controllers cuando cambia el slider o uno de los TextFields (sin
+  // disparar loops recursivos gracias a `_syncing`).
+  int _amount = 0;
+  int _principal = 0;
+  int _interest = 0;
   bool _syncing = false;
   // F-DES-12: flag para el flash de fondo en el campo Capital al aplicar
   // "Saldar". Se activa por kMotionMedium y vuelve a false.
@@ -59,7 +60,7 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
   // indicador visual y botón "Saldar"). En modo edit, se preserva el
   // capital del propio entry (para que Diego pueda editarlo sin que su
   // propio principal reste al balance disponible).
-  double _balance = 0;
+  int _balance = 0;
 
   bool _loading = false;
   bool _saving = false;
@@ -135,10 +136,21 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
     }
   }
 
-  double? _parseDecimal(String text) =>
-      double.tryParse(text.trim().replaceAll(',', '.'));
+  /// Parsea el texto de un TextField del split a centavos. `null` si el
+  /// input no es un monto válido — los handlers lo tratan como "ignorar
+  /// este cambio" y dejan el estado previo.
+  int? _parseDecimal(String text) {
+    try {
+      return parseCents(text);
+    } on FormatException {
+      return null;
+    }
+  }
 
-  String _fmt(double v) => v.toStringAsFixed(2);
+  /// Formatea centavos como "1234.56" para los controllers del split.
+  /// Sin separador de miles ni `$`: es un campo editable, no un display.
+  String _fmt(int cents) =>
+      '${cents ~/ 100}.${(cents % 100).abs().toString().padLeft(2, '0')}';
 
   /// Escribe los 3 controllers desde el estado interno. Marca `_syncing`
   /// para que los listeners no disparen re-entradas.
@@ -172,8 +184,10 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
       _interest = 0;
     } else {
       final ratio = _principal / (_principal + _interest);
-      _principal = (v * ratio).clamp(0, v);
-      _interest = (v - _principal).clamp(0, v);
+      // La ratio es fraccionaria; el capital resultante se redondea al
+      // centavo y el interés toma el resto exacto para que la suma cierre.
+      _principal = (v * ratio).round().clamp(0, v);
+      _interest = v - _principal;
     }
     _writeSplitControllers();
     setState(() {});
@@ -183,9 +197,9 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
     if (_syncing) return;
     final v = _parseDecimal(_principalCtrl.text);
     if (v == null || v < 0) return;
-    final clamped = v.clamp(0.0, _amount);
+    final clamped = v.clamp(0, _amount);
     _principal = clamped;
-    _interest = (_amount - _principal).clamp(0, _amount);
+    _interest = _amount - _principal;
     _syncing = true;
     _interestCtrl.text = _fmt(_interest);
     _syncing = false;
@@ -196,18 +210,21 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
     if (_syncing) return;
     final v = _parseDecimal(_interestCtrl.text);
     if (v == null || v < 0) return;
-    final clamped = v.clamp(0.0, _amount);
+    final clamped = v.clamp(0, _amount);
     _interest = clamped;
-    _principal = (_amount - _interest).clamp(0, _amount);
+    _principal = _amount - _interest;
     _syncing = true;
     _principalCtrl.text = _fmt(_principal);
     _syncing = false;
     setState(() {});
   }
 
+  /// El `Slider` de Flutter opera en `double`; redondeamos al centavo y
+  /// derivamos el interés por resta exacta para que el split siempre cierre
+  /// contra `_amount` (RN-L08).
   void _onSliderChanged(double value) {
-    _principal = value;
-    _interest = (_amount - value).clamp(0, _amount);
+    _principal = value.round().clamp(0, _amount);
+    _interest = _amount - _principal;
     _writeSplitControllers();
     setState(() {});
   }
@@ -333,7 +350,7 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
       );
     }
     final fmt = DateFormat("d MMM y", "es_MX");
-    final sliderMax = _amount > 0 ? _amount : 1.0;
+    final sliderMax = _amount > 0 ? _amount : 1;
 
     return Scaffold(
       appBar: AppBar(
@@ -371,7 +388,7 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
                 // Hotfix quality-review B12: siempre mostramos el botón
                 // Saldar; con balance=0 lo dejamos disabled + tooltip.
                 onSaldar: _balance > 0 ? _onSaldarPressed : null,
-                balanceZero: _balance <= 0.005,
+                balanceZero: _balance <= 0,
               ),
               const SizedBox(height: kSpaceLg),
               // En modo edit, la cuenta origen es inmutable (preservada
@@ -582,9 +599,9 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
 /// `total − principal`. El track está pintado en 2 colores para reflejar
 /// visualmente la proporción.
 class _SplitSlider extends StatelessWidget {
-  final double total;
-  final double principal;
-  final double max;
+  final int total;
+  final int principal;
+  final int max;
   final ValueChanged<double> onChanged;
   const _SplitSlider({
     required this.total,
@@ -671,10 +688,12 @@ class _SplitSlider extends StatelessWidget {
             trackHeight: 6,
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           ),
+          // El `Slider` de Material opera en `double`; el widget recibe
+          // centavos enteros y convierte sólo en la frontera de render.
           child: Slider(
-            value: principal.clamp(0.0, max),
+            value: principal.clamp(0, max).toDouble(),
             min: 0,
-            max: max,
+            max: max.toDouble(),
             onChanged: total > 0 ? onChanged : null,
           ),
         ),
@@ -688,8 +707,8 @@ class _SplitSlider extends StatelessWidget {
 /// "Saldar" para llegar exacto al balance.
 // ignore: unused_element
 class _BalanceBanner extends StatelessWidget {
-  final double balance;
-  final double principal;
+  final int balance;
+  final int principal;
   final VoidCallback? onSaldar;
   final bool balanceZero;
   const _BalanceBanner({
@@ -701,7 +720,7 @@ class _BalanceBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final remainingAfter = (balance - principal).clamp(0.0, double.infinity);
+    final remainingAfter = (balance - principal).clamp(0, balance);
     return Container(
       padding: const EdgeInsets.symmetric(
           horizontal: kSpaceLg, vertical: kSpaceMd),
@@ -731,7 +750,7 @@ class _BalanceBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: kSpace2xs),
                 Text(
-                  formatAmount(balance),
+                  formatCents(balance),
                   style: const TextStyle(
                     color: FincoreColors.textPrimary,
                     fontWeight: FontWeight.w700,
@@ -741,7 +760,7 @@ class _BalanceBanner extends StatelessWidget {
                 if (principal > 0) ...[
                   const SizedBox(height: kSpace2xs),
                   Text(
-                    'Tras este pago: ${formatAmount(remainingAfter)}',
+                    'Tras este pago: ${formatCents(remainingAfter)}',
                     style: const TextStyle(
                       color: FincoreColors.textSubtle,
                       fontSize: 11,

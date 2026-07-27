@@ -2,7 +2,7 @@ import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/daos/weekly_budgets_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
@@ -248,7 +248,7 @@ class _BudgetCalendarScreenState extends State<BudgetCalendarScreen> {
                       budget.label,
                       style: const TextStyle(color: FincoreColors.textPrimary),
                     ),
-                    subtitle: StreamBuilder<double>(
+                    subtitle: StreamBuilder<int>(
                       stream: deps.weeklyBudgetsDao
                           .watchBudgetBalance(budget.id),
                       builder: (context, snap) {
@@ -262,10 +262,10 @@ class _BudgetCalendarScreenState extends State<BudgetCalendarScreen> {
                         final String label;
                         final Color color;
                         if (balance > 0) {
-                          label = 'Sobra ${formatAmount(balance)}';
+                          label = 'Sobra ${formatCents(balance)}';
                           color = FincoreColors.positive;
                         } else if (balance < 0) {
-                          label = 'Faltan ${formatAmount(balance.abs())}';
+                          label = 'Faltan ${formatCents(balance.abs())}';
                           color = FincoreColors.negative;
                         } else {
                           label = 'En equilibrio';

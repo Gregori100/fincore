@@ -1,5 +1,5 @@
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/skeleton.dart';
 import 'package:flutter/material.dart';
 
@@ -7,12 +7,12 @@ import 'package:flutter/material.dart';
 /// El caller (`WeeklyBudgetScreen`) compone este stream sumando por `kind`
 /// a partir de los renglones (`watchBudgetItems`).
 class BudgetTotals {
-  final double income;
-  final double expense;
+  final int income;
+  final int expense;
 
   const BudgetTotals({required this.income, required this.expense});
 
-  double get balance => income - expense;
+  int get balance => income - expense;
 }
 
 /// Footer sticky con el balance reactivo del presupuesto/plantilla semanal.
@@ -33,7 +33,7 @@ class BudgetTotals {
 /// sale").
 class _MiniAmount extends StatelessWidget {
   final String label;
-  final double amount;
+  final int amount;
   final Color color;
   final bool alignEnd;
 
@@ -61,7 +61,7 @@ class _MiniAmount extends StatelessWidget {
         ),
         const SizedBox(height: 2),
         Text(
-          formatAmount(amount),
+          formatCents(amount),
           style: TextStyle(
             color: color,
             fontSize: 13,
@@ -160,17 +160,17 @@ class BalanceFooter extends StatelessWidget {
           final IconData icon;
           if (balance > 0) {
             label = 'Sobra';
-            amountText = formatAmount(balance);
+            amountText = formatCents(balance);
             color = FincoreColors.positive;
             icon = Icons.trending_up;
           } else if (balance < 0) {
             label = 'Faltan';
-            amountText = formatAmount(balance.abs());
+            amountText = formatCents(balance.abs());
             color = FincoreColors.negative;
             icon = Icons.trending_down;
           } else {
             label = 'En equilibrio';
-            amountText = formatAmount(0);
+            amountText = formatCents(0);
             color = FincoreColors.textMuted;
             icon = Icons.remove;
           }

@@ -2,7 +2,7 @@ import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/constants/category_catalog.dart';
 import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:flutter/material.dart';
 
@@ -144,12 +144,12 @@ class _GlobalCard extends StatelessWidget {
             children: [
               _HeaderMetric(
                 label: 'Promedio',
-                value: formatAmount(report.historicalAverage),
+                value: formatCents(report.historicalAverage),
                 color: FincoreColors.textPrimary,
               ),
               _HeaderMetric(
                 label: 'Mes en curso',
-                value: formatAmount(report.currentMonthSpent),
+                value: formatCents(report.currentMonthSpent),
                 color: FincoreColors.textPrimary,
               ),
               _HeaderMetric(
@@ -293,7 +293,7 @@ class _CategoryRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Promedio ${formatAmount(delta.historicalAverage)} · Actual ${formatAmount(delta.currentMonthSpent)}',
+                  'Promedio ${formatCents(delta.historicalAverage)} · Actual ${formatCents(delta.currentMonthSpent)}',
                   style: const TextStyle(
                     color: FincoreColors.textSubtle,
                     fontSize: 11,
@@ -332,8 +332,8 @@ class _CategoryRow extends StatelessWidget {
 }
 
 class _StatusChip extends StatelessWidget {
-  final double historical;
-  final double current;
+  final int historical;
+  final int current;
   final double? deltaPercent;
   const _StatusChip({
     required this.historical,
@@ -538,8 +538,8 @@ class _ErrorState extends StatelessWidget {
 /// Cuando `historical == 0`, fallback gris (textMuted) — la UI igualmente
 /// suprime el chip vía `_StatusChip`.
 Color _statusColorForDelta({
-  required double historical,
-  required double current,
+  required int historical,
+  required int current,
 }) {
   if (historical == 0) return FincoreColors.textMuted;
   final ratio = current / historical;
@@ -549,8 +549,8 @@ Color _statusColorForDelta({
 }
 
 String _statusLabel({
-  required double historical,
-  required double current,
+  required int historical,
+  required int current,
 }) {
   if (historical == 0) return 'Sin histórico';
   final ratio = current / historical;
@@ -559,8 +559,8 @@ String _statusLabel({
   return 'Por encima';
 }
 
-String _formatDelta(double value) {
-  if (value == 0) return formatAmount(0);
-  if (value > 0) return '+${formatAmount(value)}';
-  return '-${formatAmount(value.abs())}';
+String _formatDelta(int value) {
+  if (value == 0) return formatCents(0);
+  if (value > 0) return '+${formatCents(value)}';
+  return '-${formatCents(value.abs())}';
 }

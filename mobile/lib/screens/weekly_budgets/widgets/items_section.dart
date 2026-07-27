@@ -1,7 +1,7 @@
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_motion.dart';
 import 'package:fincore/theme/fincore_typography.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:flutter/material.dart';
 
@@ -25,9 +25,9 @@ class BudgetItemDisplay {
   final String id;
   final String name;
   final String? categoryId;
-  final double amount;
+  final int amount;
   final bool isDone;
-  final double? cumulativeAfter;
+  final int? cumulativeAfter;
 
   const BudgetItemDisplay({
     required this.id,
@@ -38,7 +38,7 @@ class BudgetItemDisplay {
     this.cumulativeAfter,
   });
 
-  BudgetItemDisplay copyWith({double? cumulativeAfter}) {
+  BudgetItemDisplay copyWith({int? cumulativeAfter}) {
     return BudgetItemDisplay(
       id: id,
       name: name,
@@ -66,7 +66,7 @@ class BudgetItemDisplay {
   required List<BudgetItemDisplay> income,
   required List<BudgetItemDisplay> expense,
 }) {
-  double running = 0;
+  int running = 0;
   final incomeOut = <BudgetItemDisplay>[];
   for (final i in income) {
     running += i.amount;
@@ -450,10 +450,10 @@ class _ItemRow extends StatelessWidget {
                             Semantics(
                               container: true,
                               label: item.cumulativeAfter == null
-                                  ? 'Monto ${formatAmount(item.amount)}'
-                                  : 'Monto ${formatAmount(item.amount)}, '
+                                  ? 'Monto ${formatCents(item.amount)}'
+                                  : 'Monto ${formatCents(item.amount)}, '
                                       'saldo acumulado '
-                                      '${formatAmount(item.cumulativeAfter!)}',
+                                      '${formatCents(item.cumulativeAfter!)}',
                               excludeSemantics: true,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -471,7 +471,7 @@ class _ItemRow extends StatelessWidget {
                                       decorationColor: FincoreColors.textMuted,
                                       decorationThickness: 2,
                                     ),
-                                    child: Text(formatAmount(item.amount)),
+                                    child: Text(formatCents(item.amount)),
                                   ),
                                   if (item.cumulativeAfter != null) ...[
                                     const SizedBox(height: 3),
@@ -496,15 +496,18 @@ class _ItemRow extends StatelessWidget {
                                     // frame al siguiente. Comunica que "esto
                                     // se recalculó" como consecuencia del
                                     // reorder.
+                                    // El tween interpola en `double` para que
+                                    // el conteo sea suave; el display redondea
+                                    // al centavo entero (RN-IC-04).
                                     TweenAnimationBuilder<double>(
                                       tween: Tween<double>(
-                                        end: item.cumulativeAfter!,
+                                        end: item.cumulativeAfter!.toDouble(),
                                       ),
                                       duration: kMotionFast,
                                       curve: kCurveStandard,
                                       builder: (context, value, _) {
                                         return Text(
-                                          '= ${formatAmount(value)}',
+                                          '= ${formatCents(value.round())}',
                                           style: label.copyWith(
                                             color: value < 0
                                                 ? FincoreColors.negative

@@ -9,7 +9,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_motion.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/movement_row.dart';
 import 'package:fincore/widgets/skeleton.dart';
@@ -25,12 +25,12 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  Stream<double>? _boStream;
-  Stream<double>? _deStream;
-  Stream<double>? _crStream;
+  Stream<int>? _boStream;
+  Stream<int>? _deStream;
+  Stream<int>? _crStream;
   // Sprint flutter-loans-v1: saldo total de préstamos activos + lista de
   // préstamos activos (para chip "PRÓXIMO PAGO" ≤ 5 días).
-  Stream<double>? _totalLoansStream;
+  Stream<int>? _totalLoansStream;
   Stream<List<db.Loan>>? _activeLoansStream;
   Stream<List<db.Account>>? _accountsStream;
   Stream<List<EntryWithRelations>>? _recentEntriesStream;
@@ -241,7 +241,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           // Sprint flutter-loans-v1: KPI naranja "PRÉSTAMO" full-width,
           // condicional (sólo si total > 0). Full-width para que el row de
           // 3 KPIs BO/DE/CR no se comprima en cel angosto.
-          StreamBuilder<double>(
+          StreamBuilder<int>(
             stream: _totalLoansStream,
             builder: (context, snap) {
               final total = snap.data ?? 0;
@@ -388,7 +388,7 @@ int _daysUntilPayment(int paymentDay) =>
 /// KPI naranja "PRÉSTAMO" full-width. Se renderiza sólo cuando el total > 0
 /// (RN-L20). Tap → `/loans`.
 class _LoanTotalCard extends StatelessWidget {
-  final double total;
+  final int total;
   const _LoanTotalCard({required this.total});
 
   @override
@@ -400,7 +400,7 @@ class _LoanTotalCard extends StatelessWidget {
       container: true,
       button: true,
       label:
-          'Préstamo, saldo pendiente total ${formatAmount(total)}. Toca para ver la lista.',
+          'Préstamo, saldo pendiente total ${formatCents(total)}. Toca para ver la lista.',
       excludeSemantics: true,
       child: BaseCard(
       onTap: () => context.push('/loans'),
@@ -450,7 +450,7 @@ class _LoanTotalCard extends StatelessWidget {
             ),
           ),
           Text(
-            formatAmount(total),
+            formatCents(total),
             style: const TextStyle(
               color: FincoreColors.categoryOrange,
               fontWeight: FontWeight.w700,
@@ -623,7 +623,7 @@ class _TotalCard extends StatelessWidget {
   /// Código corto (BO/DE/CR) usado solo en `Semantics.label` para
   /// accesibilidad. No se renderiza visualmente tras la audit 2026-07-14.
   final String code;
-  final Stream<double> stream;
+  final Stream<int> stream;
   final Color color;
 
   /// Sprint flutter-dashboard-bundle-v1: sparkline opcional del saldo
@@ -662,7 +662,7 @@ class _TotalCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          StreamBuilder<double>(
+          StreamBuilder<int>(
             stream: stream,
             builder: (context, snap) {
               if (!snap.hasData) {
@@ -672,7 +672,7 @@ class _TotalCard extends StatelessWidget {
                 );
               }
               return Text(
-                formatAmount(snap.data!),
+                formatCents(snap.data!),
                 // token-exception: 18 hero del monto KPI, sin token intermedio
                 // entre headingM (16) y headingL (20). Ligero bump vs 16 previo
                 // para reforzar la lectura del número.
@@ -743,11 +743,11 @@ class _TodayCard extends StatelessWidget {
           // hubo).
           final String netLabel;
           if (!hasMovements) {
-            netLabel = formatAmount(0);
+            netLabel = formatCents(0);
           } else if (data.net >= 0) {
-            netLabel = '+${formatAmount(data.net)}';
+            netLabel = '+${formatCents(data.net)}';
           } else {
-            netLabel = '-${formatAmount(data.net.abs())}';
+            netLabel = '-${formatCents(data.net.abs())}';
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -767,14 +767,14 @@ class _TodayCard extends StatelessWidget {
                   Expanded(
                     child: _TodayMetric(
                       label: 'Ingresos',
-                      value: formatAmount(data.totalIncome),
+                      value: formatCents(data.totalIncome),
                       color: incomeColor,
                     ),
                   ),
                   Expanded(
                     child: _TodayMetric(
                       label: 'Gastos',
-                      value: formatAmount(data.totalExpense),
+                      value: formatCents(data.totalExpense),
                       color: expenseColor,
                     ),
                   ),
@@ -1070,7 +1070,7 @@ class _BalanceLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final deps = AppDependencies.of(context);
-    return StreamBuilder<double>(
+    return StreamBuilder<int>(
       stream: deps.stateService.watchAccountBalance(accountId, accountType),
       builder: (context, snap) {
         if (!snap.hasData) {
@@ -1082,7 +1082,7 @@ class _BalanceLabel extends StatelessWidget {
             ? (balance > 0 ? FincoreColors.negative : FincoreColors.textPrimary)
             : (balance < 0 ? FincoreColors.negative : FincoreColors.textPrimary);
         return Text(
-          formatAmount(balance),
+          formatCents(balance),
           style: TextStyle(color: color, fontWeight: FontWeight.w700),
         );
       },

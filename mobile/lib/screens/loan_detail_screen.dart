@@ -5,7 +5,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/theme/fincore_typography.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/destructive_dialog.dart';
@@ -30,7 +30,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
   // `updateLoan` desde el form guardaba en BD pero el detail seguía
   // mostrando el snapshot viejo hasta salir y volver a entrar.
   Stream<Loan?>? _loanStream;
-  Stream<double>? _balanceStream;
+  Stream<int>? _balanceStream;
   Stream<List<JournalEntry>>? _paymentsStream;
   List<Account> _accounts = const [];
   bool _loading = false;
@@ -127,7 +127,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       title: 'Eliminar pago',
       message:
           'Eliminar el pago del ${DateFormat("d MMM y", "es_MX").format(payment.occurredAt)} '
-          'por ${formatAmount(payment.amount)}. Si el préstamo estaba pagado se reabrirá '
+          'por ${formatCents(payment.amount)}. Si el préstamo estaba pagado se reabrirá '
           'automáticamente.',
       confirmLabel: 'Eliminar pago',
     );
@@ -343,7 +343,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
 
 class _Header extends StatelessWidget {
   final Loan loan;
-  final Stream<double> balanceStream;
+  final Stream<int> balanceStream;
   final Stream<List<JournalEntry>> paymentsStream;
   final Account? destAccount;
   final VoidCallback onViewInitialIncome;
@@ -367,21 +367,21 @@ class _Header extends StatelessWidget {
             style: TextStyle(color: FincoreColors.textMuted, fontSize: 12),
           ),
           const SizedBox(height: kSpaceXs),
-          StreamBuilder<double>(
+          StreamBuilder<int>(
             stream: balanceStream,
             builder: (context, snap) {
               if (!snap.hasData) {
                 return const Skeleton(width: 160, height: 32);
               }
               return Text(
-                formatAmount(snap.data!),
+                formatCents(snap.data!),
                 style: displayL,
               );
             },
           ),
           const SizedBox(height: kSpaceXs),
           Text(
-            'de ${formatAmount(loan.principalAmount)} originales',
+            'de ${formatCents(loan.principalAmount)} originales',
             style: const TextStyle(
                 color: FincoreColors.textSubtle, fontSize: 12),
           ),
@@ -390,9 +390,9 @@ class _Header extends StatelessWidget {
             stream: paymentsStream,
             builder: (context, snap) {
               final payments = snap.data ?? const [];
-              final paidPrincipal = payments.fold<double>(
+              final paidPrincipal = payments.fold<int>(
                   0, (sum, p) => sum + (p.principalAmount ?? 0));
-              final paidInterest = payments.fold<double>(
+              final paidInterest = payments.fold<int>(
                   0, (sum, p) => sum + (p.interestAmount ?? 0));
               return Row(
                 children: [
@@ -405,7 +405,7 @@ class _Header extends StatelessWidget {
                       // "cerrado manualmente", chip "próximo pago").
                       color: FincoreColors.categoryBlue,
                       label: 'Capital pagado',
-                      value: formatAmount(paidPrincipal),
+                      value: formatCents(paidPrincipal),
                     ),
                   ),
                   const SizedBox(width: kSpaceSm),
@@ -413,7 +413,7 @@ class _Header extends StatelessWidget {
                     child: _AcumMetric(
                       color: FincoreColors.categoryOrange,
                       label: 'Intereses pagados',
-                      value: formatAmount(paidInterest),
+                      value: formatCents(paidInterest),
                     ),
                   ),
                 ],
@@ -435,7 +435,7 @@ class _Header extends StatelessWidget {
             children: [
               _Chip(
                 icon: Icons.payments_outlined,
-                label: 'Pago ${formatAmount(loan.monthlyPayment)}',
+                label: 'Pago ${formatCents(loan.monthlyPayment)}',
               ),
               _Chip(
                 icon: Icons.calendar_today_outlined,
@@ -681,7 +681,7 @@ class _PaymentRow extends StatelessWidget {
                     ),
                     const Spacer(),
                     Text(
-                      formatAmount(payment.amount),
+                      formatCents(payment.amount),
                       style: TextStyle(
                         color: textPrimary,
                         fontWeight: FontWeight.w700,
@@ -701,7 +701,7 @@ class _PaymentRow extends StatelessWidget {
                       // F-DES-3: par capital/interés unificado a categoryX.
                       color: FincoreColors.categoryBlue,
                       label: 'Capital',
-                      value: formatAmount(principal),
+                      value: formatCents(principal),
                     ),
                     // Pill de intereses siempre visible en pagos del mes
                     // (incluso $0 si es mes de gracia). En abonos capital
@@ -710,7 +710,7 @@ class _PaymentRow extends StatelessWidget {
                       _SplitPill(
                         color: FincoreColors.categoryOrange,
                         label: 'Intereses',
-                        value: formatAmount(interest),
+                        value: formatCents(interest),
                       ),
                   ],
                 ),

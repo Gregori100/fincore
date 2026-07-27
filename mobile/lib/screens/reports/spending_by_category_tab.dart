@@ -7,7 +7,7 @@ import 'package:fincore/data/reports.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/date_field_outlined.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
@@ -272,7 +272,7 @@ class _TotalCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            formatAmount(report.total),
+            formatCents(report.total),
             style: const TextStyle(
               color: FincoreColors.negative,
               fontSize: 22,
@@ -303,7 +303,7 @@ class _TotalCard extends StatelessWidget {
 /// ```
 class _SpendingBucketRow extends StatelessWidget {
   final SpendingBucket bucket;
-  final double maxTotal;
+  final int maxTotal;
   final DateTime from;
   final DateTime to;
 
@@ -382,7 +382,7 @@ class _SpendingBucketRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    formatAmount(bucket.total),
+                    formatCents(bucket.total),
                     style: const TextStyle(
                       color: FincoreColors.textPrimary,
                       fontWeight: FontWeight.w700,

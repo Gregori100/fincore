@@ -7,7 +7,7 @@ import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_balance_hint.dart';
 import 'package:fincore/widgets/account_picker.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,7 +46,7 @@ class _LoanCapitalPaymentFormState extends State<LoanCapitalPaymentForm> {
   String? _originId;
   List<Account> _accounts = const [];
   Loan? _loan;
-  double _balance = 0;
+  int _balance = 0;
 
   bool _loading = false;
   bool _saving = false;
@@ -100,8 +100,15 @@ class _LoanCapitalPaymentFormState extends State<LoanCapitalPaymentForm> {
     }
   }
 
-  double? _parseDecimal(String text) =>
-      double.tryParse(text.trim().replaceAll(',', '.'));
+  /// Parsea el texto del campo de monto a centavos. `null` si el input no
+  /// es un monto válido — el validador del form muestra el error.
+  int? _parseDecimal(String text) {
+    try {
+      return parseCents(text);
+    } on FormatException {
+      return null;
+    }
+  }
 
   Future<void> _pickDate() async {
     // Hotfix smoke Diego: firstDate = contract_date del préstamo.
@@ -318,7 +325,7 @@ class _LoanCapitalPaymentFormState extends State<LoanCapitalPaymentForm> {
 /// Más simple que el del monthly form (no muestra "tras este pago" porque
 /// el capital form no tiene split — el monto == principal).
 class _CapitalBalanceBanner extends StatelessWidget {
-  final double balance;
+  final int balance;
   final VoidCallback? onSaldar;
   const _CapitalBalanceBanner({
     required this.balance,
@@ -356,7 +363,7 @@ class _CapitalBalanceBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: kSpace2xs),
                 Text(
-                  formatAmount(balance),
+                  formatCents(balance),
                   style: const TextStyle(
                     color: FincoreColors.textPrimary,
                     fontWeight: FontWeight.w700,

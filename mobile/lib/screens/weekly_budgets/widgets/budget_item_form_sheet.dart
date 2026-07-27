@@ -3,6 +3,7 @@ import 'package:fincore/data/database.dart';
 import 'package:fincore/screens/weekly_budgets/widgets/budget_kind_picker.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/widgets/category_picker.dart';
+import 'package:fincore/widgets/amount_input_formatter.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +14,7 @@ import 'package:flutter/services.dart';
 class BudgetItemFormData {
   final String name;
   final String? categoryId;
-  final double amount;
+  final int amount;
 
   /// 'income' | 'expense'.
   final String kind;
@@ -122,7 +123,7 @@ class _BudgetItemFormSheetState extends State<BudgetItemFormSheet> {
 
   /// Evita ceros de más al precargar en edición: `150.0` → `"150"`,
   /// `150.5` → `"150.5"`.
-  String _formatInitialAmount(double amount) {
+  String _formatInitialAmount(int amount) {
     if (amount == amount.truncateToDouble()) {
       return amount.toStringAsFixed(0);
     }
@@ -141,7 +142,7 @@ class _BudgetItemFormSheetState extends State<BudgetItemFormSheet> {
     if (_saving) return;
 
     final name = _nameCtrl.text.trim();
-    final amount = double.tryParse(_amountCtrl.text.trim());
+    final amount = parseFormattedAmount(_amountCtrl.text);
 
     setState(() {
       _nameError = name.isEmpty ? 'Ingresar un nombre.' : null;

@@ -65,10 +65,10 @@ class _WeeklyBudgetScreenState extends State<WeeklyBudgetScreen> {
     _totalsStream = _itemsStream!.map((items) {
       final income = items
           .where((i) => i.kind == 'income')
-          .fold<double>(0, (acc, i) => acc + i.amount);
+          .fold<int>(0, (acc, i) => acc + i.amount);
       final expense = items
           .where((i) => i.kind == 'expense')
-          .fold<double>(0, (acc, i) => acc + i.amount);
+          .fold<int>(0, (acc, i) => acc + i.amount);
       return BudgetTotals(income: income, expense: expense);
     });
     _loadCategories();
