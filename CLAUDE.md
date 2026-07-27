@@ -84,7 +84,7 @@ Los gastos, transfers y cargos a tarjeta se permiten **siempre**, incluso si dej
 
 ```
 data/
-├── database.dart           # Tablas drift + índices + schemaVersion=12 + PRAGMA foreign_keys=ON
+├── database.dart           # Tablas drift + índices + schemaVersion=14 + PRAGMA foreign_keys=ON
 ├── database.g.dart         # Generado por build_runner (no editar)
 ├── uuid.dart               # UuidV7 compatible con backend Laravel HasUuids
 ├── daos/
@@ -95,7 +95,7 @@ data/
 ├── financial_state.dart    # Streams reactivos cacheados BO/DE/CR + balance por cuenta + total loans
 ├── seed.dart               # Bolsa + 10 categorías default (idempotente)
 ├── bootstrap.dart          # hasBolsa(db) para decidir redirect inicial
-└── backup.dart             # Export + Import + wipeAll (JSON v1 legacy + v2 con loans)
+└── backup.dart             # Export + Import + wipeAll (emite JSON v3 en centavos; import acepta v1/v2/v3)
 ```
 
 ### Reglas clave de los DAOs
@@ -124,21 +124,47 @@ data/
 - **Convención**: cualquier lectura desde la UI o desde un DAO que joinee `categories` debe filtrar por `deletedAt.isNull()` o llamar a `categoriesDao.findActiveById(id)` para evitar mostrar categorías fantasma. `findActiveById` retorna `null` si la categoría no existe **o** está archivada; es el helper canónico para validar antes de un write.
 - En `EntriesDao.updateEntry`, si la `categoryId` heredada apunta a una categoría archivada, el write fuerza `categoryId = null` sin lanzar error (RN-H03). El badge desaparece y el FK colgante se limpia. Comportamiento consistente con la libreta libre.
 
-### Backup JSON v1
+### Montos en centavos enteros (sprint `flutter-integer-cents-v1`, schema v14)
 
-Mismo formato que el `/api/finance/backup/export` del backend legacy. Bit a bit compatible:
+**Todos los montos monetarios son `int` en centavos.** `$173.77` se guarda y se maneja como `17377`. Esto elimina de raíz la clase de bugs de precisión IEEE 754 que antes se mitigaba con tolerancias `+ 0.005` parcheadas caso por caso.
+
+- **RN-IC-01**: `int` es el tipo canónico de moneda. Cero `double` para montos en schema, DAOs, `ReportsService` o UI.
+- **RN-IC-02**: `double` queda reservado para ratios `0-1` (`interest_rate`, `minimum_payment_pct`, `minimum_capital_pct`), porcentajes de UI (`usedPct`, `percent`) y umbrales interpolados (cuartiles `p25/p50/p75` de los heatmaps). Ninguno es un monto.
+- **RN-IC-03**: toda entrada de usuario se parsea con `parseCents` (vía `parseFormattedAmount`). Rechaza más de 2 decimales en vez de truncar en silencio.
+- **RN-IC-04**: todo display pasa por `formatCents`. Nunca `.toString()` sobre un int de centavos ni `/ 100` ad-hoc.
+- **RN-IC-05**: las comparaciones de montos son estrictas (`>`, `<`, `==`). **Cualquier tolerancia tipo `+ 0.005` que aparezca es un bug**, no una defensa.
+
+Helpers en `mobile/lib/utils/money.dart`: `parseCents`, `formatCents`, `formatCentsCompact`, `centsFromDouble` (sólo para backup legacy y migración; usa `round`, nunca `toInt`), `centsToDouble` (sólo para compat externa).
+
+Consecuencia lateral: un `int` de Dart no puede ser NaN ni Infinity, así que los guards `isFinite` del dominio desaparecieron. Sólo sobreviven donde validan un `double` crudo de entrada externa (payload de backup v1/v2).
+
+**Migrar una columna monetaria nueva**: declararla `IntColumn` y, si tiene default, expresarlo en centavos (`minimum_floor` pasó de `150` a `15000`). La conversión de una columna REAL existente va por `m.alterTable` con `columnTransformer`, nunca por `UPDATE` — SQLite tiene *type affinity* y un `UPDATE` sobre una columna declarada REAL vuelve a guardar el valor como REAL.
+
+### Backup JSON v3
+
+Bumpeado a v3 en el sprint `flutter-integer-cents-v1`. Los montos se emiten como `int` en centavos:
 
 ```json
 {
-  "version": 1,
+  "version": 3,
   "exported_at": "ISO 8601",
   "accounts": [...],
   "categories": [...],
-  "journal_entries": [...]
+  "journal_entries": [{ "amount": 17377, ... }],
+  "loans": [...]
 }
 ```
 
-Export: serializa solo activos (`deleted_at IS NULL`). Import: reemplazo total (`wipeAll()` + insert) dentro de transacción. Errores tipados: `invalid_json`, `unsupported_version`, `missing_bolsa`, `invalid_reference`.
+Export siempre emite v3. Import acepta v1, v2 y v3:
+
+- **v1/v2**: los montos vienen como `double` en unidades; se validan `isFinite` y se convierten con `centsFromDouble`.
+- **v3**: los montos deben ser `int`. Un `double` se rechaza con `invalid_amount_format` — no se convierte en silencio, porque rompería la invariante del formato.
+
+El historial: v1 era bit a bit compatible con `/api/finance/backup/export` del backend legacy; v2 agregó `loans` + los campos de split; v3 cambió la unidad. **v3 ya no es importable por el backend Laravel** (fuera de scope; necesitaría su propio converter).
+
+Export: serializa solo activos (`deleted_at IS NULL`). Import: reemplazo total (`wipeAll()` + insert) dentro de transacción. Errores tipados: `invalid_json`, `unsupported_version`, `invalid_amount_format`, `missing_bolsa`, `invalid_reference`.
+
+`weekly_budgets` / `weekly_budget_items` / `saved_views` / `app_preferences` NO se exportan (decisión de diseño). Las vistas guardadas, al persistir filtros de monto en JSON, discriminan payloads legacy por tipo: un `double` es pre-v14 en unidades, un `int` ya son centavos.
 
 Decisión de diseño: **subsegundos en `occurred_at` se preservan** gracias a `build.yaml` con `store_date_time_values_as_text: true`. Sin esto el round-trip rompía la igualdad de timestamps.
 
@@ -343,4 +369,4 @@ El sprint 1 (`flutter-design-tokens-v1`) migró **solo los widgets compartidos**
 2. `mobile/` se mantiene como nombre del proyecto (mismo `applicationId = io.github.gregori100.fincore`).
 3. Diego arrancó la BD desde cero, sin migrar movimientos del backend.
 4. Schema preparado para sync futuro: UUIDs v7 + soft delete + timestamps en todas las tablas, sin features SQLite-only.
-5. Backup JSON v1 idéntico al backend legacy para poder importar respaldos antiguos si hace falta.
+5. Backup JSON v1 era idéntico al backend legacy; hoy el export es v3 (centavos enteros) y el import sigue aceptando v1/v2 para respaldos antiguos.
