@@ -51,7 +51,7 @@ void main() {
         // Histórico: mes anterior.
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 500,
+          amount: 50000,
           occurredAt: lastMonth,
           categoryId: cat,
         );
@@ -59,7 +59,7 @@ void main() {
         final currentMonth = DateTime(now.year, now.month, 1, 8);
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 200,
+          amount: 20000,
           occurredAt: currentMonth,
           categoryId: cat,
         );
@@ -142,13 +142,13 @@ void main() {
         final currentMonth = DateTime(now.year, now.month, 1);
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 500,
+          amount: 50000,
           occurredAt: currentMonth,
           categoryId: catAlta,
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 100,
+          amount: 10000,
           occurredAt: currentMonth.add(const Duration(hours: 1)),
           categoryId: catBaja,
         );

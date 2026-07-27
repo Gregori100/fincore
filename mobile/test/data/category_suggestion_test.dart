@@ -54,7 +54,7 @@ void main() {
     credit = await accountsDao.create(
       name: 'Visa_T',
       type: 'credit',
-      creditLimit: 50000,
+      creditLimit: 5000000,
     );
 
     catComida = await categoriesDao.create(
@@ -112,7 +112,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'Café',
         categoryId: catCafe,
@@ -127,7 +127,7 @@ void main() {
     test('UT-03: normaliza espacios y mayúsculas ASCII', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'cafe',
         categoryId: catCafe,
@@ -143,7 +143,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 10),
         description: 'Genérico',
         categoryId: catOld,
@@ -163,7 +163,7 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'Salario',
         categoryId: catSalario,
@@ -180,7 +180,7 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime(2026, 6, 10),
         description: 'Salario MGT',
         categoryId: catSalario,
@@ -199,7 +199,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'Café',
         categoryId: catCafe,
@@ -216,7 +216,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'Café',
         categoryId: catCafe,
@@ -233,7 +233,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'pizza',
         categoryId: catComida,
@@ -254,7 +254,7 @@ void main() {
       // "Compré ok") matchearía spuriamente.
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'ok',
         categoryId: catComida,
@@ -272,7 +272,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'Café',
         categoryId: catCafe,
@@ -296,7 +296,7 @@ void main() {
       // escribir.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'fiscal',
         categoryId: catSalario,
@@ -313,7 +313,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 5, 10),
         description: 'Café',
         categoryId: catCafe,
@@ -321,7 +321,7 @@ void main() {
       // Mismo substring "Café" pero con otra categoría más reciente.
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 60,
+        amount: 6000,
         occurredAt: DateTime(2026, 6, 1),
         description: 'Café',
         categoryId: catMisc,
@@ -358,7 +358,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 6, 10),
         description: 'Pan',
         categoryId: null,
@@ -373,7 +373,7 @@ void main() {
     test('UT-16: soft-deleted entry no contribuye', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 6, 10),
         description: 'Café',
         categoryId: catCafe,
@@ -407,7 +407,7 @@ void main() {
       // Histórico credit_expense con categoría both.
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 350,
+        amount: 35000,
         occurredAt: DateTime(2026, 6, 10),
         description: 'Compra online',
         categoryId: catMisc,
@@ -425,7 +425,7 @@ void main() {
       // El único entry con match tiene categoría archivada.
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
         description: 'Compras varias',
         categoryId: catOld,
@@ -434,7 +434,7 @@ void main() {
       // para confirmar que el v2 NO cae a "más usada".
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 60,
+        amount: 6000,
         occurredAt: DateTime(2026, 6, 12),
         categoryId: catTransporte,
       );

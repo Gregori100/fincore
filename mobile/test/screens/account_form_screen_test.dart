@@ -221,7 +221,7 @@ void main() {
           id = await deps.accountsDao.create(
             name: 'AmexShow',
             type: 'credit',
-            creditLimit: 5000,
+            creditLimit: 500000,
             closingDay: 10,
             paymentDay: 20,
           );
@@ -259,7 +259,7 @@ void main() {
           amexId = await deps.accountsDao.create(
             name: 'AmexPct',
             type: 'credit',
-            creditLimit: 10000,
+            creditLimit: 1000000,
             closingDay: 15,
             paymentDay: 5,
             minimumPaymentPct: 0.03,

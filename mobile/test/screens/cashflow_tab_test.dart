@@ -37,12 +37,12 @@ void main() {
         final day = DateTime(now.year, now.month, 10, 10);
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa.id,
-          amount: 1200,
+          amount: 120000,
           occurredAt: day,
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 300,
+          amount: 30000,
           occurredAt: day.add(const Duration(hours: 1)),
         );
       });
@@ -107,7 +107,7 @@ void main() {
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 750,
+          amount: 75000,
           occurredAt: DateTime(now.year, now.month, 12, 10),
           categoryId: catId,
           description: 'BreakdownExpense',
@@ -140,13 +140,13 @@ void main() {
             .firstWhere((a) => a.type == 'cash');
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa.id,
-          amount: 5000,
+          amount: 500000,
           occurredAt: DateTime(now.year, now.month, 5, 9),
           description: 'IncomeMBW',
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 1300,
+          amount: 130000,
           occurredAt: DateTime(now.year, now.month, 15, 15),
           description: 'ExpenseMBW',
         );
@@ -192,7 +192,7 @@ void main() {
         // dispara RN-C06 (rellenar los otros 11 meses con ceros).
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa.id,
-          amount: 1500,
+          amount: 150000,
           occurredAt: DateTime(now.year, now.month, 10, 12),
           description: 'CurrentMonthIncome',
         );
@@ -224,7 +224,7 @@ void main() {
             .firstWhere((a) => a.type == 'cash');
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 400,
+          amount: 40000,
           occurredAt: DateTime(now.year, now.month, 10, 12),
           description: 'DrillDownExpense',
         );
@@ -269,13 +269,13 @@ void main() {
         final prev = DateTime(now.year, now.month - 1, 10, 12);
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 500,
+          amount: 50000,
           occurredAt: prev,
           categoryId: catId,
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 1000,
+          amount: 100000,
           occurredAt: DateTime(now.year, now.month, 12, 12),
           categoryId: catId,
         );
@@ -304,7 +304,7 @@ void main() {
             .firstWhere((a) => a.type == 'cash');
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 300,
+          amount: 30000,
           occurredAt: DateTime(now.year, now.month, 5, 12),
           description: 'NoPrevExpense',
         );

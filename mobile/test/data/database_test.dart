@@ -49,7 +49,7 @@ void main() {
                 id: UuidV7.generate(),
                 kind: 'expense',
                 accountOriginId: const Value('uuid-inexistente'),
-                amount: 100,
+                amount: 10000,
                 occurredAt: DateTime.now(),
                 createdAt: DateTime.now(),
                 updatedAt: DateTime.now(),
@@ -93,7 +93,7 @@ void main() {
         () => accountsDao.create(
           name: 'Visa',
           type: 'credit',
-          creditLimit: 50000,
+          creditLimit: 5000000,
           closingDay: 15,
           paymentDay: 15,
         ),
@@ -124,26 +124,26 @@ void main() {
       final credit = await accountsDao.create(
         name: 'Visa',
         type: 'credit',
-        creditLimit: 50000,
+        creditLimit: 5000000,
         closingDay: 15,
         paymentDay: 5,
       );
       // 3 movimientos donde debit aparece: income (destino), expense (origen),
       // transfer (origen). El 4to (credit_expense) NO toca debit.
       await entriesDao.registerIncome(
-        accountDestinationId: debit, amount: 1000, occurredAt: DateTime.now(),
+        accountDestinationId: debit, amount: 100000, occurredAt: DateTime.now(),
       );
       await entriesDao.registerExpense(
-        accountOriginId: debit, amount: 200, occurredAt: DateTime.now(),
+        accountOriginId: debit, amount: 20000, occurredAt: DateTime.now(),
       );
       await entriesDao.registerTransfer(
         accountOriginId: debit,
         accountDestinationId: bolsa,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.registerCreditExpense(
-        accountOriginId: credit, amount: 500, occurredAt: DateTime.now(),
+        accountOriginId: credit, amount: 50000, occurredAt: DateTime.now(),
       );
 
       expect(await accountsDao.countAssociatedEntries(debit), 3);
@@ -171,7 +171,7 @@ void main() {
       final debitId = await accountsDao.create(name: 'Banamex', type: 'debit');
       await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
       // El archive NO rechaza: cancela el income y archiva la cuenta.
@@ -266,7 +266,7 @@ void main() {
       creditId = await accountsDao.create(
         name: 'Visa',
         type: 'credit',
-        creditLimit: 50000,
+        creditLimit: 5000000,
         closingDay: 15,
         paymentDay: 5,
       );
@@ -281,70 +281,70 @@ void main() {
     test('income aumenta el saldo de la cuenta destino', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime.now(),
       );
-      expect(await stateService.accountBalanceNow(bolsaId), 1000);
+      expect(await stateService.accountBalanceNow(bolsaId), 100000);
     });
 
     test('expense baja el saldo de la cuenta origen', () async {
       await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.registerExpense(
         accountOriginId: debitId,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime.now(),
         categoryId: categoryExpenseId,
       );
-      expect(await stateService.accountBalanceNow(debitId), 300);
+      expect(await stateService.accountBalanceNow(debitId), 30000);
     });
 
     test('credit_expense aumenta deuda de la tarjeta', () async {
       await entriesDao.registerCreditExpense(
         accountOriginId: creditId,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime.now(),
         categoryId: categoryExpenseId,
       );
-      expect(await stateService.accountBalanceNow(creditId), 5000);
+      expect(await stateService.accountBalanceNow(creditId), 500000);
     });
 
     test('debt_payment baja deuda + saldo origin', () async {
       // Cargar tarjeta primero.
       await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 10000,
+        amount: 1000000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: creditId,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime.now(),
       );
       // Pagar 3000 de la tarjeta.
       await entriesDao.registerDebtPayment(
         accountOriginId: debitId,
         accountDestinationId: creditId,
-        amount: 3000,
+        amount: 300000,
         occurredAt: DateTime.now(),
       );
-      expect(await stateService.accountBalanceNow(creditId), 2000); // deuda restante
-      expect(await stateService.accountBalanceNow(debitId), 7000);
+      expect(await stateService.accountBalanceNow(creditId), 200000); // deuda restante
+      expect(await stateService.accountBalanceNow(debitId), 700000);
     });
 
     test('debt_payment OverpayDebt rechaza', () async {
       // Deuda = 1000.
       await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: creditId,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime.now(),
       );
       // Intentar pagar 2000 (más de la deuda) debe rechazar.
@@ -352,7 +352,7 @@ void main() {
         () => entriesDao.registerDebtPayment(
           accountOriginId: debitId,
           accountDestinationId: creditId,
-          amount: 2000,
+          amount: 200000,
           occurredAt: DateTime.now(),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -367,7 +367,7 @@ void main() {
       // Setup: fondos suficientes para pagar.
       await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime.now(),
       );
       // Cargos que reproducen el error IEEE 754 clásico: 0.1 + 0.2 = 0.30000...4
@@ -377,12 +377,12 @@ void main() {
       for (var i = 0; i < 5; i++) {
         await entriesDao.registerCreditExpense(
           accountOriginId: creditId,
-          amount: 0.1,
+          amount: 10,
           occurredAt: DateTime.now(),
         );
         await entriesDao.registerCreditExpense(
           accountOriginId: creditId,
-          amount: 0.2,
+          amount: 20,
           occurredAt: DateTime.now(),
         );
       }
@@ -392,7 +392,7 @@ void main() {
       final id = await entriesDao.registerDebtPayment(
         accountOriginId: debitId,
         accountDestinationId: creditId,
-        amount: 1.50,
+        amount: 150,
         occurredAt: DateTime.now(),
       );
       expect(id, isNotEmpty,
@@ -409,12 +409,12 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: creditId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
       // Pagar 100.01 (1 centavo más) debe seguir tirando overpay_debt.
@@ -424,7 +424,7 @@ void main() {
         () => entriesDao.registerDebtPayment(
           accountOriginId: debitId,
           accountDestinationId: creditId,
-          amount: 100.01,
+          amount: 10001,
           occurredAt: DateTime.now(),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -435,17 +435,17 @@ void main() {
     test('transfer mueve dinero sin cambiar BO', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.registerTransfer(
         accountOriginId: bolsaId,
         accountDestinationId: debitId,
-        amount: 400,
+        amount: 40000,
         occurredAt: DateTime.now(),
       );
-      expect(await stateService.accountBalanceNow(bolsaId), 600);
-      expect(await stateService.accountBalanceNow(debitId), 400);
+      expect(await stateService.accountBalanceNow(bolsaId), 60000);
+      expect(await stateService.accountBalanceNow(debitId), 40000);
     });
 
     test('transfer con origin == destination rechaza', () async {
@@ -453,7 +453,7 @@ void main() {
         () => entriesDao.registerTransfer(
           accountOriginId: bolsaId,
           accountDestinationId: bolsaId,
-          amount: 100,
+          amount: 10000,
           occurredAt: DateTime.now(),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -466,7 +466,7 @@ void main() {
         () => entriesDao.registerDebtPayment(
           accountOriginId: debitId,
           accountDestinationId: bolsaId, // cash, debería ser credit
-          amount: 100,
+          amount: 10000,
           occurredAt: DateTime.now(),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -477,10 +477,10 @@ void main() {
     test('cancel soft-deletea y desaparece de listas', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
-      expect(await stateService.accountBalanceNow(bolsaId), 100);
+      expect(await stateService.accountBalanceNow(bolsaId), 10000);
       await entriesDao.cancel(id);
       expect(await stateService.accountBalanceNow(bolsaId), 0);
       final entries = await entriesDao.watchPage().first;
@@ -490,7 +490,7 @@ void main() {
     test('cancel es idempotente', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.cancel(id);
@@ -502,11 +502,11 @@ void main() {
       // que el segundo cancel volviera a restar el monto, este test lo agarra.
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime.now(),
       );
       // Pre-condición: balance = 500.
-      expect(await stateService.accountBalanceNow(bolsaId), 500);
+      expect(await stateService.accountBalanceNow(bolsaId), 50000);
       await entriesDao.cancel(id);
       final afterFirst = await stateService.accountBalanceNow(bolsaId);
       expect(afterFirst, 0);
@@ -526,7 +526,7 @@ void main() {
       expect(
         () => entriesDao.registerCreditExpense(
           accountOriginId: creditId,
-          amount: 100,
+          amount: 10000,
           occurredAt: DateTime.now(),
           categoryId: incomeCat,
         ),
@@ -574,19 +574,19 @@ void main() {
     test('edita amount + description + occurredAt simultáneo', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.utc(2026, 1, 1),
         description: 'inicial',
       );
       await entriesDao.updateEntry(
         id: id,
-        amount: 250,
+        amount: 25000,
         description: 'editado',
         occurredAt: DateTime.utc(2026, 6, 15),
       );
       final entries = await entriesDao.watchPage().first;
       final e = entries.first.entry;
-      expect(e.amount, 250);
+      expect(e.amount, 25000);
       expect(e.description, 'editado');
       expect(e.occurredAt.year, 2026);
       expect(e.occurredAt.month, 6);
@@ -596,7 +596,7 @@ void main() {
     test('cambia categoryId a una compatible', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.updateEntry(id: id, categoryId: catSueldo);
@@ -607,7 +607,7 @@ void main() {
     test('cambia categoryId a una incompatible rechaza', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
       expect(
@@ -621,7 +621,7 @@ void main() {
       final otra = await accountsDao.create(name: 'Santander', type: 'debit');
       final id = await entriesDao.registerExpense(
         accountOriginId: debitId,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime.now(),
       );
       await entriesDao.updateEntry(id: id, accountOriginId: otra);
@@ -635,15 +635,15 @@ void main() {
       // categoryId = null y sin lanzar error.
       final id = await entriesDao.registerExpense(
         accountOriginId: debitId,
-        amount: 80,
+        amount: 8000,
         occurredAt: DateTime.now(),
         categoryId: catComida,
       );
       await categoriesDao.archive(catComida);
-      await entriesDao.updateEntry(id: id, amount: 90);
+      await entriesDao.updateEntry(id: id, amount: 9000);
       final entries = await entriesDao.watchPage().first;
       expect(entries.first.entry.categoryId, equals(null));
-      expect(entries.first.entry.amount, 90);
+      expect(entries.first.entry.amount, 9000);
     });
 
     test('updateEntry con categoryId explícito archivado rechaza', () async {
@@ -653,7 +653,7 @@ void main() {
       // (categoryId == null en el call).
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
       await categoriesDao.archive(catSueldo);
@@ -667,7 +667,7 @@ void main() {
     test('updateEntry con clearCategory=true ignora categoryId pasado', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
         categoryId: catSueldo,
       );
@@ -687,7 +687,7 @@ void main() {
       // retorna `category = null`.
       await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
         categoryId: catSueldo,
       );
@@ -772,12 +772,12 @@ void main() {
       final id = await accountsDao.create(
         name: 'Amex',
         type: 'credit',
-        creditLimit: 10000,
+        creditLimit: 1000000,
         closingDay: 15,
         paymentDay: 5,
       );
       await expectLater(
-        accountsDao.updateAccount(id: id, creditLimit: -100),
+        accountsDao.updateAccount(id: id, creditLimit: -10000),
         throwsA(isA<AccountsDaoError>()
             .having((e) => e.code, 'code', 'invalid_credit_limit')),
       );
@@ -813,7 +813,7 @@ void main() {
           appliesTo: 'income',
           colorSlug: 'green',
           iconSlug: 'briefcase',
-          monthlyLimit: 100,
+          monthlyLimit: 10000,
         ),
         throwsA(isA<CategoriesDaoError>()
             .having((e) => e.code, 'code', 'invalid_monthly_limit_for_income')),
@@ -827,7 +827,7 @@ void main() {
           appliesTo: 'expense',
           colorSlug: 'red',
           iconSlug: 'shopping-cart',
-          monthlyLimit: -50,
+          monthlyLimit: -5000,
         ),
         throwsA(isA<CategoriesDaoError>()
             .having((e) => e.code, 'code', 'invalid_monthly_limit')),
@@ -875,17 +875,17 @@ void main() {
       final ids = [
         await entriesDao.registerExpense(
           accountOriginId: bolsaId,
-          amount: 100,
+          amount: 10000,
           occurredAt: DateTime.now(),
         ),
         await entriesDao.registerExpense(
           accountOriginId: bolsaId,
-          amount: 200,
+          amount: 20000,
           occurredAt: DateTime.now(),
         ),
         await entriesDao.registerExpense(
           accountOriginId: bolsaId,
-          amount: 300,
+          amount: 30000,
           occurredAt: DateTime.now(),
         ),
       ];
@@ -913,12 +913,12 @@ void main() {
       );
       final e1 = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime.now(),
       );
       final e2 = await entriesDao.registerExpense(
         accountOriginId: bolsaId,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime.now(),
       );
 
@@ -942,12 +942,12 @@ void main() {
       );
       final e1 = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime.now(),
       );
       final e2 = await entriesDao.registerExpense(
         accountOriginId: bolsaId,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime.now(),
       );
 
@@ -985,7 +985,7 @@ void main() {
       );
       final e1 = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime.now(),
         categoryId: catSueldo,
       );
@@ -994,7 +994,7 @@ void main() {
       final e2 = await entriesDao.registerTransfer(
         accountOriginId: bolsaId,
         accountDestinationId: debitId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
 
@@ -1013,7 +1013,7 @@ void main() {
       final bolsaId = await accountsDao.createBolsa();
       final e1 = await entriesDao.registerIncome(
         accountDestinationId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
       await expectLater(
@@ -1052,7 +1052,7 @@ void main() {
       await categoriesDao.archive(catArchivada);
       final e1 = await entriesDao.registerExpense(
         accountOriginId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       );
 
@@ -1075,8 +1075,8 @@ void main() {
       final loansDao = db.loansDao;
       final loanId = await loansDao.create(
         name: 'Préstamo test',
-        principalAmount: 12000,
-        monthlyPayment: 1100,
+        principalAmount: 1200000,
+        monthlyPayment: 110000,
         initialDurationMonths: 12,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 1, 1),

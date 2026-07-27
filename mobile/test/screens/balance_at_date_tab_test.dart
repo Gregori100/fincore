@@ -35,7 +35,7 @@ void main() {
         final now = DateTime.now();
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa.id,
-          amount: 1500,
+          amount: 150000,
           occurredAt: DateTime(now.year, now.month - 1, 15),
         );
       });

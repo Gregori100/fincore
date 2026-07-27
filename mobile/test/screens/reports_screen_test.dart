@@ -60,7 +60,7 @@ void main() {
           await deps.entriesDao.registerExpense(
             accountOriginId: debit,
             categoryId: catComida,
-            amount: 350,
+            amount: 35000,
             occurredAt: DateTime(now.year, now.month, now.day, 10),
           );
         },
@@ -93,7 +93,7 @@ void main() {
           final now = DateTime.now();
           await deps.entriesDao.registerExpense(
             accountOriginId: debit,
-            amount: 500,
+            amount: 50000,
             occurredAt: DateTime(now.year, now.month, now.day, 10),
           );
         },

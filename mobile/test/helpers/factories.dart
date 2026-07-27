@@ -25,7 +25,7 @@ class Factories {
   static AccountsCompanion credit({
     String? id,
     String name = 'Visa',
-    double creditLimit = 50000,
+    int creditLimit = 50000,
     int closingDay = 15,
     int paymentDay = 5,
   }) {

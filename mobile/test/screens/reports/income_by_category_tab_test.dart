@@ -64,13 +64,13 @@ void main() {
         // Ambos incomes dentro del mes actual (default: thisMonth).
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa,
-          amount: 30000,
+          amount: 3000000,
           categoryId: catSueldo,
           occurredAt: DateTime(now.year, now.month, 5),
         );
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa,
-          amount: 5000,
+          amount: 500000,
           categoryId: catFreelance,
           occurredAt: DateTime(now.year, now.month, 10),
         );
@@ -99,7 +99,7 @@ void main() {
         final now = DateTime.now();
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa,
-          amount: 500,
+          amount: 50000,
           occurredAt: DateTime(now.year, now.month, 15),
         );
       },

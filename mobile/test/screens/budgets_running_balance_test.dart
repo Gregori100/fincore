@@ -15,7 +15,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Sin harness de widget: la función es pura para justamente permitir
 /// este blindaje mínimo.
 void main() {
-  BudgetItemDisplay item(String id, double amount, {bool isDone = false}) {
+  BudgetItemDisplay item(String id, int amount, {bool isDone = false}) {
     return BudgetItemDisplay(
       id: id,
       name: id,
@@ -33,7 +33,7 @@ void main() {
         expense: const [],
       );
       expect(out.income.map((i) => i.cumulativeAfter).toList(),
-          [1500.0, 2200.0, 2500.0]);
+          [1500, 2200, 2500]);
       expect(out.expense, isEmpty);
     });
 
@@ -45,9 +45,9 @@ void main() {
         expense: [item('e1', 500), item('e2', 1800), item('e3', 300)],
       );
       expect(out.income.map((i) => i.cumulativeAfter).toList(),
-          [1500.0, 2200.0, 2500.0]);
+          [1500, 2200, 2500]);
       expect(out.expense.map((e) => e.cumulativeAfter).toList(),
-          [2000.0, 200.0, -100.0]);
+          [2000, 200, -100]);
     });
 
     test('UT-RB03: sólo gastos → running negativo desde el primero', () {
@@ -57,7 +57,7 @@ void main() {
       );
       expect(out.income, isEmpty);
       expect(out.expense.map((e) => e.cumulativeAfter).toList(),
-          [-500.0, -800.0]);
+          [-500, -800]);
     });
 
     test('UT-RB04: lista vacía en ambos lados → devuelve dos listas vacías',
@@ -83,9 +83,9 @@ void main() {
         ],
       );
       expect(out.income.map((i) => i.cumulativeAfter).toList(),
-          [1500.0, 2200.0, 2500.0]);
+          [1500, 2200, 2500]);
       expect(out.expense.map((e) => e.cumulativeAfter).toList(),
-          [2000.0, 200.0, -100.0]);
+          [2000, 200, -100]);
     });
 
     test('UT-RB06: preserva el resto de los campos del BudgetItemDisplay',
@@ -94,7 +94,7 @@ void main() {
         id: 'i1',
         name: 'Sueldo',
         categoryId: 'cat-1',
-        amount: 1500,
+        amount: 150000,
         isDone: true,
       );
       final out = withCumulativeCascade(income: [input], expense: const []);
@@ -102,9 +102,9 @@ void main() {
       expect(result.id, 'i1');
       expect(result.name, 'Sueldo');
       expect(result.categoryId, 'cat-1');
-      expect(result.amount, 1500);
+      expect(result.amount, 150000);
       expect(result.isDone, isTrue);
-      expect(result.cumulativeAfter, 1500);
+      expect(result.cumulativeAfter, 150000);
     });
   });
 }

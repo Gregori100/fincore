@@ -45,14 +45,14 @@ void main() {
           appliesTo: 'expense',
           colorSlug: 'red',
           iconSlug: 'shopping-cart',
-          monthlyLimit: 5000,
+          monthlyLimit: 500000,
         );
         final bolsa = (await deps.accountsDao.listAll())
             .firstWhere((a) => a.type == 'cash')
             .id;
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa,
-          amount: 1500,
+          amount: 150000,
           categoryId: catId,
           occurredAt: DateTime.now(),
         );
@@ -78,14 +78,14 @@ void main() {
           appliesTo: 'expense',
           colorSlug: 'red',
           iconSlug: 'shopping-cart',
-          monthlyLimit: 100,
+          monthlyLimit: 10000,
         );
         final bolsa = (await deps.accountsDao.listAll())
             .firstWhere((a) => a.type == 'cash')
             .id;
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa,
-          amount: 250,
+          amount: 25000,
           categoryId: catId,
           occurredAt: DateTime.now(),
         );
@@ -108,7 +108,7 @@ void main() {
           appliesTo: 'expense',
           colorSlug: 'green',
           iconSlug: 'heart',
-          monthlyLimit: 1000,
+          monthlyLimit: 100000,
         );
       },
     );
@@ -134,7 +134,7 @@ void main() {
           appliesTo: 'expense',
           colorSlug: 'blue',
           iconSlug: 'tag',
-          monthlyLimit: 500,
+          monthlyLimit: 50000,
         );
       },
     );

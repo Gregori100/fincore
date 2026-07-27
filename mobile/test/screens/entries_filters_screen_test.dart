@@ -189,13 +189,13 @@ void main() {
         final today = DateTime.now();
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 100,
+          amount: 10000,
           occurredAt: today,
           description: 'GastoBolsaM10',
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: bbvaId!,
-          amount: 200,
+          amount: 20000,
           occurredAt: today.add(const Duration(hours: 1)),
           description: 'GastoBBVAM10',
         );
@@ -295,7 +295,8 @@ void main() {
 
       final result = await future;
       expect(result, isNotNull);
-      expect(result!.minAmount, 100.0);
+      expect(result!.minAmount, 10000,
+          reason: 'El usuario tipeó "100" → 10000 centavos');
       expect(result.maxAmount, isNull);
 
       await harness.dispose();

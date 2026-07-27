@@ -117,13 +117,13 @@ void main() {
     });
   });
 
-  group('parseFormattedAmount', () {
-    test('"1,234.56" → 1234.56', () {
-      expect(parseFormattedAmount('1,234.56'), 1234.56);
+  group('parseFormattedAmount (→ centavos)', () {
+    test('"1,234.56" → 123456 centavos', () {
+      expect(parseFormattedAmount('1,234.56'), 123456);
     });
 
-    test('"1000" → 1000.0', () {
-      expect(parseFormattedAmount('1000'), 1000.0);
+    test('"1000" → 100000 centavos', () {
+      expect(parseFormattedAmount('1000'), 100000);
     });
 
     test('vacío → null', () {
@@ -133,27 +133,37 @@ void main() {
     test('inválido → null', () {
       expect(parseFormattedAmount('abc'), isNull);
     });
+
+    test('más de 2 decimales → null (no trunca en silencio)', () {
+      expect(parseFormattedAmount('1.234'), isNull);
+    });
   });
 
-  group('formatAmountForInput (hydration edit)', () {
-    test('1000.0 → "1,000"', () {
-      expect(formatAmountForInput(1000), '1,000');
+  group('formatAmountForInput (hydration edit, desde centavos)', () {
+    test('100000 → "1,000"', () {
+      expect(formatAmountForInput(100000), '1,000');
     });
 
-    test('1500.5 → "1,500.50"', () {
-      expect(formatAmountForInput(1500.5), '1,500.50');
+    test('150050 → "1,500.50"', () {
+      expect(formatAmountForInput(150050), '1,500.50');
     });
 
-    test('1234.56 → "1,234.56"', () {
-      expect(formatAmountForInput(1234.56), '1,234.56');
+    test('123456 → "1,234.56"', () {
+      expect(formatAmountForInput(123456), '1,234.56');
     });
 
-    test('0.99 → "0.99"', () {
-      expect(formatAmountForInput(0.99), '0.99');
+    test('99 → "0.99"', () {
+      expect(formatAmountForInput(99), '0.99');
     });
 
-    test('0.0 → "0"', () {
+    test('0 → "0"', () {
       expect(formatAmountForInput(0), '0');
+    });
+
+    test('round-trip parse → format preserva el valor', () {
+      for (final text in ['1,000', '1,500.50', '1,234.56', '0.99']) {
+        expect(formatAmountForInput(parseFormattedAmount(text)!), text);
+      }
     });
   });
 }

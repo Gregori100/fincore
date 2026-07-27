@@ -14,8 +14,8 @@ void main() {
         kinds: const ['expense', 'credit_expense'],
         accountIds: const ['acc-1', 'acc-2'],
         categoryIds: const ['cat-1'],
-        minAmount: 100.0,
-        maxAmount: 500.0,
+        minAmount: 10000,
+        maxAmount: 50000,
       );
       final json = original.toSavedJson();
       final restored = EntriesFilters.fromSavedJson(json);
@@ -95,7 +95,7 @@ void main() {
       expect(restored.accountIds, ['acc-1']);
       expect(restored.categoryIds.toSet(), {'cat-1', 'cat-2'});
       expect(restored.minAmount, 100);
-      expect(restored.maxAmount, 500.5);
+      expect(restored.maxAmount, 50050);
     });
   });
 }

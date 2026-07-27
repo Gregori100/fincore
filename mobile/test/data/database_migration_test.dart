@@ -1,5 +1,6 @@
 import 'package:drift/native.dart';
 import 'package:fincore/data/database.dart';
+import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/data/entries_filters.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -350,7 +351,7 @@ void main() {
     await db.weeklyBudgetsDao.addItem(
       budgetId: budgetId,
       name: 'Renglón MG-02',
-      amount: 100,
+      amount: 10000,
       kind: 'expense',
     );
     expect(await db.weeklyBudgetsDao.watchAll().first, hasLength(1));
@@ -500,6 +501,153 @@ void main() {
       () => db.migration.onUpgrade(migrator, 99, 100),
       throwsA(isA<UnimplementedError>()),
     );
+
+    await db.close();
+  });
+
+  // ===========================================================================
+  // Sprint flutter-integer-cents-v1: schema bump v13 → v14
+  // ===========================================================================
+  //
+  // La conversión REAL → INTEGER no se puede simular re-declarando las tablas
+  // (el schema Dart ya está en v14), así que los tests atacan las dos
+  // propiedades verificables: idempotencia del helper y que las 9 columnas
+  // monetarias queden declaradas INTEGER tras cualquier ruta de migración.
+
+  /// Tipo declarado de una columna según `pragma_table_info`.
+  Future<String> declaredType(
+      FincoreDatabase db, String table, String column) async {
+    final row = await db
+        .customSelect(
+          "SELECT type FROM pragma_table_info('$table') WHERE name = '$column'",
+          readsFrom: const {},
+        )
+        .getSingle();
+    return row.read<String>('type').toUpperCase();
+  }
+
+  const moneyColumns = <(String, String)>[
+    ('journal_entries', 'amount'),
+    ('journal_entries', 'principal_amount'),
+    ('journal_entries', 'interest_amount'),
+    ('accounts', 'credit_limit'),
+    ('accounts', 'minimum_floor'),
+    ('loans', 'principal_amount'),
+    ('loans', 'monthly_payment'),
+    ('weekly_budget_items', 'amount'),
+    ('categories', 'monthly_limit'),
+  ];
+
+  test(
+      'MG-IC-01: las 9 columnas monetarias quedan declaradas INTEGER y los '
+      '3 ratios siguen REAL (schema v14)', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll(); // fuerza onCreate en v14.
+
+    for (final (table, column) in moneyColumns) {
+      expect(await declaredType(db, table, column), 'INTEGER',
+          reason: '$table.$column debe ser INTEGER (centavos, RN-IC-01)');
+    }
+    // Los ratios 0-1 NO son montos y quedan como REAL (RN-IC-02, P-003).
+    for (final column in [
+      'interest_rate',
+      'minimum_payment_pct',
+      'minimum_capital_pct',
+    ]) {
+      expect(await declaredType(db, 'accounts', column), 'REAL',
+          reason: 'accounts.$column es un ratio 0-1, no un monto');
+    }
+
+    await db.close();
+  });
+
+  test(
+      'MG-IC-02: la conversión 13→14 es idempotente — correrla sobre una BD '
+      'ya migrada no altera los montos', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    final bolsa = await db.accountsDao.createBolsa();
+    await db.entriesDao.registerIncome(
+      accountDestinationId: bolsa,
+      amount: 17377, // $173.77 — el monto del bug que disparó el sprint.
+      occurredAt: DateTime(2026, 7, 24),
+    );
+    await db.entriesDao.registerExpense(
+      accountOriginId: bolsa,
+      amount: 5099,
+      occurredAt: DateTime(2026, 7, 24),
+    );
+    final before = await FinancialStateService(db).accountBalanceNow(bolsa);
+    expect(before, 17377 - 5099);
+
+    // Re-ejecutar la migración: el probe de `pragma_table_info` detecta que
+    // `amount` ya es INTEGER y hace no-op. Sin el probe, los montos se
+    // multiplicarían por 100 otra vez.
+    final migrator = db.createMigrator();
+    await db.migration.onUpgrade(migrator, 13, 14);
+
+    final after = await FinancialStateService(db).accountBalanceNow(bolsa);
+    expect(after, before,
+        reason: 'la migración debe ser idempotente ante reintento post-crash');
+
+    await db.close();
+  });
+
+  test(
+      'MG-IC-03: las rutas defensivas X→14 dejan las 9 columnas monetarias '
+      'en INTEGER sin lanzar', () async {
+    for (final from in [5, 8, 11, 12, 13]) {
+      final db = FincoreDatabase(NativeDatabase.memory());
+      await db.accountsDao.listAll();
+      final migrator = db.createMigrator();
+
+      await db.migration.onUpgrade(migrator, from, 14);
+
+      for (final (table, column) in moneyColumns) {
+        expect(await declaredType(db, table, column), 'INTEGER',
+            reason: 'ruta $from→14 debe dejar $table.$column en INTEGER');
+      }
+      await db.close();
+    }
+  });
+
+  test(
+      'MG-IC-04: tras la migración los balances derivados son exactos — '
+      'pagar el saldo completo de una tarjeta no dispara overpay_debt '
+      '(regresión del bug 2026-07-24)', () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    final bolsa = await db.accountsDao.createBolsa();
+    final tarjeta = await db.accountsDao.create(
+      name: 'Visa',
+      type: 'credit',
+      creditLimit: 5000000,
+    );
+    await db.entriesDao.registerIncome(
+      accountDestinationId: bolsa,
+      amount: 100000,
+      occurredAt: DateTime(2026, 7, 24),
+    );
+    // Cargos que en `double` acumulaban residuo IEE 754 (0.1 + 0.2 ...).
+    for (var i = 0; i < 10; i++) {
+      await db.entriesDao.registerCreditExpense(
+        accountOriginId: tarjeta,
+        amount: i.isEven ? 10 : 20,
+        occurredAt: DateTime(2026, 7, 24),
+      );
+    }
+    final deuda = await FinancialStateService(db).accountBalanceNow(tarjeta);
+    expect(deuda, 150, reason: '5 × 10 + 5 × 20 centavos');
+
+    // Pagar exactamente la deuda: con centavos enteros la comparación
+    // `amount > deuda` es exacta y NO hace falta la tolerancia `+ 0.005`.
+    final id = await db.entriesDao.registerDebtPayment(
+      accountOriginId: bolsa,
+      accountDestinationId: tarjeta,
+      amount: deuda,
+      occurredAt: DateTime(2026, 7, 24),
+    );
+    expect(id, isNotEmpty);
+    expect(await FinancialStateService(db).accountBalanceNow(tarjeta), 0,
+        reason: 'la tarjeta queda exactamente en cero, sin residuo');
 
     await db.close();
   });

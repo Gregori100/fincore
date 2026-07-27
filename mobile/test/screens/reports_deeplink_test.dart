@@ -38,13 +38,13 @@ void main() {
           await deps.entriesDao.registerExpense(
             accountOriginId: bolsa.id,
             categoryId: catComida,
-            amount: 200.0,
+            amount: 20000,
             occurredAt: day,
             description: 'EsCom1',
           );
           await deps.entriesDao.registerExpense(
             accountOriginId: bolsa.id,
-            amount: 50.0,
+            amount: 5000,
             occurredAt: day.add(const Duration(hours: 1)),
             description: 'SinCatEntry',
           );
@@ -89,13 +89,13 @@ void main() {
           await deps.entriesDao.registerExpense(
             accountOriginId: bolsa.id,
             categoryId: catActiva,
-            amount: 200.0,
+            amount: 20000,
             occurredAt: day,
             description: 'EnCatActiva',
           );
           await deps.entriesDao.registerExpense(
             accountOriginId: bolsa.id,
-            amount: 50.0,
+            amount: 5000,
             occurredAt: day.add(const Duration(hours: 1)),
             description: 'SinCategoria',
           );

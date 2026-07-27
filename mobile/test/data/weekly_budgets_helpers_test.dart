@@ -28,7 +28,7 @@ void main() {
   WeeklyBudgetItemRow item({
     required String id,
     required String budgetId,
-    required double amount,
+    required int amount,
     required String kind,
     String name = 'Item',
     int sortOrder = 0,
@@ -128,27 +128,27 @@ void main() {
 
     test('UT-H07: solo income retorna +Σ', () {
       final items = [
-        item(id: '1', budgetId: 'x', amount: 100, kind: 'income'),
-        item(id: '2', budgetId: 'x', amount: 50, kind: 'income'),
+        item(id: '1', budgetId: 'x', amount: 10000, kind: 'income'),
+        item(id: '2', budgetId: 'x', amount: 5000, kind: 'income'),
       ];
-      expect(calculateBalance(items), 150);
+      expect(calculateBalance(items), 15000);
     });
 
     test('UT-H08: solo expense retorna −Σ', () {
       final items = [
-        item(id: '1', budgetId: 'x', amount: 30, kind: 'expense'),
-        item(id: '2', budgetId: 'x', amount: 20, kind: 'expense'),
+        item(id: '1', budgetId: 'x', amount: 3000, kind: 'expense'),
+        item(id: '2', budgetId: 'x', amount: 2000, kind: 'expense'),
       ];
-      expect(calculateBalance(items), -50);
+      expect(calculateBalance(items), -5000);
     });
 
     test('UT-H09: mixto retorna Σincome − Σexpense', () {
       final items = [
-        item(id: '1', budgetId: 'x', amount: 200, kind: 'income'),
-        item(id: '2', budgetId: 'x', amount: 80, kind: 'expense'),
-        item(id: '3', budgetId: 'x', amount: 20, kind: 'expense'),
+        item(id: '1', budgetId: 'x', amount: 20000, kind: 'income'),
+        item(id: '2', budgetId: 'x', amount: 8000, kind: 'expense'),
+        item(id: '3', budgetId: 'x', amount: 2000, kind: 'expense'),
       ];
-      expect(calculateBalance(items), 100);
+      expect(calculateBalance(items), 10000);
     });
   });
 }

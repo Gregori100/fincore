@@ -39,7 +39,7 @@ void main() {
               .firstWhere((a) => a.type == 'cash');
           await deps.entriesDao.registerIncome(
             accountDestinationId: bolsa.id,
-            amount: 1000.0,
+            amount: 100000,
             occurredAt: DateTime.utc(2026, 6, 22, 12),
             description: 'Salario',
           );
@@ -75,7 +75,7 @@ void main() {
           // Expense desde BBVA → subtexto muestra "BBVA_Row_Test".
           await deps.entriesDao.registerExpense(
             accountOriginId: bbva,
-            amount: 300,
+            amount: 30000,
             occurredAt: DateTime.utc(2026, 6, 22, 12),
             description: 'GastoBBVA_Row',
           );
@@ -83,7 +83,7 @@ void main() {
           await deps.entriesDao.registerTransfer(
             accountOriginId: bolsa.id,
             accountDestinationId: bbva,
-            amount: 100,
+            amount: 10000,
             occurredAt: DateTime.utc(2026, 6, 23, 12),
             description: 'TransferRow_Test',
           );
@@ -147,7 +147,7 @@ void main() {
               .firstWhere((a) => a.type == 'cash');
           await deps.entriesDao.registerIncome(
             accountDestinationId: bolsa.id,
-            amount: 1500,
+            amount: 150000,
             occurredAt: DateTime(now.year, now.month, now.day, 10),
             description: 'IncomeToday',
           );
@@ -190,14 +190,14 @@ void main() {
           // Movimiento en Bolsa.
           await deps.entriesDao.registerIncome(
             accountDestinationId: bolsa.id,
-            amount: 100,
+            amount: 10000,
             occurredAt: DateTime(now.year, now.month, now.day, 9),
             description: 'IncomeBolsaFilterTest',
           );
           // Movimiento en Banamex.
           await deps.entriesDao.registerIncome(
             accountDestinationId: banamex,
-            amount: 200,
+            amount: 20000,
             occurredAt: DateTime(now.year, now.month, now.day, 10),
             description: 'IncomeBanamexFilterTest',
           );
@@ -261,13 +261,13 @@ void main() {
           );
           await deps.entriesDao.registerIncome(
             accountDestinationId: bolsa.id,
-            amount: 100,
+            amount: 10000,
             occurredAt: DateTime(now.year, now.month, now.day, 9),
             description: 'BolsaMov_WT05',
           );
           await deps.entriesDao.registerIncome(
             accountDestinationId: debit,
-            amount: 200,
+            amount: 20000,
             occurredAt: DateTime(now.year, now.month, now.day, 10),
             description: 'DebitMov_WT05',
           );

@@ -26,32 +26,32 @@ void main() {
       final day = DateTime(now.year, now.month, 5, 10);
       await deps.entriesDao.registerIncome(
         accountDestinationId: bolsa.id,
-        amount: 1000.0,
+        amount: 100000,
         occurredAt: day,
         description: 'Salario',
       );
       await deps.entriesDao.registerIncome(
         accountDestinationId: bolsa.id,
-        amount: 200.0,
+        amount: 20000,
         occurredAt: day.add(const Duration(hours: 1)),
         description: 'Reembolso',
       );
       await deps.entriesDao.registerExpense(
         accountOriginId: bolsa.id,
-        amount: 50.0,
+        amount: 5000,
         occurredAt: day.add(const Duration(hours: 2)),
         description: 'Café',
       );
       await deps.entriesDao.registerExpense(
         accountOriginId: bolsa.id,
-        amount: 80.0,
+        amount: 8000,
         occurredAt: day.add(const Duration(hours: 3)),
         description: 'Almuerzo',
       );
       await deps.entriesDao.registerTransfer(
         accountOriginId: bolsa.id,
         accountDestinationId: debit.id,
-        amount: 500.0,
+        amount: 50000,
         occurredAt: day.add(const Duration(hours: 4)),
         description: 'A débito',
       );
@@ -160,14 +160,14 @@ void main() {
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
           categoryId: comidaId,
-          amount: 100,
+          amount: 10000,
           occurredAt: day,
           description: 'EntryComidaM3',
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
           categoryId: otraId,
-          amount: 50,
+          amount: 5000,
           occurredAt: day.add(const Duration(hours: 1)),
           description: 'EntryOtraM3',
         );
@@ -195,13 +195,13 @@ void main() {
       final day = DateTime(now.year, now.month, 5, 10);
       await deps.entriesDao.registerExpense(
         accountOriginId: bolsa.id,
-        amount: 50.0,
+        amount: 5000,
         occurredAt: day,
         description: 'Gasto uno',
       );
       await deps.entriesDao.registerExpense(
         accountOriginId: bolsa.id,
-        amount: 80.0,
+        amount: 8000,
         occurredAt: day.add(const Duration(hours: 1)),
         description: 'Gasto dos',
       );

@@ -106,13 +106,13 @@ void main() {
     final today = DateTime(now.year, now.month, now.day, 10);
     await deps.entriesDao.registerExpense(
       accountOriginId: bolsa.id,
-      amount: 100.0,
+      amount: 10000,
       occurredAt: today,
       description: 'GastoBolsa',
     );
     await deps.entriesDao.registerExpense(
       accountOriginId: bbvaId,
-      amount: 200.0,
+      amount: 20000,
       occurredAt: today.add(const Duration(hours: 1)),
       description: 'GastoBBVA',
     );

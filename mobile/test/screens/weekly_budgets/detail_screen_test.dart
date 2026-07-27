@@ -1,6 +1,6 @@
 import 'package:fincore/screens/dashboard_screen.dart';
 import 'package:fincore/theme/fincore_colors.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -118,7 +118,7 @@ void main() {
       // con el del renglón de la card (2 instancias en total).
       // Sprint flutter-weekly-budgets-polish-v1: el footer agrega los 2
       // mini-amounts INGRESOS + GASTOS, así que el monto aparece más veces.
-      expect(find.text(formatAmount(6500)), findsWidgets);
+      expect(find.text(formatCents(650000)), findsWidgets);
       expect(find.text('Sobra'), findsOneWidget);
 
       await harness.dispose();
@@ -139,7 +139,7 @@ void main() {
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Sueldo',
-            amount: 6500,
+            amount: 650000,
             kind: 'income',
           );
         },
@@ -152,7 +152,7 @@ void main() {
       expect(find.text('Sobra'), findsOneWidget);
       // Sprint flutter-weekly-budgets-polish-v1: el footer agrega los 2
       // mini-amounts INGRESOS + GASTOS, así que el monto aparece más veces.
-      expect(find.text(formatAmount(6500)), findsWidgets);
+      expect(find.text(formatCents(650000)), findsWidgets);
 
       // QW3: income ya tiene 1 renglón → su sección no muestra ningún
       // "Agregar" (header ahora es ícono sin label, y al no estar vacía no
@@ -170,11 +170,11 @@ void main() {
       expect(find.text('Renta'), findsOneWidget);
       // Sprint flutter-weekly-budgets-polish-v1: el mini-amount de GASTOS
       // en el footer duplica la aparición del monto.
-      expect(find.text(formatAmount(2000)), findsWidgets);
+      expect(find.text(formatCents(200000)), findsWidgets);
       // "$4,500.00" es un monto único (no coincide con ningún renglón) →
       // findsOneWidget sigue siendo válido para el monto del footer.
       expect(find.text('Sobra'), findsOneWidget);
-      expect(find.text(formatAmount(4500)), findsOneWidget);
+      expect(find.text(formatCents(450000)), findsOneWidget);
 
       await harness.dispose();
     });
@@ -194,13 +194,13 @@ void main() {
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Sueldo',
-            amount: 6500,
+            amount: 650000,
             kind: 'income',
           );
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Renta',
-            amount: 2000,
+            amount: 200000,
             kind: 'expense',
           );
         },
@@ -208,7 +208,7 @@ void main() {
       await pushBudgetDetail(tester, budgetId);
 
       expect(find.text('Sobra'), findsOneWidget);
-      expect(find.text(formatAmount(4500)), findsOneWidget);
+      expect(find.text(formatCents(450000)), findsOneWidget);
 
       // Tap en el nombre del renglón (fuera del handle) abre edición.
       await tester.tap(find.text('Renta'));
@@ -223,7 +223,7 @@ void main() {
       // semántico (`FincoreColors.negative`), el label siempre es
       // `textMuted`.
       expect(find.text('Faltan'), findsOneWidget);
-      final amountFinder = find.text(formatAmount(1500));
+      final amountFinder = find.text(formatCents(150000));
       expect(amountFinder, findsOneWidget);
       final textWidget = tester.widget<Text>(amountFinder);
       expect(textWidget.style?.color, FincoreColors.negative);
@@ -246,7 +246,7 @@ void main() {
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Sueldo',
-            amount: 6500,
+            amount: 650000,
             kind: 'income',
           );
         },
@@ -258,7 +258,7 @@ void main() {
       // Monto duplicado (renglón + footer) — ver nota de WT-DS02/03.
       // Sprint flutter-weekly-budgets-polish-v1: el footer agrega los 2
       // mini-amounts INGRESOS + GASTOS, así que el monto aparece más veces.
-      expect(find.text(formatAmount(6500)), findsWidgets);
+      expect(find.text(formatCents(650000)), findsWidgets);
 
       // Swipe-to-delete: fling horizontal sobre el renglón activa el
       // Dismissible, que dispara `onDeleteItem` (el caller muestra el
@@ -294,13 +294,13 @@ void main() {
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Sueldo',
-            amount: 6500,
+            amount: 650000,
             kind: 'income',
           );
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Renta',
-            amount: 2000,
+            amount: 200000,
             kind: 'expense',
           );
         },
@@ -380,13 +380,13 @@ void main() {
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Sueldo',
-            amount: 6500,
+            amount: 650000,
             kind: 'income',
           );
           await deps.weeklyBudgetsDao.addItem(
             budgetId: budgetId,
             name: 'Extra',
-            amount: 500,
+            amount: 50000,
             kind: 'income',
           );
         },

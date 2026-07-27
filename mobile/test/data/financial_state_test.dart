@@ -31,7 +31,7 @@ void main() {
     credit = await accountsDao.create(
       name: 'Visa',
       type: 'credit',
-      creditLimit: 50000,
+      creditLimit: 5000000,
       closingDay: 15,
       paymentDay: 5,
     );
@@ -44,83 +44,83 @@ void main() {
   test('BD vacía: BO/DE/CR = 0', () async {
     expect(await state.watchBo().first, 0);
     expect(await state.watchDe().first, 0);
-    expect(await state.watchCr().first, 50000);
+    expect(await state.watchCr().first, 5000000);
   });
 
   test('Income suma a BO', () async {
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 1000,
+      amount: 100000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.watchBo().first, 1000);
+    expect(await state.watchBo().first, 100000);
   });
 
   test('Expense baja BO (libreta libre permite negativo)', () async {
     await entriesDao.registerExpense(
       accountOriginId: debit,
-      amount: 200,
+      amount: 20000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.watchBo().first, -200);
+    expect(await state.watchBo().first, -20000);
   });
 
   test('credit_expense sube DE y baja CR', () async {
     await entriesDao.registerCreditExpense(
       accountOriginId: credit,
-      amount: 5000,
+      amount: 500000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.watchDe().first, 5000);
-    expect(await state.watchCr().first, 45000);
+    expect(await state.watchDe().first, 500000);
+    expect(await state.watchCr().first, 4500000);
   });
 
   test('debt_payment baja DE y baja BO', () async {
     await entriesDao.registerIncome(
       accountDestinationId: debit,
-      amount: 10000,
+      amount: 1000000,
       occurredAt: DateTime.now(),
     );
     await entriesDao.registerCreditExpense(
       accountOriginId: credit,
-      amount: 5000,
+      amount: 500000,
       occurredAt: DateTime.now(),
     );
     await entriesDao.registerDebtPayment(
       accountOriginId: debit,
       accountDestinationId: credit,
-      amount: 2000,
+      amount: 200000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.watchBo().first, 8000); // 10000 - 2000
-    expect(await state.watchDe().first, 3000); // 5000 - 2000
-    expect(await state.watchCr().first, 47000); // 50000 - 3000
+    expect(await state.watchBo().first, 800000); // 10000 - 2000
+    expect(await state.watchDe().first, 300000); // 5000 - 2000
+    expect(await state.watchCr().first, 4700000); // 50000 - 3000
   });
 
   test('transfer NO cambia BO (suma cero entre debit y cash)', () async {
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 1000,
+      amount: 100000,
       occurredAt: DateTime.now(),
     );
     await entriesDao.registerTransfer(
       accountOriginId: bolsa,
       accountDestinationId: debit,
-      amount: 400,
+      amount: 40000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.watchBo().first, 1000); // sin cambio
-    expect(await state.accountBalanceNow(bolsa), 600);
-    expect(await state.accountBalanceNow(debit), 400);
+    expect(await state.watchBo().first, 100000); // sin cambio
+    expect(await state.accountBalanceNow(bolsa), 60000);
+    expect(await state.accountBalanceNow(debit), 40000);
   });
 
   test('Entry cancelado NO cuenta en BO/DE/CR', () async {
     final id = await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 500,
+      amount: 50000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.watchBo().first, 500);
+    expect(await state.watchBo().first, 50000);
     await entriesDao.cancel(id);
     // RF-007 v4 introdujo replay-1 en watchBo(): el siguiente `.first` ahora
     // recibe el último valor cacheado (500). Usar `firstWhere(v == 0)` para
@@ -133,11 +133,11 @@ void main() {
   test('Cuenta archivada NO aparece en BO', () async {
     await entriesDao.registerIncome(
       accountDestinationId: debit,
-      amount: 300,
+      amount: 30000,
       occurredAt: DateTime.now(),
     );
     // Primer subscribe: cache vacío, el primer evento viene de drift (300).
-    expect(await state.watchBo().first, 300);
+    expect(await state.watchBo().first, 30000);
     // Archive ahora cancela el income en cascada, sin precondición de saldo.
     await accountsDao.deleteAccount(debit);
     // RF-007 v4: replay-1 puede entregar el valor cacheado (300). Esperar 0.
@@ -145,19 +145,19 @@ void main() {
   });
 
   test('Stream reactivo: insert entry mientras escucha → emite valor nuevo', () async {
-    final emissions = <double>[];
+    final emissions = <int>[];
     final sub = state.watchBo().listen(emissions.add);
     // Esperar primer valor.
     await Future<void>.delayed(const Duration(milliseconds: 50));
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 1000,
+      amount: 100000,
       occurredAt: DateTime.now(),
     );
     await Future<void>.delayed(const Duration(milliseconds: 100));
     await sub.cancel();
     expect(emissions, contains(0));
-    expect(emissions, contains(1000));
+    expect(emissions, contains(100000));
   });
 
   test('CR cuando no hay credit accounts es 0', () async {
@@ -172,28 +172,38 @@ void main() {
     final id = await accountsDao.create(
       name: 'Otra',
       type: 'credit',
-      creditLimit: 30000,
+      creditLimit: 3000000,
       closingDay: 10,
       paymentDay: 1,
     );
-    // CR ahora debería ser 50000 + 30000.
+    // CR ahora debería ser 5,000,000 + 3,000,000 centavos.
     // RF-007 v4: con replay-1, esperar el valor esperado vía firstWhere para
     // no recibir un valor cacheado intermedio. `.timeout(5s)` defensivo (M1 v4).
-    expect(await state.watchCr().firstWhere((v) => v == 80000).timeout(const Duration(seconds: 5)), 80000);
+    expect(
+        await state
+            .watchCr()
+            .firstWhere((v) => v == 8000000)
+            .timeout(const Duration(seconds: 5)),
+        8000000);
     await accountsDao.deleteAccount(id);
-    expect(await state.watchCr().firstWhere((v) => v == 50000).timeout(const Duration(seconds: 5)), 50000);
+    expect(
+        await state
+            .watchCr()
+            .firstWhere((v) => v == 5000000)
+            .timeout(const Duration(seconds: 5)),
+        5000000);
   });
 
   test('accountBalanceNow sincrónico devuelve mismo valor que stream', () async {
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 750,
+      amount: 75000,
       occurredAt: DateTime.now(),
     );
     final sync = await state.accountBalanceNow(bolsa);
     final reactive = await state.watchAccountBalance(bolsa, 'cash').first;
     expect(sync, reactive);
-    expect(sync, 750);
+    expect(sync, 75000);
   });
 
   // Cache de streams (RF-012 del sprint flutter-local-hardening).
@@ -255,15 +265,15 @@ void main() {
     // condicional: si falla por stream cerrado, ajustar watchAccountBalance
     // con onCancel).
     final stream = state.watchAccountBalance(bolsa, 'cash');
-    final received1 = <double>[];
-    final received2 = <double>[];
+    final received1 = <int>[];
+    final received2 = <int>[];
 
     final sub1 = stream.listen(received1.add);
     final sub2 = stream.listen(received2.add);
     // Trigger evento.
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 100,
+      amount: 10000,
       occurredAt: DateTime.now(),
     );
     await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -274,11 +284,11 @@ void main() {
 
     // Cancelar todo y resuscribir: el stream cacheado debe seguir vivo
     // (sin esto, la próxima `watchAccountBalance` retornaría un stream cerrado).
-    final received3 = <double>[];
+    final received3 = <int>[];
     final sub3 = state.watchAccountBalance(bolsa, 'cash').listen(received3.add);
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 50,
+      amount: 5000,
       occurredAt: DateTime.now(),
     );
     await Future<void>.delayed(const Duration(milliseconds: 200));
@@ -304,35 +314,35 @@ void main() {
     // el último valor inmediatamente.
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 500,
+      amount: 50000,
       occurredAt: DateTime.now(),
     );
     final stream = state.watchAccountBalance(bolsa, 'cash');
 
-    final receivedA = <double>[];
+    final receivedA = <int>[];
     final subA = stream.listen(receivedA.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(receivedA, isNotEmpty, reason: 'Listener A debería recibir primer valor');
-    expect(receivedA.last, 500);
+    expect(receivedA.last, 50000);
 
     // Sin cancelar subA, entra subB.
-    final receivedB = <double>[];
+    final receivedB = <int>[];
     final subB = stream.listen(receivedB.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(receivedB, isNotEmpty,
         reason:
             'Listener B debería recibir replay del último valor, aún con A activo');
-    expect(receivedB.last, 500);
+    expect(receivedB.last, 50000);
 
     // Trigger nuevo evento: ambos deben recibirlo.
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 100,
+      amount: 10000,
       occurredAt: DateTime.now(),
     );
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(receivedA.last, 600, reason: 'A debería recibir el cambio');
-    expect(receivedB.last, 600, reason: 'B debería recibir el cambio');
+    expect(receivedA.last, 60000, reason: 'A debería recibir el cambio');
+    expect(receivedB.last, 60000, reason: 'B debería recibir el cambio');
 
     await subA.cancel();
     await subB.cancel();
@@ -353,7 +363,7 @@ void main() {
     final stream = state.watchAccountBalance(bolsa, 'cash');
 
     // Suscripción inicial recibe el primer valor (0).
-    final received1 = <double>[];
+    final received1 = <int>[];
     final sub1 = stream.listen(received1.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(received1.last, 0, reason: 'Listener 1 debería ver el balance inicial');
@@ -362,19 +372,19 @@ void main() {
     // SIN listeners activos: insertar un income simulando el cancel real.
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 250,
+      amount: 25000,
       occurredAt: DateTime.now(),
     );
     await Future<void>.delayed(const Duration(milliseconds: 100));
 
     // Resuscribirse al stream cacheado (Dashboard se vuelve a montar).
     // Sin replay-1, este listener quedaría sin valor hasta el próximo cambio.
-    final received2 = <double>[];
+    final received2 = <int>[];
     final sub2 = state.watchAccountBalance(bolsa, 'cash').listen(received2.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(received2, isNotEmpty,
         reason: 'Listener resuscrito debería recibir el último valor por replay-1');
-    expect(received2.last, 250,
+    expect(received2.last, 25000,
         reason: 'El último valor debería ser el balance post-income (250)');
     await sub2.cancel();
   });
@@ -390,7 +400,7 @@ void main() {
 
     // L2-H2 quality review v3: 100 ms para alinearse con el resto del archivo
     // y reducir el riesgo de flake en CI lento.
-    final received1 = <double>[];
+    final received1 = <int>[];
     final sub1 = s1.listen(received1.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(received1.last, 0);
@@ -408,7 +418,7 @@ void main() {
             'Si esta aserción falla, alguien reintrodujo onLastListenerCanceled y rompió la decisión del v2.');
 
     // Y el listener nuevo recibe inmediatamente sin que ocurra otro cambio.
-    final received2 = <double>[];
+    final received2 = <int>[];
     final sub2 = s2.listen(received2.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(received2, isNotEmpty);
@@ -439,23 +449,23 @@ void main() {
     // Sembrar 1 income, primer listener captura el valor.
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 500,
+      amount: 50000,
       occurredAt: DateTime.now(),
     );
-    final received1 = <double>[];
+    final received1 = <int>[];
     final sub1 = bo1.listen(received1.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(received1.last, 500);
+    expect(received1.last, 50000);
 
     // Cancelar y resubscribir: replay-1 entrega el último valor cacheado.
     await sub1.cancel();
     await Future<void>.delayed(const Duration(milliseconds: 100));
-    final received2 = <double>[];
+    final received2 = <int>[];
     final sub2 = state.watchBo().listen(received2.add);
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(received2, isNotEmpty,
         reason: 'watchBo() resuscrita debería recibir el último valor por replay-1');
-    expect(received2.last, 500);
+    expect(received2.last, 50000);
     await sub2.cancel();
   });
 
@@ -482,21 +492,21 @@ void main() {
     test('sube al crear préstamo (income inicial atómico)', () async {
       await db.loansDao.create(
         name: 'BBVA',
-        principalAmount: 10000,
-        monthlyPayment: 500,
+        principalAmount: 1000000,
+        monthlyPayment: 50000,
         initialDurationMonths: 24,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 1),
         destinationAccountId: bolsa,
       );
-      expect(await state.watchTotalLoans().first, 10000);
+      expect(await state.watchTotalLoans().first, 1000000);
     });
 
     test('baja al pagar principal', () async {
       final loanId = await db.loansDao.create(
         name: 'BBVA',
-        principalAmount: 10000,
-        monthlyPayment: 500,
+        principalAmount: 1000000,
+        monthlyPayment: 50000,
         initialDurationMonths: 24,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 1),
@@ -505,21 +515,21 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
-      expect(await state.watchTotalLoans().first, 9600);
+      expect(await state.watchTotalLoans().first, 960000);
     });
 
     test('vuelve a 0 cuando el préstamo se salda (auto-cierre paid)',
         () async {
       final loanId = await db.loansDao.create(
         name: 'BBVA',
-        principalAmount: 1000,
-        monthlyPayment: 1001,
+        principalAmount: 100000,
+        monthlyPayment: 100100,
         initialDurationMonths: 1,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 1),
@@ -528,9 +538,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 1001,
-        principalAmount: 1000,
-        interestAmount: 1,
+        amount: 100100,
+        principalAmount: 100000,
+        interestAmount: 100,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -541,14 +551,14 @@ void main() {
     test('no cuenta préstamos cerrados (paid o manual)', () async {
       final loanId = await db.loansDao.create(
         name: 'BBVA',
-        principalAmount: 5000,
-        monthlyPayment: 500,
+        principalAmount: 500000,
+        monthlyPayment: 50000,
         initialDurationMonths: 10,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 1),
         destinationAccountId: bolsa,
       );
-      expect(await state.watchTotalLoans().first, 5000);
+      expect(await state.watchTotalLoans().first, 500000);
       await db.loansDao.closeManual(loanId);
       // Patrón replay-1: el `.first` cachea el último valor. Usar
       // `firstWhere` para esperar la re-emisión reactiva.
@@ -564,14 +574,14 @@ void main() {
     test('no cuenta préstamos eliminados', () async {
       final loanId = await db.loansDao.create(
         name: 'BBVA',
-        principalAmount: 3000,
-        monthlyPayment: 300,
+        principalAmount: 300000,
+        monthlyPayment: 30000,
         initialDurationMonths: 10,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 1),
         destinationAccountId: bolsa,
       );
-      expect(await state.watchTotalLoans().first, 3000);
+      expect(await state.watchTotalLoans().first, 300000);
       await db.loansDao.deleteLoan(loanId);
       expect(
         await state
@@ -585,8 +595,8 @@ void main() {
     test('suma múltiples préstamos activos', () async {
       await db.loansDao.create(
         name: 'A',
-        principalAmount: 1000,
-        monthlyPayment: 100,
+        principalAmount: 100000,
+        monthlyPayment: 10000,
         initialDurationMonths: 10,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 1),
@@ -594,14 +604,14 @@ void main() {
       );
       await db.loansDao.create(
         name: 'B',
-        principalAmount: 2500,
-        monthlyPayment: 250,
+        principalAmount: 250000,
+        monthlyPayment: 25000,
         initialDurationMonths: 10,
         paymentDay: 10,
         contractDate: DateTime.utc(2026, 7, 1),
         destinationAccountId: debit,
       );
-      expect(await state.watchTotalLoans().first, 3500);
+      expect(await state.watchTotalLoans().first, 350000);
     });
   });
 }

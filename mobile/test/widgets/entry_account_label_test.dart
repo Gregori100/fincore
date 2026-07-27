@@ -30,7 +30,7 @@ void main() {
         accountOriginId: null,
         accountDestinationId: null,
         categoryId: null,
-        amount: 100,
+        amount: 10000,
         description: null,
         occurredAt: DateTime(2026, 1, 1),
         createdAt: DateTime(2026, 1, 1),

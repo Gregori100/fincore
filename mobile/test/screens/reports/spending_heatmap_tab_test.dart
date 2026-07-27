@@ -63,7 +63,7 @@ void main() {
             .firstWhere((a) => a.type == 'cash');
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 250,
+          amount: 25000,
           categoryId: catComida,
           occurredAt: DateTime(now.year, now.month, 10, 12),
           description: 'HeatmapExpense',
@@ -142,7 +142,7 @@ void main() {
         // 1 gasto que SÍ debe aparecer en el drill-down.
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 250,
+          amount: 25000,
           categoryId: catComida,
           occurredAt: DateTime(
             targetDay.year,
@@ -156,7 +156,7 @@ void main() {
         // excluye income). Blinda T3 del quality review.
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa.id,
-          amount: 5000,
+          amount: 500000,
           categoryId: catSueldo,
           occurredAt: DateTime(
             targetDay.year,

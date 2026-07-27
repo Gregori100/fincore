@@ -62,7 +62,7 @@ void main() {
     test('no toca los journal_entries asociados', () async {
       final incomeId = await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.utc(2026, 7, 1),
       );
       await accountsDao.archive(debitId);
@@ -206,7 +206,7 @@ void main() {
         () async {
       final incomeId = await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 250,
+        amount: 25000,
         occurredAt: DateTime.utc(2026, 7, 1),
       );
       await accountsDao.archive(debitId);
@@ -232,12 +232,12 @@ void main() {
     test('cuenta N movimientos donde figura como origen o destino', () async {
       await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.utc(2026, 7, 1),
       );
       await entriesDao.registerExpense(
         accountOriginId: debitId,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime.utc(2026, 7, 2),
       );
       final count = await accountsDao.countAssociatedEntries(debitId);
@@ -247,7 +247,7 @@ void main() {
     test('ignora movimientos cancelados', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: debitId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.utc(2026, 7, 1),
       );
       await entriesDao.cancel(id);

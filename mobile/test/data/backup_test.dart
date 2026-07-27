@@ -47,12 +47,12 @@ void main() {
     );
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 1000,
+      amount: 100000,
       occurredAt: DateTime.utc(2026, 6, 17, 12, 0, 0, 123),
     );
     await entriesDao.registerExpense(
       accountOriginId: debit,
-      amount: 200,
+      amount: 20000,
       occurredAt: DateTime.utc(2026, 6, 17, 13, 30, 0, 456),
       categoryId: cat,
     );
@@ -100,7 +100,7 @@ void main() {
     // (v3, v99, futura) sigue siendo rechazada con unsupported_version.
     await seed();
     final json = await backup.exportToJson();
-    final bumped = json.replaceFirst('"version": 2', '"version": 99');
+    final bumped = json.replaceFirst('"version": 3', '"version": 99');
     expect(
       () => backup.importFromJson(bumped),
       throwsA(isA<BackupError>()
@@ -209,7 +209,7 @@ void main() {
   test('Export con BD vacía produce JSON v2 con arrays vacíos', () async {
     await accountsDao.createBolsa(); // mínimo: solo bolsa
     final json = await backup.exportToJson();
-    expect(json, contains('"version": 2'));
+    expect(json, contains('"version": 3'));
     expect(json, contains('"loans"'));
     expect(json, contains('"accounts"'));
     expect(json, contains('"categories": []'));
@@ -315,7 +315,7 @@ void main() {
 
   test('Import con amount < 0 rechaza con invalid_amount', () async {
     expect(
-      () => backup.importFromJson(buildPayload(amount: -50)),
+      () => backup.importFromJson(buildPayload(amount: -5000)),
       throwsA(
           isA<BackupError>().having((e) => e.code, 'code', 'invalid_amount')),
     );
@@ -626,7 +626,7 @@ void main() {
       final visa = all.firstWhere((a) => a.name == 'VisaSinLimite');
       expect(visa.creditLimit, 0);
       final amex = all.firstWhere((a) => a.name == 'AmexConLimite');
-      expect(amex.creditLimit, 30000);
+      expect(amex.creditLimit, 3000000);
     });
 
     test('DT-03: credit_limit=0 se acepta (antes rechazado por <=0)', () async {
@@ -711,7 +711,7 @@ void main() {
       await accountsDao.create(
         name: 'AmexRoundTrip',
         type: 'credit',
-        creditLimit: 15000,
+        creditLimit: 1500000,
         closingDay: 10,
         paymentDay: 20,
       );
@@ -723,7 +723,7 @@ void main() {
           reason: 'export post-sprint siempre incluye credit_limit → sin ajustes');
       final all = await accountsDao.listAll();
       final amex = all.firstWhere((a) => a.name == 'AmexRoundTrip');
-      expect(amex.creditLimit, 15000);
+      expect(amex.creditLimit, 1500000);
     });
   });
 
@@ -770,7 +770,7 @@ void main() {
       await db.weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renta',
-        amount: 5000,
+        amount: 500000,
         kind: 'expense',
       );
       final templateId = await db.weeklyBudgetsDao.createBudget(
@@ -802,7 +802,7 @@ void main() {
       await db.weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renglón pre-import',
-        amount: 1000,
+        amount: 100000,
         kind: 'expense',
       );
       final templateId = await db.weeklyBudgetsDao.createBudget(
@@ -842,7 +842,7 @@ void main() {
       await db.weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renglón RG-04',
-        amount: 200,
+        amount: 20000,
         kind: 'income',
       );
       final templateId = await db.weeklyBudgetsDao.createBudget(
@@ -886,8 +886,8 @@ void main() {
       await accountsDao.createBolsa();
       final loanId = await db.loansDao.create(
         name: 'BBVA Round-trip',
-        principalAmount: 15000,
-        monthlyPayment: 750,
+        principalAmount: 1500000,
+        monthlyPayment: 75000,
         initialDurationMonths: 24,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 6, 1),
@@ -900,9 +900,9 @@ void main() {
         accountOriginId: (await accountsDao.listAll())
             .firstWhere((a) => a.type == 'cash')
             .id,
-        amount: 750,
-        principalAmount: 500,
-        interestAmount: 250,
+        amount: 75000,
+        principalAmount: 50000,
+        interestAmount: 25000,
         occurredAt: DateTime.utc(2026, 7, 5),
         isMonthlyPayment: true,
       );
@@ -915,16 +915,16 @@ void main() {
       final loansAfter = await db.loansDao.watchActive().first;
       expect(loansAfter, hasLength(1));
       expect(loansAfter.first.name, 'BBVA Round-trip');
-      expect(loansAfter.first.principalAmount, 15000);
-      expect(loansAfter.first.monthlyPayment, 750);
+      expect(loansAfter.first.principalAmount, 1500000);
+      expect(loansAfter.first.monthlyPayment, 75000);
       expect(loansAfter.first.paymentDay, 5);
       // Verificar loan_payment reimportado con splits intactos.
       final payments =
           await db.loansDao.watchPayments(loansAfter.first.id).first;
       expect(payments, hasLength(1));
-      expect(payments.first.amount, 750);
-      expect(payments.first.principalAmount, 500);
-      expect(payments.first.interestAmount, 250);
+      expect(payments.first.amount, 75000);
+      expect(payments.first.principalAmount, 50000);
+      expect(payments.first.interestAmount, 25000);
       // Hotfix quality-review B3: la brecha que dejó pasar B1.
       expect(payments.first.isMonthlyPayment, isTrue,
           reason: 'is_monthly_payment DEBE preservarse en el round-trip v2');
@@ -939,8 +939,8 @@ void main() {
           .id;
       final loanId = await db.loansDao.create(
         name: 'BBVA Mixto',
-        principalAmount: 10000,
-        monthlyPayment: 500,
+        principalAmount: 1000000,
+        monthlyPayment: 50000,
         initialDurationMonths: 24,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 6, 1),
@@ -949,17 +949,17 @@ void main() {
       final monthlyId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 7, 5),
         isMonthlyPayment: true,
       );
       final capitalId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 200,
-        principalAmount: 200,
+        amount: 20000,
+        principalAmount: 20000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 7, 20),
         isMonthlyPayment: false,

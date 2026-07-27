@@ -29,19 +29,19 @@ void main() {
         final day = DateTime(now.year, now.month, 10, 10);
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 500,
+          amount: 50000,
           occurredAt: day,
           description: 'TopBig',
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 100,
+          amount: 10000,
           occurredAt: day.add(const Duration(hours: 1)),
           description: 'TopSmall',
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 300,
+          amount: 30000,
           occurredAt: day.add(const Duration(hours: 2)),
           description: 'TopMid',
         );
@@ -106,7 +106,7 @@ void main() {
         final now = DateTime.now();
         await deps.entriesDao.registerExpense(
           accountOriginId: debit.id,
-          amount: 500,
+          amount: 50000,
           occurredAt: DateTime(now.year, now.month, 10, 10),
           description: 'TapTarget',
         );

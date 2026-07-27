@@ -45,7 +45,7 @@ void main() {
     creditId = await accountsDao.create(
       name: 'Crédito',
       type: 'credit',
-      creditLimit: 50000,
+      creditLimit: 5000000,
     );
     archivedDebitId = await accountsDao.create(
       name: 'Archivada',
@@ -54,8 +54,8 @@ void main() {
     await accountsDao.archive(archivedDebitId);
     loanId = await loansDao.create(
       name: 'BBVA',
-      principalAmount: 5000,
-      monthlyPayment: 500,
+      principalAmount: 500000,
+      monthlyPayment: 50000,
       initialDurationMonths: 10,
       paymentDay: 5,
       contractDate: DateTime.utc(2026, 7, 15),
@@ -72,18 +72,18 @@ void main() {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
       final entry = await entriesDao.findById(id);
       expect(entry!.entry.kind, 'loan_payment');
       expect(entry.entry.loanId, loanId);
-      expect(entry.entry.amount, 500);
-      expect(entry.entry.principalAmount, 400);
-      expect(entry.entry.interestAmount, 100);
+      expect(entry.entry.amount, 50000);
+      expect(entry.entry.principalAmount, 40000);
+      expect(entry.entry.interestAmount, 10000);
       expect(entry.entry.accountOriginId, bolsaId);
     });
 
@@ -92,9 +92,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: 300,
-          interestAmount: 100, // 300+100 != 500
+          amount: 50000,
+          principalAmount: 30000,
+          interestAmount: 10000, // 300+100 != 500
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -107,9 +107,9 @@ void main() {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400.001,
-        interestAmount: 99.998,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -121,9 +121,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: -100,
-          interestAmount: 600,
+          amount: 50000,
+          principalAmount: -10000,
+          interestAmount: 60000,
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -151,9 +151,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: creditId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 8, 5),
           isMonthlyPayment: true,
         ),
@@ -167,9 +167,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: archivedDebitId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 8, 5),
           isMonthlyPayment: true,
         ),
@@ -184,9 +184,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -199,9 +199,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: 'no-existe',
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -219,9 +219,9 @@ void main() {
         await entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 501,
-          principalAmount: 500,
-          interestAmount: 1,
+          amount: 50100,
+          principalAmount: 50000,
+          interestAmount: 100,
           occurredAt: DateTime.utc(2026, 8 + i, 5),
           isMonthlyPayment: true,
         );
@@ -238,9 +238,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 10001,
-          principalAmount: 10000, // saldo pendiente es 5000
-          interestAmount: 1,
+          amount: 1000100,
+          principalAmount: 1000000, // saldo pendiente es 5000
+          interestAmount: 100,
           occurredAt: DateTime.utc(2026, 8, 5),
           isMonthlyPayment: true,
         ),
@@ -256,9 +256,9 @@ void main() {
       final pId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 5001,
-        principalAmount: 5000,
-        interestAmount: 1,
+        amount: 500100,
+        principalAmount: 500000,
+        interestAmount: 100,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -270,16 +270,16 @@ void main() {
       loan = await loansDao.findById(loanId);
       expect(loan!.closedAt, isNull);
       expect(loan.closeReason, isNull);
-      expect(await loansDao.balanceOf(loanId), 5000);
+      expect(await loansDao.balanceOf(loanId), 500000);
     });
 
     test('NO reapertura sobre cerrado manual', () async {
       final pId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -297,9 +297,9 @@ void main() {
       final principalPayment = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 5001,
-        principalAmount: 5000,
-        interestAmount: 1,
+        amount: 500100,
+        principalAmount: 500000,
+        interestAmount: 100,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -310,9 +310,9 @@ void main() {
       final interestPayment = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 100,
+        amount: 10000,
         principalAmount: 0,
-        interestAmount: 100,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 9, 5),
         isMonthlyPayment: true,
       );
@@ -330,17 +330,17 @@ void main() {
       final monthlyId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
       final cap1 = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 200,
-        principalAmount: 200,
+        amount: 20000,
+        principalAmount: 20000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 10),
         isMonthlyPayment: false,
@@ -348,8 +348,8 @@ void main() {
       final cap2 = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 300,
-        principalAmount: 300,
+        amount: 30000,
+        principalAmount: 30000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 20),
         isMonthlyPayment: false,
@@ -370,7 +370,7 @@ void main() {
       }
       // Balance vuelve al principal completo (5000) porque nada quedó
       // activo.
-      expect(await loansDao.balanceOf(loanId), 5000);
+      expect(await loansDao.balanceOf(loanId), 500000);
     });
 
     test('cascade sobre pago SIN abonos del mes no borra pagos de otro mes',
@@ -378,17 +378,17 @@ void main() {
       final jul = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 7, 20),
         isMonthlyPayment: true,
       );
       final julCap = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 100,
-        principalAmount: 100,
+        amount: 10000,
+        principalAmount: 10000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 7, 25),
         isMonthlyPayment: false,
@@ -396,9 +396,9 @@ void main() {
       final ago = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -421,9 +421,9 @@ void main() {
       monthlyId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -432,18 +432,18 @@ void main() {
     test('happy path: cambia monto y split', () async {
       await entriesDao.updateLoanPayment(
         entryId: monthlyId,
-        amount: 600,
-        principalAmount: 500,
-        interestAmount: 100,
+        amount: 60000,
+        principalAmount: 50000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
       );
       final e = await entriesDao.findById(monthlyId);
-      expect(e?.entry.amount, 600);
-      expect(e?.entry.principalAmount, 500);
-      expect(e?.entry.interestAmount, 100);
+      expect(e?.entry.amount, 60000);
+      expect(e?.entry.principalAmount, 50000);
+      expect(e?.entry.interestAmount, 10000);
       expect(e?.entry.isMonthlyPayment, isTrue,
           reason: 'isMonthlyPayment se preserva del entry original');
-      expect(await loansDao.balanceOf(loanId), 4500);
+      expect(await loansDao.balanceOf(loanId), 450000);
     });
 
     test('rechaza overpay considerando el capital previo del propio entry',
@@ -454,9 +454,9 @@ void main() {
       expect(
         () => entriesDao.updateLoanPayment(
           entryId: monthlyId,
-          amount: 5002,
-          principalAmount: 5001,
-          interestAmount: 1,
+          amount: 500200,
+          principalAmount: 500100,
+          interestAmount: 100,
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -465,9 +465,9 @@ void main() {
       // Y aceptar exactamente 5000.
       await entriesDao.updateLoanPayment(
         entryId: monthlyId,
-        amount: 5001,
-        principalAmount: 5000,
-        interestAmount: 1,
+        amount: 500100,
+        principalAmount: 500000,
+        interestAmount: 100,
         occurredAt: DateTime.utc(2026, 8, 5),
       );
       expect(await loansDao.balanceOf(loanId), 0);
@@ -478,9 +478,9 @@ void main() {
         () async {
       await entriesDao.updateLoanPayment(
         entryId: monthlyId,
-        amount: 5001,
-        principalAmount: 5000,
-        interestAmount: 1,
+        amount: 500100,
+        principalAmount: 500000,
+        interestAmount: 100,
         occurredAt: DateTime.utc(2026, 8, 5),
       );
       final loan = await loansDao.findById(loanId);
@@ -493,8 +493,8 @@ void main() {
       final extraCap = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 4600,
-        principalAmount: 4600,
+        amount: 460000,
+        principalAmount: 460000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 10),
         isMonthlyPayment: false,
@@ -503,8 +503,8 @@ void main() {
       // Editar el capital para bajarlo → reabre.
       await entriesDao.updateLoanPayment(
         entryId: extraCap,
-        amount: 100,
-        principalAmount: 100,
+        amount: 10000,
+        principalAmount: 10000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 10),
       );
@@ -519,9 +519,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 9, 5),
         isMonthlyPayment: true,
       );
@@ -529,9 +529,9 @@ void main() {
       expect(
         () => entriesDao.updateLoanPayment(
           entryId: monthlyId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 9, 10),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -545,8 +545,8 @@ void main() {
       final capId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 100,
-        principalAmount: 100,
+        amount: 10000,
+        principalAmount: 10000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 15),
         isMonthlyPayment: false,
@@ -555,8 +555,8 @@ void main() {
       expect(
         () => entriesDao.updateLoanPayment(
           entryId: capId,
-          amount: 100,
-          principalAmount: 100,
+          amount: 10000,
+          principalAmount: 10000,
           interestAmount: 0,
           occurredAt: DateTime.utc(2026, 9, 15),
         ),
@@ -569,9 +569,9 @@ void main() {
       expect(
         () => entriesDao.updateLoanPayment(
           entryId: monthlyId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 7, 14), // contract es 2026-07-15
         ),
         throwsA(isA<EntriesDaoError>()
@@ -584,9 +584,9 @@ void main() {
       expect(
         () => entriesDao.updateLoanPayment(
           entryId: monthlyId,
-          amount: 500,
-          principalAmount: 300,
-          interestAmount: 100, // 300+100 = 400 ≠ 500
+          amount: 50000,
+          principalAmount: 30000,
+          interestAmount: 10000, // 300+100 = 400 ≠ 500
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -598,9 +598,9 @@ void main() {
       expect(
         () => entriesDao.updateLoanPayment(
           entryId: 'ffffffff-ffff-7fff-8fff-ffffffffffff',
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -610,9 +610,9 @@ void main() {
       expect(
         () => entriesDao.updateLoanPayment(
           entryId: monthlyId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 8, 5),
         ),
         throwsA(isA<EntriesDaoError>()
@@ -626,14 +626,14 @@ void main() {
       final pId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
       expect(
-        () => entriesDao.updateEntry(id: pId, amount: 600),
+        () => entriesDao.updateEntry(id: pId, amount: 60000),
         throwsA(isA<EntriesDaoError>()
             .having((e) => e.code, 'code', 'immutable_loan_payment')),
       );
@@ -642,7 +642,7 @@ void main() {
     test('rechaza edición sobre income inicial', () async {
       final incomeId = await loansDao.findIncomeEntryId(loanId);
       expect(
-        () => entriesDao.updateEntry(id: incomeId!, amount: 99999),
+        () => entriesDao.updateEntry(id: incomeId!, amount: 9999900),
         throwsA(isA<EntriesDaoError>()
             .having((e) => e.code, 'code', 'immutable_loan_payment')),
       );
@@ -651,12 +651,12 @@ void main() {
     test('permite edición sobre entry normal (sin loan_id)', () async {
       final id = await entriesDao.registerExpense(
         accountOriginId: bolsaId,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
       );
-      await entriesDao.updateEntry(id: id, amount: 150);
+      await entriesDao.updateEntry(id: id, amount: 15000);
       final entry = await entriesDao.findById(id);
-      expect(entry!.entry.amount, 150);
+      expect(entry!.entry.amount, 15000);
     });
   });
 
@@ -666,8 +666,8 @@ void main() {
       // protegida, así que probamos con un préstamo sobre debitId.
       final debitLoanId = await loansDao.create(
         name: 'Sobre débito',
-        principalAmount: 1000,
-        monthlyPayment: 100,
+        principalAmount: 100000,
+        monthlyPayment: 10000,
         initialDurationMonths: 12,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 15),
@@ -684,8 +684,8 @@ void main() {
     test('permite delete si el préstamo asociado está eliminado', () async {
       final debitLoanId = await loansDao.create(
         name: 'X',
-        principalAmount: 1000,
-        monthlyPayment: 100,
+        principalAmount: 100000,
+        monthlyPayment: 10000,
         initialDurationMonths: 12,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 15),
@@ -703,8 +703,8 @@ void main() {
     test('permite archivar cuenta aunque tenga préstamo asociado', () async {
       final debitLoanId = await loansDao.create(
         name: 'X',
-        principalAmount: 1000,
-        monthlyPayment: 100,
+        principalAmount: 100000,
+        monthlyPayment: 10000,
         initialDurationMonths: 12,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 15),
@@ -729,9 +729,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: 400,
-          interestAmount: 100,
+          amount: 50000,
+          principalAmount: 40000,
+          interestAmount: 10000,
           occurredAt: DateTime.utc(2026, 6, 1), // ANTES del contrato.
         ),
         throwsA(isA<EntriesDaoError>().having(
@@ -744,9 +744,9 @@ void main() {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 7, 15),
         isMonthlyPayment: true,
       );
@@ -757,9 +757,9 @@ void main() {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2027, 12, 5), // Futuro lejano.
         isMonthlyPayment: true,
       );
@@ -772,9 +772,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -783,9 +783,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: 300,
-          interestAmount: 200,
+          amount: 50000,
+          principalAmount: 30000,
+          interestAmount: 20000,
           occurredAt: DateTime.utc(2026, 8, 20),
           isMonthlyPayment: true,
         ),
@@ -800,9 +800,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -810,9 +810,9 @@ void main() {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 9, 5),
         isMonthlyPayment: true,
       );
@@ -826,9 +826,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 1),
         isMonthlyPayment: true,
       );
@@ -837,8 +837,8 @@ void main() {
         final id = await entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: 500,
+          amount: 50000,
+          principalAmount: 50000,
           interestAmount: 0,
           occurredAt: DateTime.utc(2026, 8, 5 + i),
           isMonthlyPayment: false,
@@ -855,8 +855,8 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 500,
-          principalAmount: 500,
+          amount: 50000,
+          principalAmount: 50000,
           interestAmount: 0,
           occurredAt: DateTime.utc(2026, 8, 5),
           isMonthlyPayment: false,
@@ -879,9 +879,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -898,17 +898,17 @@ void main() {
       final monthlyId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 1),
         isMonthlyPayment: true,
       );
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 500,
+        amount: 50000,
+        principalAmount: 50000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 15),
         isMonthlyPayment: false,
@@ -926,9 +926,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 100,
+        amount: 10000,
         principalAmount: 0,
-        interestAmount: 100,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -937,8 +937,8 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 5000.004,
-        principalAmount: 5000.004,
+        amount: 500000,
+        principalAmount: 500000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 6),
         isMonthlyPayment: false,
@@ -948,8 +948,8 @@ void main() {
       // Reset con otro préstamo para tener saldo limpio.
       final loan2 = await loansDao.create(
         name: 'X',
-        principalAmount: 1000,
-        monthlyPayment: 100,
+        principalAmount: 100000,
+        monthlyPayment: 10000,
         initialDurationMonths: 10,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 7, 15),
@@ -959,8 +959,8 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loan2,
           accountOriginId: bolsaId,
-          amount: 1000.006,
-          principalAmount: 1000.006,
+          amount: 100001,
+          principalAmount: 100001,
           interestAmount: 0,
           occurredAt: DateTime.utc(2026, 8, 5),
           isMonthlyPayment: true,
@@ -976,9 +976,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100.004, // suma 500.004 vs amount 500 → diff 0.004
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000, // suma 500.004 vs amount 500 → diff 0.004
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
@@ -987,9 +987,9 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 100,
-          principalAmount: 50,
-          interestAmount: 50.006,
+          amount: 10000,
+          principalAmount: 5000,
+          interestAmount: 5001,
           occurredAt: DateTime.utc(2026, 8, 15),
           isMonthlyPayment: false,
         ),
@@ -1008,8 +1008,8 @@ void main() {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 500,
+        amount: 50000,
+        principalAmount: 50000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
@@ -1022,8 +1022,8 @@ void main() {
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 300,
-          principalAmount: 300,
+          amount: 30000,
+          principalAmount: 30000,
           interestAmount: 0,
           occurredAt: DateTime.utc(2026, 8, 20),
           isMonthlyPayment: true,
@@ -1035,8 +1035,8 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 300,
-        principalAmount: 300,
+        amount: 30000,
+        principalAmount: 30000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 20),
         isMonthlyPayment: false,
@@ -1051,17 +1051,17 @@ void main() {
       final m = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
       final c = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 100,
-        principalAmount: 100,
+        amount: 10000,
+        principalAmount: 10000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 8, 15),
         isMonthlyPayment: false,
@@ -1080,9 +1080,9 @@ void main() {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
-        amount: 500,
-        principalAmount: 400,
-        interestAmount: 100,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );

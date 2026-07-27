@@ -47,7 +47,7 @@ void main() {
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 50,
+          amount: 5000,
           occurredAt: DateTime.now().subtract(const Duration(days: 3)),
           description: 'Café',
           categoryId: catCafeId,
@@ -104,7 +104,7 @@ void main() {
         );
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 50,
+          amount: 5000,
           occurredAt: DateTime.now().subtract(const Duration(days: 3)),
           description: 'Café',
           categoryId: catCafeId,
@@ -180,7 +180,7 @@ void main() {
         // Entry histórico que daría match por descripción.
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 50,
+          amount: 5000,
           occurredAt: DateTime.now().subtract(const Duration(days: 3)),
           description: 'Café',
           categoryId: catCafe,
@@ -189,7 +189,7 @@ void main() {
         // matchearía si la sugerencia se disparara.
         editingEntryId = await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 70,
+          amount: 7000,
           occurredAt: DateTime.now().subtract(const Duration(days: 1)),
           description: 'Café',
           categoryId: null,

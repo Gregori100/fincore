@@ -18,7 +18,7 @@ void main() {
               .firstWhere((a) => a.type == 'cash');
           entryId = await deps.entriesDao.registerExpense(
             accountOriginId: bolsa.id,
-            amount: 150.0,
+            amount: 15000,
             occurredAt: DateTime.utc(2026, 6, 22, 12),
             description: 'Café',
           );
@@ -77,7 +77,7 @@ void main() {
               .firstWhere((a) => a.type == 'cash');
           entryId = await deps.entriesDao.registerExpense(
             accountOriginId: bolsa.id,
-            amount: 150.0,
+            amount: 15000,
             occurredAt: DateTime.utc(2026, 6, 22, 12),
             description: 'Café',
           );
@@ -112,9 +112,10 @@ void main() {
       expect(find.text('Editar movimiento'), findsNothing);
       expect(find.text('BOLSA + DÉBITO'), findsOneWidget);
 
-      // Verificación de persistencia: el monto en la BD ahora es 200.
+      // Verificación de persistencia: el usuario tipeó "200", que
+      // `parseCents` convierte a 20000 centavos.
       final entry = await harness.deps.entriesDao.findById(entryId);
-      expect(entry?.entry.amount, 200.0,
+      expect(entry?.entry.amount, 20000,
           reason: 'El amount no se persistió tras Guardar cambios');
 
       await harness.dispose();
@@ -135,7 +136,7 @@ void main() {
               .firstWhere((a) => a.type == 'cash');
           entryId = await deps.entriesDao.registerExpense(
             accountOriginId: bolsa.id,
-            amount: 150.0,
+            amount: 15000,
             occurredAt: DateTime.utc(2026, 6, 22, 12),
             description: 'FocusTest',
           );

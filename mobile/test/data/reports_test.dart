@@ -54,7 +54,7 @@ void main() {
     credit = await accountsDao.create(
       name: 'Visa',
       type: 'credit',
-      creditLimit: 50000,
+      creditLimit: 5000000,
     );
 
     // Categorías expense para los tests. Las del seed son `both`, pero un
@@ -98,17 +98,17 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 6, 10),
       );
       final report = await reports
           .spendingByCategory(from: from, to: to)
           .first;
-      expect(report.total, 1000);
+      expect(report.total, 100000);
       expect(report.count, 1);
       expect(report.buckets, hasLength(1));
       final bucket = report.buckets.first;
-      expect(bucket.total, 1000);
+      expect(bucket.total, 100000);
       expect(bucket.count, 1);
       expect(bucket.percent, closeTo(1.0, 1e-9));
       expect(bucket.name, 'Comida_Test');
@@ -120,22 +120,22 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
         categoryId: catComida,
-        amount: 250,
+        amount: 25000,
         occurredAt: DateTime(2026, 6, 15),
       );
       final report = await reports
           .spendingByCategory(from: from, to: to)
           .first;
-      expect(report.total, 350);
+      expect(report.total, 35000);
       expect(report.count, 2);
       expect(report.buckets, hasLength(1));
-      expect(report.buckets.first.total, 350);
+      expect(report.buckets.first.total, 35000);
       expect(report.buckets.first.count, 2);
     });
 
@@ -143,19 +143,19 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catTransporte,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 12),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catSalud,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 14),
       );
       final report = await reports
@@ -163,20 +163,20 @@ void main() {
           .first;
       expect(report.buckets.map((b) => b.name).toList(),
           ['Transporte_Test', 'Salud_Test', 'Comida_Test']);
-      expect(report.buckets.map((b) => b.total).toList(), [300, 200, 100]);
+      expect(report.buckets.map((b) => b.total).toList(), [30000, 20000, 10000]);
     });
 
     test('Empate de monto: tiebreak alfabético asc', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida, // Comida_Test
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catSalud, // Salud_Test
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 11),
       );
       final report = await reports
@@ -192,19 +192,19 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
         categoryId: catComida,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 15),
       );
       final report = await reports
           .spendingByCategory(from: from, to: to)
           .first;
-      expect(report.total, 300);
+      expect(report.total, 30000);
       expect(report.count, 2);
       expect(report.buckets, hasLength(1));
       expect(report.buckets.first.name, 'Comida_Test');
@@ -215,12 +215,12 @@ void main() {
       // es expense-only y el DAO valida appliesTo contra el kind.
       await entriesDao.registerIncome(
         accountDestinationId: debit,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 6, 7),
       );
       // Reporte solo de junio 12-30 para excluir el credit_expense de arriba.
@@ -230,13 +230,13 @@ void main() {
       await entriesDao.registerTransfer(
         accountOriginId: debit,
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 13),
       );
       await entriesDao.registerDebtPayment(
         accountOriginId: debit,
         accountDestinationId: credit,
-        amount: 800,
+        amount: 80000,
         occurredAt: DateTime(2026, 6, 14),
       );
       final report = await reports
@@ -256,7 +256,7 @@ void main() {
     test('expense con categoryId null va a Sin categoría', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 10),
       );
       final report = await reports
@@ -270,7 +270,7 @@ void main() {
           reason: 'colorSlug null → UI usa fallback gray');
       expect(bucket.iconSlug, isNull,
           reason: 'iconSlug null → UI usa fallback label_outline');
-      expect(bucket.total, 500);
+      expect(bucket.total, 50000);
     });
 
     test('expense con categoría archivada va a Sin categoría (RN-R04)',
@@ -278,7 +278,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 700,
+        amount: 70000,
         occurredAt: DateTime(2026, 6, 10),
       );
       // Archivar la categoría DESPUÉS del registro.
@@ -291,7 +291,7 @@ void main() {
       expect(bucket.categoryId, isNull,
           reason: 'archivada se trata como Sin categoría');
       expect(bucket.name, kUncategorizedBucketName);
-      expect(bucket.total, 700);
+      expect(bucket.total, 70000);
     });
 
     test(
@@ -299,13 +299,13 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 11),
       );
       await categoriesDao.archive(catComida);
@@ -314,20 +314,20 @@ void main() {
           .first;
       expect(report.buckets, hasLength(1));
       expect(report.buckets.first.name, kUncategorizedBucketName);
-      expect(report.buckets.first.total, 300);
+      expect(report.buckets.first.total, 30000);
       expect(report.buckets.first.count, 2);
     });
 
     test('Sin categoría coexiste con categoría activa', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catTransporte,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 11),
       );
       final report = await reports
@@ -345,7 +345,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 5, 30),
       );
       final report = await reports
@@ -359,7 +359,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 7, 1),
       );
       final report = await reports
@@ -372,13 +372,13 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: from,
       );
       final report = await reports
           .spendingByCategory(from: from, to: to)
           .first;
-      expect(report.total, 100,
+      expect(report.total, 10000,
           reason: 'occurred_at == from cuenta (rango inclusivo)');
     });
 
@@ -386,13 +386,13 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: to,
       );
       final report = await reports
           .spendingByCategory(from: from, to: to)
           .first;
-      expect(report.total, 100,
+      expect(report.total, 10000,
           reason: 'occurred_at == to cuenta (rango inclusivo)');
     });
 
@@ -401,19 +401,19 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: single,
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 11),
       );
       final report = await reports
           .spendingByCategory(from: single, to: single)
           .first;
-      expect(report.total, 100,
+      expect(report.total, 10000,
           reason: 'rango de 1 milisegundo solo captura el entry exacto');
     });
   });
@@ -423,7 +423,7 @@ void main() {
       final entryId = await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.cancel(entryId);
@@ -440,19 +440,19 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catTransporte,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 12),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catSalud,
-        amount: 700,
+        amount: 70000,
         occurredAt: DateTime(2026, 6, 14),
       );
       final report = await reports
@@ -468,13 +468,13 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 123.45,
+        amount: 12345,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catTransporte,
-        amount: 67.89,
+        amount: 6789,
         occurredAt: DateTime(2026, 6, 12),
       );
       final report = await reports
@@ -490,7 +490,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 6, 10),
       );
       final report = await reports
@@ -506,13 +506,13 @@ void main() {
       final entryId = await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 10),
       );
       var report = await reports
           .spendingByCategory(from: from, to: to)
           .first;
-      expect(report.total, 500);
+      expect(report.total, 50000);
       await entriesDao.cancel(entryId);
       report = await reports
           .spendingByCategory(from: from, to: to)
@@ -525,7 +525,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 10),
       );
       var report = await reports
@@ -555,7 +555,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 10),
       );
       // Cambio post-facto: catComida pasa a applies_to='income'.
@@ -590,13 +590,13 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
         categoryId: catComida,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 6),
       );
       await categoriesDao.updateCategory(
@@ -620,7 +620,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await categoriesDao.updateCategory(
@@ -646,7 +646,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await categoriesDao.updateCategory(
@@ -695,18 +695,18 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1500,
+        amount: 150000,
         occurredAt: DateTime(2026, 6, 10),
       );
       final report = await reports
           .cashflowByMonth(from: from, to: to)
           .first;
-      expect(report.totalIncome, 1500);
+      expect(report.totalIncome, 150000);
       expect(report.totalExpense, 0);
-      expect(report.net, 1500);
-      expect(report.months.first.income, 1500);
+      expect(report.net, 150000);
+      expect(report.months.first.income, 150000);
       expect(report.months.first.expense, 0);
-      expect(report.months.first.net, 1500);
+      expect(report.months.first.net, 150000);
       expect(report.isEmpty, isFalse);
     });
 
@@ -715,21 +715,21 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 15),
       );
       final report = await reports
           .cashflowByMonth(from: from, to: to)
           .first;
       expect(report.totalIncome, 0);
-      expect(report.totalExpense, 500,
+      expect(report.totalExpense, 50000,
           reason: 'expense + credit_expense suman en expense (RN-C02)');
-      expect(report.net, -500);
+      expect(report.net, -50000);
     });
   });
 
@@ -738,7 +738,7 @@ void main() {
       await entriesDao.registerTransfer(
         accountOriginId: debit,
         accountDestinationId: bolsa,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       final report = await reports
@@ -754,20 +754,20 @@ void main() {
       // contará el credit_expense (RN-C02) pero NO el debt_payment (RN-C03).
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerDebtPayment(
         accountOriginId: debit,
         accountDestinationId: credit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
       );
       final report = await reports
           .cashflowByMonth(from: from, to: to)
           .first;
       expect(report.totalIncome, 0);
-      expect(report.totalExpense, 200,
+      expect(report.totalExpense, 20000,
           reason: 'solo el credit_expense de 200 cuenta; el debt_payment NO');
     });
   });
@@ -776,13 +776,13 @@ void main() {
     test('UT-06: entry soft-deleted no cuenta', () async {
       final entryId = await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 10),
       );
       var report = await reports
           .cashflowByMonth(from: from, to: to)
           .first;
-      expect(report.totalExpense, 500);
+      expect(report.totalExpense, 50000);
       await entriesDao.cancel(entryId);
       report = await reports
           .cashflowByMonth(from: from, to: to)
@@ -801,7 +801,7 @@ void main() {
       final wideTo = DateTime(2026, 2, 28, 23, 59, 59);
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 1, 15),
       );
       final report = await reports
@@ -818,12 +818,12 @@ void main() {
       // Sembrar solo en abril y junio. Mayo queda vacío en medio.
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 4, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 10),
       );
       final report = await reports
@@ -861,13 +861,13 @@ void main() {
       // Entry exacto en el límite `from`.
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: from,
       );
       final report = await reports
           .cashflowByMonth(from: from, to: to)
           .first;
-      expect(report.totalExpense, 50,
+      expect(report.totalExpense, 5000,
           reason: 'entry en el límite `from` debe contar');
     });
   });
@@ -878,12 +878,12 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 12),
       );
       final report = await reports
@@ -903,17 +903,17 @@ void main() {
       final wideTo = DateTime(2026, 6, 30, 23, 59, 59);
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 800,
+        amount: 80000,
         occurredAt: DateTime(2026, 4, 10),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 5, 15),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 20),
       );
       final report = await reports
@@ -952,12 +952,12 @@ void main() {
     test('UT-CB02: mes con solo ingresos → expenseBuckets vacía', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         occurredAt: anchor,
       );
       final result =
           await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
-      expect(result.totalIncome, 5000);
+      expect(result.totalIncome, 500000);
       expect(result.totalExpense, 0);
       expect(result.expenseBuckets, isEmpty);
       expect(result.incomeBuckets, hasLength(1));
@@ -969,14 +969,14 @@ void main() {
     test('UT-CB03: mes con solo gastos → incomeBuckets vacía', () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 1200,
+        amount: 120000,
         occurredAt: anchor,
         categoryId: catComida,
       );
       final result =
           await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
       expect(result.totalIncome, 0);
-      expect(result.totalExpense, 1200);
+      expect(result.totalExpense, 120000);
       expect(result.incomeBuckets, isEmpty);
       expect(result.expenseBuckets, hasLength(1));
       expect(result.expenseBuckets.first.label, 'Comida_Test');
@@ -987,19 +987,19 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 3000,
+        amount: 300000,
         occurredAt: anchor,
         categoryId: catComida,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 5000,
+        amount: 500000,
         occurredAt: anchor,
         categoryId: catTransporte,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 2000,
+        amount: 200000,
         occurredAt: anchor,
         categoryId: catSalud,
       );
@@ -1007,7 +1007,7 @@ void main() {
           await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
       expect(result.expenseBuckets, hasLength(3));
       expect(result.expenseBuckets[0].label, 'Transporte_Test');
-      expect(result.expenseBuckets[0].amount, 5000);
+      expect(result.expenseBuckets[0].amount, 500000);
       expect(result.expenseBuckets[1].label, 'Comida_Test');
       expect(result.expenseBuckets[2].label, 'Salud_Test');
       final sumPercent =
@@ -1019,7 +1019,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 800,
+        amount: 80000,
         occurredAt: anchor,
       );
       final result =
@@ -1040,7 +1040,7 @@ void main() {
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 400,
+        amount: 40000,
         occurredAt: anchor,
         categoryId: catTemp,
       );
@@ -1064,7 +1064,7 @@ void main() {
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 900,
+        amount: 90000,
         occurredAt: anchor,
         categoryId: catFlex,
       );
@@ -1094,7 +1094,7 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 300,
+        amount: 30000,
         occurredAt: anchor,
         categoryId: catFlex,
       );
@@ -1121,13 +1121,13 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1500,
+        amount: 150000,
         occurredAt: anchor,
         categoryId: catBoth,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 700,
+        amount: 70000,
         occurredAt: anchor,
         categoryId: catBoth,
       );
@@ -1135,16 +1135,16 @@ void main() {
           await reports.cashflowMonthBreakdown(monthAnchor: anchor).first;
       expect(result.incomeBuckets, hasLength(1));
       expect(result.incomeBuckets.first.label, 'Both_Test');
-      expect(result.incomeBuckets.first.amount, 1500);
+      expect(result.incomeBuckets.first.amount, 150000);
       expect(result.expenseBuckets, hasLength(1));
       expect(result.expenseBuckets.first.label, 'Both_Test');
-      expect(result.expenseBuckets.first.amount, 700);
+      expect(result.expenseBuckets.first.amount, 70000);
     });
 
     test('UT-CB10: movimiento cancelado no cuenta', () async {
       final id = await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 700,
+        amount: 70000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1160,20 +1160,20 @@ void main() {
       // Registrar cargo primero para poder pagarlo (invariante RN-011).
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 400,
+        amount: 40000,
         occurredAt: anchor,
         categoryId: catComida,
       );
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: anchor,
       );
       await entriesDao.registerDebtPayment(
         accountOriginId: bolsa,
         accountDestinationId: credit,
-        amount: 200,
+        amount: 20000,
         occurredAt: anchor,
       );
       final result =
@@ -1182,7 +1182,7 @@ void main() {
       // se excluyen (RN-CB02).
       expect(result.incomeBuckets, isEmpty);
       expect(result.expenseBuckets, hasLength(1));
-      expect(result.expenseBuckets.first.amount, 400);
+      expect(result.expenseBuckets.first.amount, 40000);
     });
 
     test(
@@ -1195,12 +1195,12 @@ void main() {
         emitsThrough(
           predicate<MonthBreakdown>((mb) =>
               mb.expenseBuckets.length == 1 &&
-              mb.expenseBuckets.first.amount == 900),
+              mb.expenseBuckets.first.amount == 90000),
         ),
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 900,
+        amount: 90000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1213,7 +1213,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 600,
+        amount: 60000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1241,7 +1241,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 400,
+        amount: 40000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1277,13 +1277,13 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: anchorPrev,
         categoryId: catComida,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 2000,
+        amount: 200000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1300,13 +1300,13 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: anchorPrev,
         categoryId: catComida,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1320,13 +1320,13 @@ void main() {
     test('UT-CP03: bucket idéntico \$1000 en ambos meses → flat', () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: anchorPrev,
         categoryId: catComida,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1342,7 +1342,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1358,12 +1358,12 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 200,
+        amount: 20000,
         occurredAt: anchorPrev,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 300,
+        amount: 30000,
         occurredAt: anchor,
       );
       final r =
@@ -1381,7 +1381,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 400,
+        amount: 40000,
         occurredAt: anchorPrev,
         categoryId: catTransporte,
       );
@@ -1399,13 +1399,13 @@ void main() {
       final anchor2025Dec = DateTime(2025, 12, 15);
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 800,
+        amount: 80000,
         occurredAt: anchor2025Dec,
         categoryId: catComida,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 1600,
+        amount: 160000,
         occurredAt: anchor2026,
         categoryId: catComida,
       );
@@ -1423,7 +1423,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: anchor,
         categoryId: catComida,
       );
@@ -1443,7 +1443,7 @@ void main() {
       // Registrar en el mes previo: $250 → delta 500/250 = +100%.
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 250,
+        amount: 25000,
         occurredAt: anchorPrev,
         categoryId: catComida,
       );
@@ -1457,13 +1457,13 @@ void main() {
       // Mes previo: solo ingreso $500 → net = +500.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: anchorPrev,
       );
       // Mes actual: solo gasto $300 → net = -300.
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 300,
+        amount: 30000,
         occurredAt: anchor,
       );
       final r =
@@ -1490,13 +1490,13 @@ void main() {
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 400,
+        amount: 40000,
         occurredAt: anchorPrev,
         categoryId: catTemp,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 700,
+        amount: 70000,
         occurredAt: anchor,
         categoryId: catTemp,
       );
@@ -1539,31 +1539,31 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1200,
+        amount: 120000,
         occurredAt: anchor,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 300,
+        amount: 30000,
         occurredAt: anchor,
       );
       final s = await reports.watchTodaySummary(now: anchor).first;
-      expect(s.totalIncome, 1200);
-      expect(s.totalExpense, 300);
-      expect(s.net, 900);
+      expect(s.totalIncome, 120000);
+      expect(s.totalExpense, 30000);
+      expect(s.net, 90000);
     });
 
     test('UT-TD03: credit_expense cuenta en totalExpense (RN-DB01)',
         () async {
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 700,
+        amount: 70000,
         occurredAt: anchor,
       );
       final s = await reports.watchTodaySummary(now: anchor).first;
       expect(s.totalIncome, 0);
-      expect(s.totalExpense, 700);
-      expect(s.net, -700);
+      expect(s.totalExpense, 70000);
+      expect(s.net, -70000);
     });
 
     test('UT-TD04: transfer y debt_payment NO cuentan (RN-DB01)',
@@ -1571,32 +1571,32 @@ void main() {
       // Cargo previo para permitir debt_payment.
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 400,
+        amount: 40000,
         occurredAt: anchor,
       );
       // Movimientos que NO deberían aparecer en la vista Hoy.
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: anchor,
       );
       await entriesDao.registerDebtPayment(
         accountOriginId: bolsa,
         accountDestinationId: credit,
-        amount: 200,
+        amount: 20000,
         occurredAt: anchor,
       );
       final s = await reports.watchTodaySummary(now: anchor).first;
       // Solo el credit_expense (400) cuenta como gasto.
       expect(s.totalIncome, 0);
-      expect(s.totalExpense, 400);
+      expect(s.totalExpense, 40000);
     });
 
     test('UT-TD05: movimiento cancelado NO cuenta (RN-DB03)', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: anchor,
       );
       await entriesDao.cancel(id);
@@ -1619,22 +1619,22 @@ void main() {
 
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 100,
+        amount: 10000,
         occurredAt: prevDayMidday,
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 200,
+        amount: 20000,
         occurredAt: todayMidday,
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 400,
+        amount: 40000,
         occurredAt: nextDayMidday,
       );
 
       final s = await reports.watchTodaySummary(now: anchor).first;
-      expect(s.totalIncome, 200,
+      expect(s.totalIncome, 20000,
           reason: 'Solo el income del 15/jun mediodía cuenta; los de 14 '
               'y 16 quedan fuera del rango. Blinda el bracket '
               'occurred_at + strftime localtime.');
@@ -1648,12 +1648,12 @@ void main() {
       final expectation = expectLater(
         stream,
         emitsThrough(
-          predicate<TodaySummary>((s) => s.totalIncome == 800),
+          predicate<TodaySummary>((s) => s.totalIncome == 80000),
         ),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 800,
+        amount: 80000,
         occurredAt: anchor,
       );
       await expectation;
@@ -1688,7 +1688,7 @@ void main() {
       final incomeDay = DateTime(2024, 5, 31, 12);
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: incomeDay,
       );
       final points = await reports
@@ -1709,7 +1709,7 @@ void main() {
       }
       // Días del income en adelante → balance 1000.
       for (var i = idxIncomeDay; i < points.length; i++) {
-        expect(points[i].balance, 1000,
+        expect(points[i].balance, 100000,
             reason: 'día del income o posterior → 1000');
       }
     });
@@ -1722,19 +1722,19 @@ void main() {
       final incomeDay = DateTime(2024, 5, 31, 12);
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: incomeDay,
       );
       await entriesDao.registerIncome(
         accountDestinationId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: incomeDay,
       );
       final points = await reports
           .watchDailyBalance30d(kind: 'bo', now: anchor)
           .first;
       // Último punto (hoy) → balance = 500 + 500 = 1000.
-      expect(points.last.balance, 1000);
+      expect(points.last.balance, 100000);
     });
 
     test(
@@ -1745,14 +1745,14 @@ void main() {
       final chargeDay = DateTime(2024, 6, 5, 12);
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 800,
+        amount: 80000,
         occurredAt: chargeDay,
       );
       final points = await reports
           .watchDailyBalance30d(kind: 'de', now: anchor)
           .first;
       // Último punto: deuda de 800.
-      expect(points.last.balance, 800);
+      expect(points.last.balance, 80000);
     });
 
     test(
@@ -1762,14 +1762,14 @@ void main() {
       // Cargo de \$800 el día `hoy-10d`.
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 800,
+        amount: 80000,
         occurredAt: DateTime(2024, 6, 5, 12),
       );
       final points = await reports
           .watchDailyBalance30d(kind: 'cr', now: anchor)
           .first;
       // Disponible = 50000 - 800 = 49200.
-      expect(points.last.balance, 49200);
+      expect(points.last.balance, 4920000);
     });
 
     test('UT-SP06: cuenta archivada NO cuenta en el agregado',
@@ -1781,7 +1781,7 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: tempDebit,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2024, 6, 1, 12),
       );
       await accountsDao.deleteAccount(tempDebit);
@@ -1802,12 +1802,12 @@ void main() {
         stream,
         emitsThrough(
           predicate<List<DailyBalance>>(
-              (points) => points.last.balance == 250),
+              (points) => points.last.balance == 25000),
         ),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 250,
+        amount: 25000,
         occurredAt: DateTime(2024, 6, 10, 12),
       );
       await expectation;
@@ -1838,26 +1838,26 @@ void main() {
     test('UT-02: orden por monto desc', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10),
         description: 'small',
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 11),
         description: 'large',
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 12),
         description: 'medium',
       );
       final report = await reports
           .topMovements(from: from, to: to, kinds: allKinds)
           .first;
-      expect(report.entries.map((e) => e.amount).toList(), [500, 300, 100]);
+      expect(report.entries.map((e) => e.amount).toList(), [50000, 30000, 10000]);
       expect(report.entries.map((e) => e.description).toList(),
           ['large', 'medium', 'small']);
     });
@@ -1867,13 +1867,13 @@ void main() {
       // reciente debe aparecer primero.
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 10, 10),
         description: 'older',
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 12, 10),
         description: 'newer',
       );
@@ -1889,7 +1889,7 @@ void main() {
     test('UT-04: entry soft-deleted no cuenta', () async {
       final id = await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 10),
       );
       var report = await reports
@@ -1908,7 +1908,7 @@ void main() {
       await entriesDao.registerExpense(
         accountOriginId: debit,
         categoryId: catComida,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 10),
       );
       var report = await reports
@@ -1931,7 +1931,7 @@ void main() {
       for (var i = 0; i < 30; i++) {
         await entriesDao.registerExpense(
           accountOriginId: debit,
-          amount: 100.0 + i,
+          amount: 10000 + i,
           occurredAt: DateTime(2026, 6, 10, 0, i),
         );
       }
@@ -1940,15 +1940,15 @@ void main() {
           .first;
       expect(report.entries, hasLength(20));
       // Los más grandes (129..110) deben aparecer ordenados desc.
-      expect(report.entries.first.amount, 129);
-      expect(report.entries.last.amount, 110);
+      expect(report.entries.first.amount, 10029);
+      expect(report.entries.last.amount, 10010);
     });
 
     test('UT-07: limit=20 con 5 entries → retorna 5', () async {
       for (var i = 0; i < 5; i++) {
         await entriesDao.registerExpense(
           accountOriginId: debit,
-          amount: 100.0 + i,
+          amount: 10000 + i,
           occurredAt: DateTime(2026, 6, 10, 0, i),
         );
       }
@@ -1963,7 +1963,7 @@ void main() {
     test('UT-08: rango inclusivo en `from` exacto', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: from,
       );
       final report = await reports
@@ -1979,7 +1979,7 @@ void main() {
       final boundaryTo = DateTime(2026, 6, 30);
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 30, 23, 30),
       );
       final report = await reports
@@ -1994,19 +1994,19 @@ void main() {
     test('UT-10: kinds=["expense"] excluye otros kinds', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 6, 5),
         description: 'income_filtered',
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 6),
         description: 'expense_kept',
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 700,
+        amount: 70000,
         occurredAt: DateTime(2026, 6, 7),
         description: 'credit_expense_filtered',
       );
@@ -2025,7 +2025,7 @@ void main() {
       // funciona, retorna lista vacía sin tocar nada.
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await db.close();
@@ -2051,7 +2051,7 @@ void main() {
       expect(report.bo, 0);
       expect(report.de, 0);
       // CR = credit_limit - 0 = 50000.
-      expect(report.cr, 50000);
+      expect(report.cr, 5000000);
       expect(report.accounts, hasLength(3),
           reason: 'Bolsa + Banamex + Visa visibles');
     });
@@ -2062,17 +2062,17 @@ void main() {
       // Sembrar entries variados.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 6, 10),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 2000,
+        amount: 200000,
         occurredAt: DateTime(2026, 6, 15),
       );
       // Validar cruzado contra FinancialStateService a hoy.
@@ -2091,18 +2091,18 @@ void main() {
     test('UT-03: fecha pasada filtra entries posteriores', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 20),
       );
       final report = await reports
           .balanceAtDate(asOf: DateTime(2026, 6, 10))
           .first;
-      expect(report.bo, 1000,
+      expect(report.bo, 100000,
           reason: 'solo el primer income cuenta hasta el 10 de junio');
     });
 
@@ -2110,19 +2110,19 @@ void main() {
       // Entry a las 23:59:59 del 10 de junio cuenta para asOf=10 jun.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 10, 23, 59, 59),
       );
       // Entry el 11 de junio NO cuenta.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 11, 0, 0, 0),
       );
       final report = await reports
           .balanceAtDate(asOf: DateTime(2026, 6, 10))
           .first;
-      expect(report.bo, 100,
+      expect(report.bo, 10000,
           reason: 'entry a 23:59:59 cuenta; entry de día siguiente NO');
     });
   });
@@ -2131,13 +2131,13 @@ void main() {
     test('UT-05: entry soft-deleted excluido', () async {
       final id = await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 5),
       );
       var report = await reports
           .balanceAtDate(asOf: DateTime(2026, 6, 30))
           .first;
-      expect(report.bo, 500);
+      expect(report.bo, 50000);
       await entriesDao.cancel(id);
       report = await reports
           .balanceAtDate(asOf: DateTime(2026, 6, 30))
@@ -2169,7 +2169,7 @@ void main() {
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: visaZero,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 6, 5),
       );
       final report = await reports
@@ -2178,8 +2178,8 @@ void main() {
       // Visa del seed (creditLimit=50000, sin deuda) + VisaZero (creditLimit=0,
       // debt=50). DE total = 50 (solo VisaZero). CR total = 50000 (Visa)
       //   + (0 - 50 = -50) (VisaZero) = 49950.
-      expect(report.de, closeTo(50, 0.001));
-      expect(report.cr, closeTo(49950, 0.001));
+      expect(report.de, closeTo(5000, 0));
+      expect(report.cr, 4995000);
     });
   });
 
@@ -2192,7 +2192,7 @@ void main() {
       await accountsDao.create(
         name: 'Mastercard',
         type: 'credit',
-        creditLimit: 10000,
+        creditLimit: 1000000,
       );
       final report = await reports
           .balanceAtDate(asOf: DateTime(2026, 6, 30))
@@ -2213,7 +2213,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 5),
       );
       final report = await reports
@@ -2225,7 +2225,7 @@ void main() {
           reason: 'Bolsa sin entries → balance 0');
       final debitAcc =
           report.accounts.firstWhere((a) => a.name == 'Banamex');
-      expect(debitAcc.balance, -200,
+      expect(debitAcc.balance, -20000,
           reason: 'Banamex con solo un expense → -200');
     });
   });
@@ -2236,7 +2236,7 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 5),
       );
       // asOf = hoy → balance == balanceNow → delta = 0.
@@ -2257,25 +2257,25 @@ void main() {
       // Sembrar income antiguo + expense reciente.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 6, 5),
       );
       // Expense reciente (hoy) → solo cuenta en balanceNow, no en balance
       // a fecha 2026-06-10.
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime.now(),
       );
       final report = await reports
           .balanceAtDate(asOf: DateTime(2026, 6, 10))
           .first;
       // A 2026-06-10: solo el income → bo=1000.
-      expect(report.bo, 1000);
+      expect(report.bo, 100000);
       // Hoy: income - expense = 700.
-      expect(report.boNow, 700);
+      expect(report.boNow, 70000);
       // Delta = boNow - bo = -300.
-      expect(report.boDelta, -300,
+      expect(report.boDelta, -30000,
           reason: 'BO cayó 300 entre 2026-06-10 y hoy');
     });
   });
@@ -2289,7 +2289,7 @@ void main() {
 
     Future<void> seedExpense({
       required String accountOriginId,
-      required double amount,
+      required int amount,
       required DateTime occurredAt,
       String? categoryId,
       String kind = 'expense',
@@ -2331,23 +2331,23 @@ void main() {
       // Histórico: mayo 2026, gasto al día 20.
       await seedExpense(
         accountOriginId: debit,
-        amount: 1000,
+        amount: 100000,
         occurredAt: DateTime(2026, 5, 10, 10),
         categoryId: catComida,
       );
       // Mes actual: junio 2026, gasto al día 5 (antes del 20).
       await seedExpense(
         accountOriginId: debit,
-        amount: 400,
+        amount: 40000,
         occurredAt: DateTime(2026, 6, 5, 10),
         categoryId: catComida,
       );
       final report =
           await reports.monthlyAverage(monthsBack: 1, now: now).first;
       expect(report.monthsAvailable, 1);
-      expect(report.historicalAverage, 1000);
-      expect(report.currentMonthSpent, 400);
-      expect(report.deltaAbsolute, -600);
+      expect(report.historicalAverage, 100000);
+      expect(report.currentMonthSpent, 40000);
+      expect(report.deltaAbsolute, -60000);
       expect(report.deltaPercent, closeTo(-60, 0.01));
     });
 
@@ -2359,20 +2359,20 @@ void main() {
       // Marzo: entry día 14 ($100), día 16 ($999 — NO cuenta).
       await seedExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 3, 14),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 999,
+        amount: 99900,
         occurredAt: DateTime(2026, 3, 16),
         categoryId: catComida,
       );
       // Abril: entry día 15 ($200).
       await seedExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 4, 15),
         categoryId: catComida,
       );
@@ -2382,7 +2382,7 @@ void main() {
       expect(report.monthsAvailable, 2,
           reason: 'solo marzo y abril aportaron datos válidos al prorrateo');
       // Promedio = (100 + 200) / 2 = 150.
-      expect(report.historicalAverage, 150);
+      expect(report.historicalAverage, 15000);
     });
 
     test('UT-04: mes en curso suma todos los días desde el 1 hasta now',
@@ -2391,25 +2391,25 @@ void main() {
       // Mes actual: entries día 1, 10, 20.
       await seedExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         occurredAt: DateTime(2026, 6, 1),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 75,
+        amount: 7500,
         occurredAt: DateTime(2026, 6, 10),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 125,
+        amount: 12500,
         occurredAt: DateTime(2026, 6, 20),
         categoryId: catComida,
       );
       final report =
           await reports.monthlyAverage(monthsBack: 1, now: now).first;
-      expect(report.currentMonthSpent, 250);
+      expect(report.currentMonthSpent, 25000);
     });
 
     test(
@@ -2419,21 +2419,21 @@ void main() {
       // Febrero histórico: entry día 28 ($300). Debe contar.
       await seedExpense(
         accountOriginId: debit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 2, 28),
         categoryId: catComida,
       );
       // Marzo histórico: entry día 31 ($600). Debe contar.
       await seedExpense(
         accountOriginId: debit,
-        amount: 600,
+        amount: 60000,
         occurredAt: DateTime(2026, 3, 31),
         categoryId: catComida,
       );
       // Abril histórico: entry día 28 + entry día 31 (no existe → no se siembra).
       await seedExpense(
         accountOriginId: debit,
-        amount: 400,
+        amount: 40000,
         occurredAt: DateTime(2026, 4, 28),
         categoryId: catComida,
       );
@@ -2441,7 +2441,7 @@ void main() {
           await reports.monthlyAverage(monthsBack: 3, now: now).first;
       expect(report.monthsAvailable, 3);
       expect(report.historicalAverage,
-          closeTo((300 + 600 + 400) / 3, 0.01));
+          ((30000 + 60000 + 40000) / 3).round());
     });
 
     test(
@@ -2451,14 +2451,14 @@ void main() {
       // Histórico con categoría que será archivada.
       await seedExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 5, 10),
         categoryId: catComida,
       );
       // Entry con categoría null (mes actual).
       await seedExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 5),
         categoryId: null,
       );
@@ -2470,15 +2470,15 @@ void main() {
       expect(report.categoryBreakdown, hasLength(1));
       expect(report.categoryBreakdown.first.categoryId, isNull);
       expect(report.categoryBreakdown.first.name, 'Sin categoría');
-      expect(report.categoryBreakdown.first.historicalAverage, 200);
-      expect(report.categoryBreakdown.first.currentMonthSpent, 100);
+      expect(report.categoryBreakdown.first.historicalAverage, 20000);
+      expect(report.categoryBreakdown.first.currentMonthSpent, 10000);
     });
 
     test('UT-07: soft delete excluye entry del promedio', () async {
       final now = DateTime(2026, 6, 20);
       await seedExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 5, 10),
         categoryId: catComida,
       );
@@ -2499,20 +2499,20 @@ void main() {
       // Income al mes histórico — debe ignorarse.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime(2026, 5, 10),
       );
       // Transfer — debe ignorarse.
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 5, 11),
       );
       // expense — sí cuenta.
       await seedExpense(
         accountOriginId: debit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 5, 12),
         categoryId: catComida,
       );
@@ -2520,7 +2520,7 @@ void main() {
       // debt_payment siguiente.)
       await seedExpense(
         accountOriginId: credit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 5, 13),
         categoryId: catComida,
         kind: 'credit_expense',
@@ -2530,12 +2530,12 @@ void main() {
       await entriesDao.registerDebtPayment(
         accountOriginId: debit,
         accountDestinationId: credit,
-        amount: 80,
+        amount: 8000,
         occurredAt: DateTime(2026, 5, 14),
       );
       final report =
           await reports.monthlyAverage(monthsBack: 1, now: now).first;
-      expect(report.historicalAverage, 500,
+      expect(report.historicalAverage, 50000,
           reason: 'expense + credit_expense del mes histórico');
       expect(report.currentMonthSpent, 0);
     });
@@ -2545,19 +2545,19 @@ void main() {
       // 3 meses históricos con datos.
       await seedExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 3, 5),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 4, 5),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 5, 5),
         categoryId: catComida,
       );
@@ -2566,7 +2566,7 @@ void main() {
       expect(report.monthsRequested, 12);
       expect(report.monthsAvailable, 3,
           reason: 'M < N: solo 3 meses con datos disponibles');
-      expect(report.historicalAverage, closeTo((100 + 200 + 300) / 3, 0.01));
+      expect(report.historicalAverage, 20000);
     });
 
     test(
@@ -2576,15 +2576,15 @@ void main() {
       // Solo entry del mes actual, sin histórico.
       await seedExpense(
         accountOriginId: debit,
-        amount: 800,
+        amount: 80000,
         occurredAt: DateTime(2026, 6, 10),
         categoryId: catComida,
       );
       final report =
           await reports.monthlyAverage(monthsBack: 3, now: now).first;
       expect(report.historicalAverage, 0);
-      expect(report.currentMonthSpent, 800);
-      expect(report.deltaAbsolute, 800);
+      expect(report.currentMonthSpent, 80000);
+      expect(report.deltaAbsolute, 80000);
       expect(report.deltaPercent, isNull);
     });
 
@@ -2594,7 +2594,7 @@ void main() {
       final now = DateTime(2026, 6, 20);
       await seedExpense(
         accountOriginId: debit,
-        amount: 600,
+        amount: 60000,
         occurredAt: DateTime(2026, 5, 10),
         categoryId: catComida,
       );
@@ -2602,9 +2602,9 @@ void main() {
           await reports.monthlyAverage(monthsBack: 1, now: now).first;
       expect(report.categoryBreakdown, hasLength(1));
       final row = report.categoryBreakdown.first;
-      expect(row.historicalAverage, 600);
+      expect(row.historicalAverage, 60000);
       expect(row.currentMonthSpent, 0);
-      expect(row.deltaAbsolute, -600);
+      expect(row.deltaAbsolute, -60000);
       expect(row.deltaPercent, closeTo(-100, 0.01));
     });
 
@@ -2615,14 +2615,14 @@ void main() {
       // Histórico de OTRA categoría — la categoría target no tiene histórico.
       await seedExpense(
         accountOriginId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 5, 10),
         categoryId: catComida,
       );
       // Mes actual: gasto en catTransporte (sin histórico).
       await seedExpense(
         accountOriginId: debit,
-        amount: 250,
+        amount: 25000,
         occurredAt: DateTime(2026, 6, 10),
         categoryId: catTransporte,
       );
@@ -2631,8 +2631,8 @@ void main() {
       final transporteRow = report.categoryBreakdown
           .firstWhere((b) => b.categoryId == catTransporte);
       expect(transporteRow.historicalAverage, 0);
-      expect(transporteRow.currentMonthSpent, 250);
-      expect(transporteRow.deltaAbsolute, 250);
+      expect(transporteRow.currentMonthSpent, 25000);
+      expect(transporteRow.deltaAbsolute, 25000);
       expect(transporteRow.deltaPercent, isNull);
     });
 
@@ -2646,19 +2646,19 @@ void main() {
       // catTransporte: actual = 200 (empate con Comida).
       await seedExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 10),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 11),
         categoryId: catSalud,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2026, 6, 12),
         categoryId: catTransporte,
       );
@@ -2676,13 +2676,13 @@ void main() {
       final now = DateTime(2026, 6, 20);
       await seedExpense(
         accountOriginId: debit,
-        amount: 400,
+        amount: 40000,
         occurredAt: DateTime(2026, 5, 10),
         categoryId: catComida,
       );
       final stream = reports.monthlyAverage(monthsBack: 1, now: now);
       final first = await stream.first;
-      expect(first.historicalAverage, 400);
+      expect(first.historicalAverage, 40000);
 
       final entries = await entriesDao.watchPage().first;
       await entriesDao.cancel(entries.first.entry.id);
@@ -2696,26 +2696,26 @@ void main() {
       final now = DateTime(2026, 6, 10, 12);
       await seedExpense(
         accountOriginId: debit,
-        amount: 90,
+        amount: 9000,
         occurredAt: DateTime(2026, 3, 10),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 120,
+        amount: 12000,
         occurredAt: DateTime(2026, 4, 10),
         categoryId: catComida,
       );
       await seedExpense(
         accountOriginId: debit,
-        amount: 60,
+        amount: 6000,
         occurredAt: DateTime(2026, 5, 10),
         categoryId: catComida,
       );
       final report =
           await reports.monthlyAverage(monthsBack: 3, now: now).first;
       expect(report.historicalAverage,
-          closeTo((90 + 120 + 60) / 3, 0.01));
+          ((9000 + 12000 + 6000) / 3).round());
     });
   });
 
@@ -2739,19 +2739,19 @@ void main() {
       final id = await accountsDao.create(
         name: 'SinMeta',
         type: 'credit',
-        creditLimit: 1000,
+        creditLimit: 100000,
         // closingDay/paymentDay/minimumPaymentPct no se pasan.
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: id,
-        amount: 200,
+        amount: 20000,
         occurredAt: DateTime(2024, 6, 1),
       );
       final list = await reports.watchCreditCards(now: refDate).first;
       expect(list, hasLength(1));
       final s = list.first;
       expect(s.name, 'SinMeta');
-      expect(s.debt, 200);
+      expect(s.debt, 20000);
       expect(s.nextClosingDate, isNull);
       expect(s.nextPaymentDate, isNull);
       expect(s.daysToClosing, isNull);
@@ -2763,7 +2763,7 @@ void main() {
       final archivedId = await accountsDao.create(
         name: 'Archivada',
         type: 'credit',
-        creditLimit: 5000,
+        creditLimit: 500000,
         closingDay: 10,
         paymentDay: 20,
       );
@@ -2781,40 +2781,40 @@ void main() {
       final visaProxima = await accountsDao.create(
         name: 'ProximaPago',
         type: 'credit',
-        creditLimit: 10000,
+        creditLimit: 1000000,
         closingDay: 15,
         paymentDay: 20, // hoy=15 → 20 (5 días)
       );
       final visaLejana = await accountsDao.create(
         name: 'LejanaPago',
         type: 'credit',
-        creditLimit: 10000,
+        creditLimit: 1000000,
         closingDay: 5,
         paymentDay: 10, // hoy=15 → 10 del mes siguiente (~25 días)
       );
       final sinDeudaB = await accountsDao.create(
         name: 'B_SinDeuda',
         type: 'credit',
-        creditLimit: 3000,
+        creditLimit: 300000,
         closingDay: 15,
         paymentDay: 5,
       );
       final sinDeudaA = await accountsDao.create(
         name: 'A_SinDeuda',
         type: 'credit',
-        creditLimit: 3000,
+        creditLimit: 300000,
         closingDay: 15,
         paymentDay: 5,
       );
       // Deuda solo en las 2 primeras.
       await entriesDao.registerCreditExpense(
         accountOriginId: visaProxima,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2024, 6, 1),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: visaLejana,
-        amount: 800,
+        amount: 80000,
         occurredAt: DateTime(2024, 6, 1),
       );
       final list = await reports.watchCreditCards(now: refDate).first;
@@ -2834,18 +2834,18 @@ void main() {
       final id = await accountsDao.create(
         name: 'Mitad',
         type: 'credit',
-        creditLimit: 10000,
+        creditLimit: 1000000,
         closingDay: 15,
         paymentDay: 5,
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: id,
-        amount: 5000,
+        amount: 500000,
         occurredAt: DateTime(2024, 6, 1),
       );
       final list = await reports.watchCreditCards(now: refDate).first;
       expect(list.first.usedPct, 50.0);
-      expect(list.first.availableCredit, 5000);
+      expect(list.first.availableCredit, 500000);
       expect(list.first.isOverdue, false);
     });
 
@@ -2860,7 +2860,7 @@ void main() {
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: id,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2024, 6, 1),
       );
       final list = await reports.watchCreditCards(now: refDate).first;
@@ -2874,13 +2874,13 @@ void main() {
       final id = await accountsDao.create(
         name: 'Excedida',
         type: 'credit',
-        creditLimit: 1000,
+        creditLimit: 100000,
         closingDay: 15,
         paymentDay: 5,
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: id,
-        amount: 1500,
+        amount: 150000,
         occurredAt: DateTime(2024, 6, 1),
       );
       final list = await reports.watchCreditCards(now: refDate).first;
@@ -2906,14 +2906,14 @@ void main() {
       // Registrar cargo.
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2024, 6, 1),
       );
       await Future.delayed(const Duration(milliseconds: 100));
 
       final updated = events.last.firstWhere((s) => s.accountId == credit);
       expect(updated.debt, greaterThan(initialDebt));
-      expect(updated.debt - initialDebt, 300);
+      expect(updated.debt - initialDebt, 30000);
 
       await sub.cancel();
     });
@@ -2924,7 +2924,7 @@ void main() {
       final id = await accountsDao.create(
         name: 'SinDeudaConPct',
         type: 'credit',
-        creditLimit: 10000,
+        creditLimit: 1000000,
         closingDay: 15,
         paymentDay: 5,
         minimumPaymentPct: 0.05,
@@ -2994,14 +2994,14 @@ void main() {
       // Gasto del mes anchor.
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 500,
+        amount: 50000,
         categoryId: catComida,
         occurredAt: DateTime(2024, 6, 5),
       );
       // Gasto del mes anterior — NO cuenta.
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 999,
+        amount: 99900,
         categoryId: catComida,
         occurredAt: DateTime(2024, 5, 30),
       );
@@ -3009,7 +3009,7 @@ void main() {
           .watchBudgetsProgress(monthAnchor: anchor)
           .first;
       expect(list, hasLength(1));
-      expect(list.first.spent, 500);
+      expect(list.first.spent, 50000);
     });
 
     test('UT-B10: credit_expense cuenta como spent', () async {
@@ -3019,14 +3019,14 @@ void main() {
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 200,
+        amount: 20000,
         categoryId: catComida,
         occurredAt: DateTime(2024, 6, 5),
       );
       final list = await reports
           .watchBudgetsProgress(monthAnchor: anchor)
           .first;
-      expect(list.first.spent, 200);
+      expect(list.first.spent, 20000);
     });
 
     test(
@@ -3041,14 +3041,14 @@ void main() {
       // Sembramos un expense de control:
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 100,
+        amount: 10000,
         categoryId: catComida,
         occurredAt: DateTime(2024, 6, 5),
       );
       final list = await reports
           .watchBudgetsProgress(monthAnchor: anchor)
           .first;
-      expect(list.first.spent, 100);
+      expect(list.first.spent, 10000);
     });
 
     test('UT-B13: BudgetProgress.compute — límite 1000, spent 800 → warning',
@@ -3058,14 +3058,14 @@ void main() {
         categoryName: 'X',
         colorSlug: 'red',
         iconSlug: 'tag',
-        monthlyLimit: 1000,
-        spent: 800,
+        monthlyLimit: 100000,
+        spent: 80000,
       );
       expect(p.usedPct, 80.0);
       expect(p.isWarning, isTrue);
       expect(p.isOverBudget, isFalse);
       expect(p.isNoSpend, isFalse);
-      expect(p.available, 200);
+      expect(p.available, 20000);
     });
 
     test(
@@ -3076,13 +3076,13 @@ void main() {
         categoryName: 'X',
         colorSlug: 'red',
         iconSlug: 'tag',
-        monthlyLimit: 1000,
-        spent: 1200,
+        monthlyLimit: 100000,
+        spent: 120000,
       );
       expect(p.isOverBudget, isTrue);
       expect(p.usedPct, 100.0);
       expect(p.available, 0);
-      expect(p.overBy, 200);
+      expect(p.overBy, 20000);
     });
 
     test('UT-B15: compute — límite 0, spent 0 → usedPct null, isNoSpend', () {
@@ -3107,11 +3107,11 @@ void main() {
         colorSlug: 'red',
         iconSlug: 'tag',
         monthlyLimit: 0,
-        spent: 50,
+        spent: 5000,
       );
       expect(p.usedPct, isNull);
       expect(p.isOverBudget, isTrue);
-      expect(p.overBy, 50);
+      expect(p.overBy, 5000);
     });
 
     // A1 del quality review: blindaje del filtro `applies_to != 'income'`
@@ -3152,44 +3152,44 @@ void main() {
         appliesTo: 'expense',
         colorSlug: 'red',
         iconSlug: 'heart',
-        monthlyLimit: 1000,
+        monthlyLimit: 100000,
       );
       final comida = await categoriesDao.create(
         name: 'Comida_B17',
         appliesTo: 'expense',
         colorSlug: 'orange',
         iconSlug: 'shopping-cart',
-        monthlyLimit: 1000,
+        monthlyLimit: 100000,
       );
       final transporte = await categoriesDao.create(
         name: 'Transporte_B17',
         appliesTo: 'expense',
         colorSlug: 'blue',
         iconSlug: 'truck',
-        monthlyLimit: 1000,
+        monthlyLimit: 100000,
       );
       await categoriesDao.create(
         name: 'Regalos_B17',
         appliesTo: 'expense',
         colorSlug: 'purple',
         iconSlug: 'gift',
-        monthlyLimit: 500,
+        monthlyLimit: 50000,
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 3000,
+        amount: 300000,
         categoryId: salud,
         occurredAt: DateTime(2024, 6, 5),
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 1500,
+        amount: 150000,
         categoryId: comida,
         occurredAt: DateTime(2024, 6, 6),
       );
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 900,
+        amount: 90000,
         categoryId: transporte,
         occurredAt: DateTime(2024, 6, 7),
       );
@@ -3227,14 +3227,14 @@ void main() {
 
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 400,
+        amount: 40000,
         categoryId: catComida,
         occurredAt: DateTime(2024, 6, 10),
       );
       await Future.delayed(const Duration(milliseconds: 100));
       final updated =
           events.last.firstWhere((p) => p.categoryId == catComida);
-      expect(updated.spent, 400);
+      expect(updated.spent, 40000);
 
       await sub.cancel();
     });
@@ -3253,7 +3253,7 @@ void main() {
       // Referencia: expense normal cuenta.
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 100,
+        amount: 10000,
         categoryId: catComida,
         occurredAt: DateTime(2024, 6, 5),
       );
@@ -3263,7 +3263,7 @@ void main() {
       final transferId = await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2024, 6, 6),
       );
       // Sembramos un debt_payment vía customStatement (el DAO exige que
@@ -3284,7 +3284,7 @@ void main() {
       final list = await reports
           .watchBudgetsProgress(monthAnchor: anchor)
           .first;
-      expect(list.first.spent, 100,
+      expect(list.first.spent, 10000,
           reason:
               'Solo el expense (100) cuenta; el transfer (500) y el debt_payment (200) no.');
     });
@@ -3332,16 +3332,16 @@ void main() {
     test('UT-I02: 1 income con categoría income → 1 bucket 100%', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 30000,
+        amount: 3000000,
         categoryId: catIncomeSueldo,
         occurredAt: DateTime(2026, 6, 5),
       );
       final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
       expect(report.buckets, hasLength(1));
       expect(report.buckets.first.categoryId, catIncomeSueldo);
-      expect(report.buckets.first.total, 30000);
+      expect(report.buckets.first.total, 3000000);
       expect(report.buckets.first.percent, closeTo(1.0, 0.001));
-      expect(report.total, 30000);
+      expect(report.total, 3000000);
       expect(report.count, 1);
     });
 
@@ -3351,7 +3351,7 @@ void main() {
       // Case a: sin category_id (registro normal por DAO).
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime(2026, 6, 5),
       );
       // Case b: categoría archivada. Registramos y luego archivamos.
@@ -3363,7 +3363,7 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 200,
+        amount: 20000,
         categoryId: archivedId,
         occurredAt: DateTime(2026, 6, 6),
       );
@@ -3376,7 +3376,7 @@ void main() {
         "account_destination_id, amount, description, occurred_at, "
         "category_id, created_at, updated_at) "
         "VALUES('01a2b3c4-5678-7abc-9def-i03legacyexp', 'income', NULL, ?, "
-        "300, NULL, '2026-06-07T00:00:00.000', ?, "
+        "30000, NULL, '2026-06-07T00:00:00.000', ?, "
         "'2026-06-07T00:00:00.000', '2026-06-07T00:00:00.000')",
         [bolsa, catComida], // catComida es applies_to='expense'
       );
@@ -3385,14 +3385,14 @@ void main() {
           reason: 'Los 3 casos merge en un solo bucket "Sin categoría".');
       expect(report.buckets.first.categoryId, isNull);
       expect(report.buckets.first.name, 'Sin categoría');
-      expect(report.buckets.first.total, 600);
+      expect(report.buckets.first.total, 60000);
       expect(report.buckets.first.count, 3);
     });
 
     test('UT-I04: applies_to=both con income → sí aparece', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         categoryId: catBothMisc,
         occurredAt: DateTime(2026, 6, 5),
       );
@@ -3405,13 +3405,13 @@ void main() {
     test('UT-I05: empate en total → orden alfabético asc', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncomeFreelance,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncomeSueldo,
         occurredAt: DateTime(2026, 6, 6),
       );
@@ -3425,13 +3425,13 @@ void main() {
     test('UT-I06: distintos totales → orden por total desc', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         categoryId: catIncomeFreelance,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 30000,
+        amount: 3000000,
         categoryId: catIncomeSueldo,
         occurredAt: DateTime(2026, 6, 6),
       );
@@ -3446,31 +3446,31 @@ void main() {
       // Referencia: 1 income con categoría income válida.
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         categoryId: catIncomeSueldo,
         occurredAt: DateTime(2026, 6, 8),
       );
       // Expenses con categoría expense (permitido por DAO).
       await entriesDao.registerExpense(
         accountOriginId: bolsa,
-        amount: 100,
+        amount: 10000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 200,
+        amount: 20000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 6, 6),
       );
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 7),
       );
       final report = await reports.incomeByCategory(from: iFrom, to: iTo).first;
-      expect(report.total, 500,
+      expect(report.total, 50000,
           reason: 'Solo el income cuenta; expense/credit_expense/transfer no.');
       expect(report.count, 1);
     });
@@ -3483,12 +3483,12 @@ void main() {
       final future = expectLater(
         stream,
         emitsThrough(
-          predicate<IncomeReport>((r) => r.total == 1000 && r.count == 1),
+          predicate<IncomeReport>((r) => r.total == 100000 && r.count == 1),
         ),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncomeSueldo,
         occurredAt: DateTime(2026, 6, 10),
       );
@@ -3498,13 +3498,13 @@ void main() {
     test('UT-I09: percent calculado correctamente para 2 buckets', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncomeFreelance,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 3000,
+        amount: 300000,
         categoryId: catIncomeSueldo,
         occurredAt: DateTime(2026, 6, 6),
       );
@@ -3526,7 +3526,7 @@ void main() {
         "account_destination_id, amount, description, occurred_at, "
         "category_id, created_at, updated_at) "
         "VALUES('01a2b3c4-5678-7abc-9def-000000000110', 'income', NULL, ?, "
-        "0.0, NULL, '2026-06-10T00:00:00.000', ?, "
+        "0, NULL, '2026-06-10T00:00:00.000', ?, "
         "'2026-06-10T00:00:00.000', '2026-06-10T00:00:00.000')",
         [bolsa, catIncomeSueldo],
       );
@@ -3557,13 +3557,13 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catFlip,
         occurredAt: DateTime(2026, 6, 5),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         categoryId: catFlip,
         occurredAt: DateTime(2026, 6, 8),
       );
@@ -3577,7 +3577,7 @@ void main() {
       expect(report.buckets.first.name, kUncategorizedBucketName,
           reason: 'edge (3) cae en "Sin categoría" (RN-I05 del sprint income).');
       expect(report.buckets.first.count, 2);
-      expect(report.buckets.first.total, 1500);
+      expect(report.buckets.first.total, 150000);
       // Drill-down: mismo rango + kinds=[income] + token → debe listar los 2.
       final entries = await entriesDao.watchPage(
         kinds: ['income'],
@@ -3629,7 +3629,7 @@ void main() {
       credit = await accountsDao.create(
         name: 'Visa_CAL',
         type: 'credit',
-        creditLimit: 50000,
+        creditLimit: 5000000,
       );
       catIncome = await categoriesDao.create(
         name: 'Sueldo_CAL',
@@ -3658,7 +3658,7 @@ void main() {
     test('UT-CAL02: 1 income el día 5 → hasIncome true, otros false', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         categoryId: catIncome,
         occurredAt: DateTime(2026, 6, 5),
       );
@@ -3674,7 +3674,7 @@ void main() {
     test('UT-CAL03: 1 expense el día 10 → hasSpending true', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         categoryId: catExpense,
         occurredAt: DateTime(2026, 6, 10),
       );
@@ -3692,7 +3692,7 @@ void main() {
         () async {
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 800,
+        amount: 80000,
         categoryId: catExpense,
         occurredAt: DateTime(2026, 6, 12),
       );
@@ -3708,7 +3708,7 @@ void main() {
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 6, 15),
       );
       final activity =
@@ -3723,14 +3723,14 @@ void main() {
       // Sembrar deuda primero para poder pagarla.
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 800,
+        amount: 80000,
         categoryId: catExpense,
         occurredAt: DateTime(2026, 6, 1),
       );
       await entriesDao.registerDebtPayment(
         accountOriginId: bolsa,
         accountDestinationId: credit,
-        amount: 700,
+        amount: 70000,
         occurredAt: DateTime(2026, 6, 20),
       );
       final activity =
@@ -3746,20 +3746,20 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncome,
         occurredAt: DateTime(2026, 6, 25, 8),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         categoryId: catExpense,
         occurredAt: DateTime(2026, 6, 25, 12),
       );
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 300,
+        amount: 30000,
         occurredAt: DateTime(2026, 6, 25, 18),
       );
       final activity =
@@ -3777,13 +3777,13 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncome,
         occurredAt: DateTime(2026, 5, 20), // mes anterior
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         categoryId: catExpense,
         occurredAt: DateTime(2026, 7, 5), // mes siguiente
       );
@@ -3796,7 +3796,7 @@ void main() {
         () async {
       final entryId = await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncome,
         occurredAt: DateTime(2026, 6, 10),
       );
@@ -3814,7 +3814,7 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 100,
+        amount: 10000,
         categoryId: catIncome,
         occurredAt: DateTime(2026, 6, 1),
       );
@@ -3830,7 +3830,7 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         categoryId: catExpense,
         occurredAt: DateTime(2026, 6, 30, 23, 59, 59, 999),
       );
@@ -3855,7 +3855,7 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncome,
         occurredAt: DateTime(2026, 6, 15),
       );
@@ -3896,7 +3896,7 @@ void main() {
       credit = await accountsDao.create(
         name: 'Visa_HM',
         type: 'credit',
-        creditLimit: 50000,
+        creditLimit: 5000000,
       );
       catComida = await categoriesDao.create(
         name: 'Comida_HM',
@@ -3931,13 +3931,13 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 6, 15),
       );
       final hm = await reports.spendingHeatmap(year: 2026).first;
       expect(hm.daysWithSpending, 1);
-      expect(hm.total, 100);
+      expect(hm.total, 10000);
       // Fallback RN-HM05: cuartiles = 0 → todos los días con gasto son
       // veryHigh (visualmente uniforme).
       expect(hm.p25, 0);
@@ -3953,9 +3953,9 @@ void main() {
     test('UT-HM03: 3 expenses con montos distintos → todos veryHigh (fallback)',
         () async {
       const dailyAmounts = [
-        (day: 5, amount: 100.0),
-        (day: 10, amount: 300.0),
-        (day: 15, amount: 200.0),
+        (day: 5, amount: 10000),
+        (day: 10, amount: 30000),
+        (day: 15, amount: 20000),
       ];
       for (final entry in dailyAmounts) {
         await entriesDao.registerExpense(
@@ -3975,7 +3975,7 @@ void main() {
     test(
         'UT-HM04: 4 expenses 100/200/300/400 → cuartiles calculados; niveles distintos',
         () async {
-      final montos = [100.0, 200.0, 300.0, 400.0];
+      final montos = [10000, 20000, 30000, 40000];
       for (var i = 0; i < montos.length; i++) {
         await entriesDao.registerExpense(
           accountOriginId: debit,
@@ -3986,11 +3986,12 @@ void main() {
       }
       final hm = await reports.spendingHeatmap(year: 2026).first;
       expect(hm.daysWithSpending, 4);
-      expect(hm.total, 1000);
-      // p25 ≈ 175, p50 ≈ 250, p75 ≈ 325.
-      expect(hm.p25, closeTo(175, 1));
-      expect(hm.p50, closeTo(250, 1));
-      expect(hm.p75, closeTo(325, 1));
+      expect(hm.total, 100000);
+      // Cuartiles interpolados en centavos: p25 ≈ 17500, p50 = 25000,
+      // p75 ≈ 32500.
+      expect(hm.p25, closeTo(17500, 1));
+      expect(hm.p50, closeTo(25000, 1));
+      expect(hm.p75, closeTo(32500, 1));
       // 100 ≤ p25 → low. 200 ≤ p50 → medium. 300 ≤ p75 → high. 400 > p75 → veryHigh.
       expect(hm.intensityFor(DateTime(2026, 6, 5)), IntensityLevel.low);
       expect(hm.intensityFor(DateTime(2026, 6, 10)), IntensityLevel.medium);
@@ -4001,52 +4002,52 @@ void main() {
     test('UT-HM05: credit_expense cuenta como gasto', () async {
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 500,
+        amount: 50000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 3, 10),
       );
       final hm = await reports.spendingHeatmap(year: 2026).first;
       expect(hm.daysWithSpending, 1);
-      expect(hm.total, 500);
+      expect(hm.total, 50000);
     });
 
     test('UT-HM06: income/transfer/debt_payment NO cuentan', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         categoryId: catIncome,
         occurredAt: DateTime(2026, 3, 10),
       );
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 3, 11),
       );
       // Sembrar deuda primero para poder pagar.
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 1000,
+        amount: 100000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 3, 1),
       );
       await entriesDao.registerDebtPayment(
         accountOriginId: bolsa,
         accountDestinationId: credit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 3, 12),
       );
       final hm = await reports.spendingHeatmap(year: 2026).first;
       // Solo el credit_expense del día 1 cuenta.
       expect(hm.daysWithSpending, 1);
-      expect(hm.total, 1000);
-      expect(hm.daySpending[DateTime(2026, 3, 1)], 1000);
+      expect(hm.total, 100000);
+      expect(hm.daySpending[DateTime(2026, 3, 1)], 100000);
     });
 
     test('UT-HM07: entry soft-deleted no cuenta', () async {
       final entryId = await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 6, 10),
       );
@@ -4060,14 +4061,14 @@ void main() {
       for (var i = 0; i < 3; i++) {
         await entriesDao.registerExpense(
           accountOriginId: debit,
-          amount: 100.0 + i * 50,
+          amount: 10000 + i * 50,
           categoryId: catComida,
           occurredAt: DateTime(2026, 6, 10, 8 + i * 4),
         );
       }
       final hm = await reports.spendingHeatmap(year: 2026).first;
       expect(hm.daysWithSpending, 1);
-      expect(hm.daySpending[DateTime(2026, 6, 10)], 100 + 150 + 200);
+      expect(hm.daySpending[DateTime(2026, 6, 10)], 10000 + 10050 + 10100);
     });
 
     test(
@@ -4075,25 +4076,25 @@ void main() {
         () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 50,
+        amount: 5000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 12, 31, 23, 59, 59, 999),
       );
       final hm = await reports.spendingHeatmap(year: 2026).first;
-      expect(hm.daySpending[DateTime(2026, 12, 31)], 50,
+      expect(hm.daySpending[DateTime(2026, 12, 31)], 5000,
           reason: "'localtime' preserva el día local.");
     });
 
     test('UT-HM10: entries de otros años NO cuentan', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 300,
+        amount: 30000,
         categoryId: catComida,
         occurredAt: DateTime(2025, 12, 15),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 400,
+        amount: 40000,
         categoryId: catComida,
         occurredAt: DateTime(2027, 1, 10),
       );
@@ -4107,13 +4108,13 @@ void main() {
         stream,
         emitsThrough(
           predicate<SpendingHeatmap>(
-            (hm) => hm.daySpending[DateTime(2026, 6, 15)] == 200,
+            (hm) => hm.daySpending[DateTime(2026, 6, 15)] == 20000,
           ),
         ),
       );
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 6, 15),
       );
@@ -4126,12 +4127,12 @@ void main() {
   // ===========================================================================
   group('SpendingHeatmap.intensityFor (unit tests del modelo)', () {
     SpendingHeatmap hm({
-      Map<DateTime, double> daySpending = const {},
+      Map<DateTime, int> daySpending = const {},
       double p25 = 100,
       double p50 = 200,
       double p75 = 300,
     }) {
-      final total = daySpending.values.fold<double>(0, (a, b) => a + b);
+      final total = daySpending.values.fold<int>(0, (a, b) => a + b);
       return SpendingHeatmap(
         daySpending: daySpending,
         total: total,
@@ -4233,7 +4234,7 @@ void main() {
       credit = await accountsDao.create(
         name: 'Visa_IHM',
         type: 'credit',
-        creditLimit: 50000,
+        creditLimit: 5000000,
       );
       catSueldo = await categoriesDao.create(
         name: 'Sueldo_IHM',
@@ -4269,13 +4270,13 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 5000,
+        amount: 500000,
         categoryId: catSueldo,
         occurredAt: DateTime(2026, 6, 15),
       );
       final hm = await reports.incomeHeatmap(year: 2026).first;
       expect(hm.daysWithIncome, 1);
-      expect(hm.total, 5000);
+      expect(hm.total, 500000);
       expect(hm.p25, 0);
       expect(hm.p75, 0);
       expect(
@@ -4287,7 +4288,7 @@ void main() {
 
     test('UT-IHM03: 4 incomes 1000/2000/3000/4000 → cuartiles calculados',
         () async {
-      final montos = [1000.0, 2000.0, 3000.0, 4000.0];
+      final montos = [100000, 200000, 300000, 400000];
       for (var i = 0; i < montos.length; i++) {
         await entriesDao.registerIncome(
           accountDestinationId: bolsa,
@@ -4298,7 +4299,7 @@ void main() {
       }
       final hm = await reports.incomeHeatmap(year: 2026).first;
       expect(hm.daysWithIncome, 4);
-      expect(hm.total, 10000);
+      expect(hm.total, 1000000);
       // 1000 → low, 2000 → medium, 3000 → high, 4000 → veryHigh.
       expect(hm.intensityFor(DateTime(2026, 6, 5)), IntensityLevel.low);
       expect(hm.intensityFor(DateTime(2026, 6, 10)), IntensityLevel.medium);
@@ -4309,7 +4310,7 @@ void main() {
     test('UT-IHM04: expense NO cuenta como ingreso', () async {
       await entriesDao.registerExpense(
         accountOriginId: debit,
-        amount: 200,
+        amount: 20000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 3, 10),
       );
@@ -4321,7 +4322,7 @@ void main() {
     test('UT-IHM05: credit_expense NO cuenta como ingreso', () async {
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 800,
+        amount: 80000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 3, 10),
       );
@@ -4333,7 +4334,7 @@ void main() {
       await entriesDao.registerTransfer(
         accountOriginId: bolsa,
         accountDestinationId: debit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 3, 10),
       );
       final hm = await reports.incomeHeatmap(year: 2026).first;
@@ -4344,14 +4345,14 @@ void main() {
       // Sembrar deuda primero.
       await entriesDao.registerCreditExpense(
         accountOriginId: credit,
-        amount: 1000,
+        amount: 100000,
         categoryId: catComida,
         occurredAt: DateTime(2026, 3, 1),
       );
       await entriesDao.registerDebtPayment(
         accountOriginId: bolsa,
         accountDestinationId: credit,
-        amount: 500,
+        amount: 50000,
         occurredAt: DateTime(2026, 3, 15),
       );
       final hm = await reports.incomeHeatmap(year: 2026).first;
@@ -4361,7 +4362,7 @@ void main() {
     test('UT-IHM08: income soft-deleted no cuenta', () async {
       final entryId = await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 3000,
+        amount: 300000,
         categoryId: catSueldo,
         occurredAt: DateTime(2026, 6, 10),
       );
@@ -4375,14 +4376,14 @@ void main() {
       for (var i = 0; i < 3; i++) {
         await entriesDao.registerIncome(
           accountDestinationId: bolsa,
-          amount: 1000.0 + i * 500,
+          amount: 100000 + i * 500,
           categoryId: catSueldo,
           occurredAt: DateTime(2026, 6, 10, 8 + i * 4),
         );
       }
       final hm = await reports.incomeHeatmap(year: 2026).first;
       expect(hm.daysWithIncome, 1);
-      expect(hm.dayIncome[DateTime(2026, 6, 10)], 1000 + 1500 + 2000);
+      expect(hm.dayIncome[DateTime(2026, 6, 10)], 100000 + 100500 + 101000);
     });
 
     test(
@@ -4390,25 +4391,25 @@ void main() {
         () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         categoryId: catSueldo,
         occurredAt: DateTime(2026, 12, 31, 23, 59, 59, 999),
       );
       final hm = await reports.incomeHeatmap(year: 2026).first;
-      expect(hm.dayIncome[DateTime(2026, 12, 31)], 500,
+      expect(hm.dayIncome[DateTime(2026, 12, 31)], 50000,
           reason: "'localtime' preserva el día local.");
     });
 
     test('UT-IHM11: entries de otros años NO cuentan', () async {
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 3000,
+        amount: 300000,
         categoryId: catSueldo,
         occurredAt: DateTime(2025, 12, 15),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 4000,
+        amount: 400000,
         categoryId: catSueldo,
         occurredAt: DateTime(2027, 1, 10),
       );
@@ -4422,13 +4423,13 @@ void main() {
         stream,
         emitsThrough(
           predicate<IncomeHeatmap>(
-            (hm) => hm.dayIncome[DateTime(2026, 6, 15)] == 2000,
+            (hm) => hm.dayIncome[DateTime(2026, 6, 15)] == 200000,
           ),
         ),
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 2000,
+        amount: 200000,
         categoryId: catSueldo,
         occurredAt: DateTime(2026, 6, 15),
       );
@@ -4441,12 +4442,12 @@ void main() {
   // ===========================================================================
   group('IncomeHeatmap.intensityFor (unit tests del modelo)', () {
     IncomeHeatmap hm({
-      Map<DateTime, double> dayIncome = const {},
+      Map<DateTime, int> dayIncome = const {},
       double p25 = 1000,
       double p50 = 2000,
       double p75 = 3000,
     }) {
-      final total = dayIncome.values.fold<double>(0, (a, b) => a + b);
+      final total = dayIncome.values.fold<int>(0, (a, b) => a + b);
       return IncomeHeatmap(
         dayIncome: dayIncome,
         total: total,
@@ -4519,8 +4520,8 @@ void main() {
     setUp(() async {
       loanId = await db.loansDao.create(
         name: 'BBVA Test',
-        principalAmount: 10000,
-        monthlyPayment: 500,
+        principalAmount: 1000000,
+        monthlyPayment: 50000,
         initialDurationMonths: 24,
         paymentDay: 5,
         contractDate: DateTime.utc(2026, 6, 1),
@@ -4547,18 +4548,18 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 500,
-        principalAmount: 300,
-        interestAmount: 200,
+        amount: 50000,
+        principalAmount: 30000,
+        interestAmount: 20000,
         occurredAt: DateTime.utc(2026, 6, 10),
         isMonthlyPayment: true,
       );
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 500,
-        principalAmount: 350,
-        interestAmount: 150,
+        amount: 50000,
+        principalAmount: 35000,
+        interestAmount: 15000,
         occurredAt: DateTime.utc(2026, 6, 15),
         isMonthlyPayment: false, // abono capital, mismo mes: OK tras monthly.
       );
@@ -4571,7 +4572,7 @@ void main() {
       final synthetic = report.buckets
           .firstWhere((b) => b.categoryId == kLoanInterestSyntheticId);
       expect(synthetic.name, 'Intereses de préstamos');
-      expect(synthetic.total, 350); // 200 + 150
+      expect(synthetic.total, 35000); // 200 + 150
       // Hotfix M8: count del sintético es 0 para no contaminar el header.
       expect(synthetic.count, 0);
     });
@@ -4584,17 +4585,17 @@ void main() {
       final monthlyId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 100,
-        principalAmount: 99,
-        interestAmount: 1,
+        amount: 10000,
+        principalAmount: 9900,
+        interestAmount: 100,
         occurredAt: DateTime.utc(2026, 6, 1),
         isMonthlyPayment: true,
       );
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 500,
-        principalAmount: 500,
+        amount: 50000,
+        principalAmount: 50000,
         interestAmount: 0,
         occurredAt: DateTime.utc(2026, 6, 10),
         isMonthlyPayment: false,
@@ -4615,9 +4616,9 @@ void main() {
       final paymentId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 500,
-        principalAmount: 300,
-        interestAmount: 200,
+        amount: 50000,
+        principalAmount: 30000,
+        interestAmount: 20000,
         occurredAt: DateTime.utc(2026, 6, 10),
         isMonthlyPayment: true,
       );
@@ -4638,9 +4639,9 @@ void main() {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsa,
-        amount: 500,
-        principalAmount: 300,
-        interestAmount: 200,
+        amount: 50000,
+        principalAmount: 30000,
+        interestAmount: 20000,
         occurredAt: DateTime.utc(2026, 7, 10),
         isMonthlyPayment: true,
       );
@@ -4665,7 +4666,7 @@ void main() {
           julyReport.buckets
               .firstWhere((b) => b.categoryId == kLoanInterestSyntheticId)
               .total,
-          200);
+          20000);
     });
   });
 }

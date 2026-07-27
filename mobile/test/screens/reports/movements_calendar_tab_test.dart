@@ -54,7 +54,7 @@ void main() {
             .firstWhere((a) => a.type == 'cash');
         await deps.entriesDao.registerExpense(
           accountOriginId: bolsa.id,
-          amount: 200,
+          amount: 20000,
           categoryId: catComida,
           occurredAt: day10,
           description: 'CalendarExpense',
@@ -85,7 +85,7 @@ void main() {
             .firstWhere((a) => a.type == 'cash');
         await deps.entriesDao.registerIncome(
           accountDestinationId: bolsa.id,
-          amount: 5000,
+          amount: 500000,
           occurredAt: DateTime(
             targetDay.year,
             targetDay.month,

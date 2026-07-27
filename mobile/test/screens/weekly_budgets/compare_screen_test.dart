@@ -1,5 +1,5 @@
 import 'package:fincore/screens/dashboard_screen.dart';
-import 'package:fincore/widgets/amount_formatter.dart';
+import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,13 +48,13 @@ void main() {
           await deps.weeklyBudgetsDao.addItem(
             budgetId: idA,
             name: 'Renta',
-            amount: 500,
+            amount: 50000,
             kind: 'expense',
           );
           await deps.weeklyBudgetsDao.addItem(
             budgetId: idB,
             name: 'Freelance',
-            amount: 800,
+            amount: 80000,
             kind: 'income',
           );
         },
@@ -93,13 +93,13 @@ void main() {
           await deps.weeklyBudgetsDao.addItem(
             budgetId: idA,
             name: 'Super',
-            amount: 500,
+            amount: 50000,
             kind: 'expense',
           );
           await deps.weeklyBudgetsDao.addItem(
             budgetId: idB,
             name: 'Super',
-            amount: 700,
+            amount: 70000,
             kind: 'expense',
           );
         },
@@ -109,7 +109,7 @@ void main() {
       // Mismo nombre en ambos → un solo renglón compartido, no dos.
       expect(find.text('Super'), findsNWidgets(2));
       // B (700) > A (500): delta +$200 se muestra junto al monto de B.
-      expect(find.text('+${formatAmount(200)}'), findsOneWidget);
+      expect(find.text('+${formatCents(20000)}'), findsOneWidget);
 
       await harness.dispose();
     });

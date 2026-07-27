@@ -171,13 +171,13 @@ void main() {
     final base = EntriesFilters.thisMonth(DateTime(2026, 6, 15));
 
     test('UT-07: copyWith setea, clearMinAmount/clearMaxAmount limpia', () {
-      final withMin = base.copyWith(minAmount: 100);
-      expect(withMin.minAmount, 100);
+      final withMin = base.copyWith(minAmount: 10000);
+      expect(withMin.minAmount, 10000);
       expect(withMin.maxAmount, isNull);
 
       // No cambiar.
       final noOp = withMin.copyWith();
-      expect(noOp.minAmount, 100);
+      expect(noOp.minAmount, 10000);
 
       // Limpiar explícitamente.
       final cleared = withMin.copyWith(clearMinAmount: true);
@@ -185,15 +185,15 @@ void main() {
 
       // Setear max + limpiar min en la misma copia.
       final mixed = withMin.copyWith(
-        maxAmount: 500,
+        maxAmount: 50000,
         clearMinAmount: true,
       );
       expect(mixed.minAmount, isNull);
-      expect(mixed.maxAmount, 500);
+      expect(mixed.maxAmount, 50000);
     });
 
     test('UT-08: clearDimension(amount) limpia ambos campos', () {
-      final f = base.copyWith(minAmount: 100, maxAmount: 500);
+      final f = base.copyWith(minAmount: 10000, maxAmount: 50000);
       final cleared = f.clearDimension(FilterDimension.amount);
       expect(cleared.minAmount, isNull);
       expect(cleared.maxAmount, isNull);
@@ -201,9 +201,9 @@ void main() {
 
     test('UT-09: activeCount cuenta amount como 1 dimensión (no 2)', () {
       expect(base.activeCount, 0);
-      expect(base.copyWith(minAmount: 100).activeCount, 1);
-      expect(base.copyWith(maxAmount: 500).activeCount, 1);
-      expect(base.copyWith(minAmount: 100, maxAmount: 500).activeCount, 1);
+      expect(base.copyWith(minAmount: 10000).activeCount, 1);
+      expect(base.copyWith(maxAmount: 50000).activeCount, 1);
+      expect(base.copyWith(minAmount: 10000, maxAmount: 50000).activeCount, 1);
     });
 
     test('UT-10: parse({"minAmount": "500", "maxAmount": "1500"}) ok', () {
@@ -231,7 +231,7 @@ void main() {
 
     test('UT-13: toDeepLink agrega minAmount/maxAmount como query params',
         () {
-      final f = base.copyWith(minAmount: 500, maxAmount: 1500);
+      final f = base.copyWith(minAmount: 50000, maxAmount: 150000);
       final link = f.toDeepLink();
       expect(link, contains('minAmount=500'));
       expect(link, contains('maxAmount=1500'));

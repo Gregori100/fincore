@@ -31,7 +31,7 @@ void main() {
     credit = await accounts.create(
       name: 'Visa',
       type: 'credit',
-      creditLimit: 50000,
+      creditLimit: 5000000,
       closingDay: 15,
       paymentDay: 5,
     );
@@ -43,22 +43,22 @@ void main() {
     // BO = 0 antes; expense por 1000 → BO = -1000. Debe pasar.
     await entries.registerExpense(
       accountOriginId: debit,
-      amount: 1000,
+      amount: 100000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.accountBalanceNow(debit), -1000);
+    expect(await state.accountBalanceNow(debit), -100000);
   });
 
   test('Libreta libre: credit_expense que excede credit_limit se acepta', () async {
     // credit_limit = 50000; cargar 60000 → deuda 60000 > limit. Acepta libreta libre.
     await entries.registerCreditExpense(
       accountOriginId: credit,
-      amount: 60000,
+      amount: 6000000,
       occurredAt: DateTime.now(),
     );
-    expect(await state.accountBalanceNow(credit), 60000);
+    expect(await state.accountBalanceNow(credit), 6000000);
     // CR queda negativo (sobre-girado).
-    expect(await state.watchCr().first, -10000);
+    expect(await state.watchCr().first, -1000000);
   });
 
   test('Crear movimiento con cuenta archivada como origin rechaza', () async {
@@ -67,7 +67,7 @@ void main() {
     expect(
       () => entries.registerExpense(
         accountOriginId: debit,
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       ),
       throwsA(isA<EntriesDaoError>()
@@ -79,7 +79,7 @@ void main() {
     // Crear income limpio.
     final id = await entries.registerIncome(
       accountDestinationId: bolsa,
-      amount: 100,
+      amount: 10000,
       occurredAt: DateTime.now(),
     );
     // Intentar agregar origin via update → debe rechazar (income no lleva origin).
@@ -94,7 +94,7 @@ void main() {
     expect(
       () => entries.registerCreditExpense(
         accountOriginId: debit, // debit, debería ser credit
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       ),
       throwsA(isA<EntriesDaoError>()
@@ -107,7 +107,7 @@ void main() {
       () => entries.registerTransfer(
         accountOriginId: debit,
         accountDestinationId: credit, // credit no es cash/debit
-        amount: 100,
+        amount: 10000,
         occurredAt: DateTime.now(),
       ),
       throwsA(isA<EntriesDaoError>()
@@ -125,7 +125,7 @@ void main() {
     // Setup: meter algo de deuda primero para que no caiga en OverpayDebt.
     await entries.registerCreditExpense(
       accountOriginId: credit,
-      amount: 500,
+      amount: 50000,
       occurredAt: DateTime.now(),
     );
     // El método registerDebtPayment no acepta categoryId, así que el "rechazo"
@@ -133,7 +133,7 @@ void main() {
     final id = await entries.registerDebtPayment(
       accountOriginId: debit,
       accountDestinationId: credit,
-      amount: 100,
+      amount: 10000,
       occurredAt: DateTime.now(),
     );
     expect(
@@ -146,7 +146,7 @@ void main() {
   test('updateEntry rechaza cuenta archivada como nuevo origin', () async {
     final id = await entries.registerExpense(
       accountOriginId: debit,
-      amount: 100,
+      amount: 10000,
       occurredAt: DateTime.now(),
     );
     // Otra cuenta debit para archivar.

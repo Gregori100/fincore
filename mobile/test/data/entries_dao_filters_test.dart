@@ -35,43 +35,43 @@ void main() {
     // - transfer + debt_payment sin categoría
     await entriesDao.registerIncome(
       accountDestinationId: bolsa,
-      amount: 5000,
+      amount: 500000,
       occurredAt: DateTime(2026, 6, 1),
       description: 'Salario',
     );
     await entriesDao.registerExpense(
       accountOriginId: debit,
       categoryId: catComida,
-      amount: 200,
+      amount: 20000,
       occurredAt: DateTime(2026, 6, 5),
     );
     await entriesDao.registerExpense(
       accountOriginId: bolsa,
       categoryId: catTransporte,
-      amount: 150,
+      amount: 15000,
       occurredAt: DateTime(2026, 6, 10),
     );
     await entriesDao.registerExpense(
       accountOriginId: debit,
       categoryId: catArchivada,
-      amount: 300,
+      amount: 30000,
       occurredAt: DateTime(2026, 6, 12),
     );
     await entriesDao.registerExpense(
       accountOriginId: debit,
-      amount: 100,
+      amount: 10000,
       occurredAt: DateTime(2026, 6, 15),
     );
     await entriesDao.registerCreditExpense(
       accountOriginId: credit,
       categoryId: catComida,
-      amount: 800,
+      amount: 80000,
       occurredAt: DateTime(2026, 6, 20),
     );
     await entriesDao.registerTransfer(
       accountOriginId: debit,
       accountDestinationId: bolsa,
-      amount: 500,
+      amount: 50000,
       occurredAt: DateTime(2026, 6, 22),
     );
     // Archivar la categoría después de registrar el entry — el filtro debe
@@ -97,7 +97,7 @@ void main() {
     credit = await accountsDao.create(
       name: 'Visa',
       type: 'credit',
-      creditLimit: 50000,
+      creditLimit: 5000000,
     );
     catComida = await categoriesDao.create(
       name: 'Comida_Test',
@@ -224,7 +224,7 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 100,
+        amount: 10000,
         categoryId: catBoth,
         occurredAt: DateTime(2026, 6, 5),
       );
@@ -263,14 +263,14 @@ void main() {
       // 1 income con catIncomeReal (debe aparecer por matcheo IN realIds).
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 1000,
+        amount: 100000,
         categoryId: catIncomeReal,
         occurredAt: DateTime(2026, 6, 5),
       );
       // 1 income con catEdge (será edge (3) tras el update).
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 500,
+        amount: 50000,
         categoryId: catEdge,
         occurredAt: DateTime(2026, 6, 6),
       );
@@ -332,7 +332,7 @@ void main() {
       );
       await entriesDao.registerIncome(
         accountDestinationId: bolsa,
-        amount: 3000,
+        amount: 300000,
         categoryId: catA,
         occurredAt: DateTime(2026, 6, 10),
       );
@@ -493,7 +493,7 @@ void main() {
       for (var i = 0; i < n; i++) {
         await entriesDao.registerExpense(
           accountOriginId: bolsa,
-          amount: 10.0 + i,
+          amount: 1000 + i,
           occurredAt: DateTime(2025, 1, 1).add(Duration(minutes: n - i)),
           description: 'pag_$i',
         );
@@ -574,51 +574,51 @@ void main() {
 
     test('UT-01: solo minAmount = 300 → entries con amount >= 300', () async {
       final results = await entriesDao
-          .watchPage(from: from, to: to, minAmount: 300)
+          .watchPage(from: from, to: to, minAmount: 30000)
           .first;
       final amounts = results.map((e) => e.entry.amount).toList();
       // Esperados: 5000, 800, 500 (transfer), 300.
-      expect(amounts, containsAll([5000.0, 800.0, 500.0, 300.0]));
-      expect(amounts.every((a) => a >= 300), isTrue,
+      expect(amounts, containsAll([500000, 80000, 50000, 30000]));
+      expect(amounts.every((a) => a >= 30000), isTrue,
           reason: 'Todos los entries deben tener amount >= 300');
-      expect(amounts.contains(200.0), isFalse);
-      expect(amounts.contains(150.0), isFalse);
-      expect(amounts.contains(100.0), isFalse);
+      expect(amounts.contains(20000), isFalse);
+      expect(amounts.contains(15000), isFalse);
+      expect(amounts.contains(10000), isFalse);
     });
 
     test('UT-02: solo maxAmount = 200 → entries con amount <= 200', () async {
       final results = await entriesDao
-          .watchPage(from: from, to: to, maxAmount: 200)
+          .watchPage(from: from, to: to, maxAmount: 20000)
           .first;
       final amounts = results.map((e) => e.entry.amount).toList();
       // Esperados: 200, 150, 100.
-      expect(amounts, containsAll([200.0, 150.0, 100.0]));
-      expect(amounts.every((a) => a <= 200), isTrue,
+      expect(amounts, containsAll([20000, 15000, 10000]));
+      expect(amounts.every((a) => a <= 20000), isTrue,
           reason: 'Todos los entries deben tener amount <= 200');
-      expect(amounts.contains(5000.0), isFalse);
-      expect(amounts.contains(800.0), isFalse);
+      expect(amounts.contains(500000), isFalse);
+      expect(amounts.contains(80000), isFalse);
     });
 
     test('UT-03: rango min=150 max=500 → entries en [150, 500]', () async {
       final results = await entriesDao
-          .watchPage(from: from, to: to, minAmount: 150, maxAmount: 500)
+          .watchPage(from: from, to: to, minAmount: 15000, maxAmount: 50000)
           .first;
       final amounts = results.map((e) => e.entry.amount).toList();
       // Esperados: 500 (transfer), 300, 200, 150.
-      expect(amounts, containsAll([500.0, 300.0, 200.0, 150.0]));
-      expect(amounts.every((a) => a >= 150 && a <= 500), isTrue);
-      expect(amounts.contains(100.0), isFalse);
-      expect(amounts.contains(800.0), isFalse);
-      expect(amounts.contains(5000.0), isFalse);
+      expect(amounts, containsAll([50000, 30000, 20000, 15000]));
+      expect(amounts.every((a) => a >= 15000 && a <= 50000), isTrue);
+      expect(amounts.contains(10000), isFalse);
+      expect(amounts.contains(80000), isFalse);
+      expect(amounts.contains(500000), isFalse);
     });
 
     test('UT-04: min == max == 200 → solo entries con amount == 200',
         () async {
       final results = await entriesDao
-          .watchPage(from: from, to: to, minAmount: 200, maxAmount: 200)
+          .watchPage(from: from, to: to, minAmount: 20000, maxAmount: 20000)
           .first;
       final amounts = results.map((e) => e.entry.amount).toList();
-      expect(amounts, [200.0]);
+      expect(amounts, [20000]);
     });
 
     test('UT-05: combinado con kinds = ["expense"] + monto → AND', () async {
@@ -627,13 +627,13 @@ void main() {
             from: from,
             to: to,
             kinds: const ['expense'],
-            minAmount: 150,
-            maxAmount: 250,
+            minAmount: 15000,
+            maxAmount: 25000,
           )
           .first;
       final amounts = results.map((e) => e.entry.amount).toList();
       // Esperados: solo expense en [150, 250] → 200 (Comida) y 150 (Transporte).
-      expect(amounts, containsAll([200.0, 150.0]));
+      expect(amounts, containsAll([20000, 15000]));
       expect(amounts.length, 2);
     });
 

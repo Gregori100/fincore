@@ -46,7 +46,7 @@ void main() {
         await deps.accountsDao.create(
           name: 'AmexOro',
           type: 'credit',
-          creditLimit: 20000,
+          creditLimit: 2000000,
           closingDay: 15,
           paymentDay: 5,
           minimumPaymentPct: 0.05,
@@ -88,7 +88,7 @@ void main() {
         await deps.accountsDao.create(
           name: 'BasicaCard',
           type: 'credit',
-          creditLimit: 10000,
+          creditLimit: 1000000,
           closingDay: 15,
           paymentDay: 5,
           // sin minimumPaymentPct
@@ -124,7 +124,7 @@ void main() {
         await deps.accountsDao.create(
           name: 'SinCorte',
           type: 'credit',
-          creditLimit: 5000,
+          creditLimit: 500000,
           // sin closingDay ni paymentDay
         );
       },
@@ -159,14 +159,14 @@ void main() {
         final id = await deps.accountsDao.create(
           name: 'ExcedidaCard',
           type: 'credit',
-          creditLimit: 1000,
+          creditLimit: 100000,
           closingDay: 15,
           paymentDay: 5,
         );
         // Registrar cargo que excede el límite (1500 > 1000).
         await deps.entriesDao.registerCreditExpense(
           accountOriginId: id,
-          amount: 1500,
+          amount: 150000,
           occurredAt: DateTime.now(),
         );
       },
@@ -214,7 +214,7 @@ void main() {
         await deps.accountsDao.create(
           name: 'ClearCard',
           type: 'credit',
-          creditLimit: 10000,
+          creditLimit: 1000000,
           closingDay: 15,
           paymentDay: 5,
           minimumPaymentPct: 0.05,

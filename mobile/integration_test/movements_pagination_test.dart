@@ -59,7 +59,7 @@ void main() {
     for (var i = 0; i < n; i++) {
       await deps.entriesDao.registerExpense(
         accountOriginId: bolsa.id,
-        amount: 10.0 + i,
+        amount: 1000 + i,
         occurredAt: base.add(Duration(minutes: i)),
         description: 'PAG-$i',
       );

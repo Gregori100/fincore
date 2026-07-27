@@ -177,19 +177,19 @@ void main() {
       await weeklyBudgetsDao.addItem(
         budgetId: id,
         name: 'Sueldo',
-        amount: 6500,
+        amount: 650000,
         kind: 'income',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: id,
         name: 'Renta',
-        amount: 1000,
+        amount: 100000,
         kind: 'expense',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: id,
         name: 'Comida',
-        amount: 2000,
+        amount: 200000,
         kind: 'expense',
       );
 
@@ -233,7 +233,7 @@ void main() {
         () => weeklyBudgetsDao.addItem(
           budgetId: budgetId,
           name: '',
-          amount: 100,
+          amount: 10000,
           kind: 'expense',
         ),
         throwsA(isA<WeeklyBudgetsDaoError>()
@@ -261,7 +261,7 @@ void main() {
         () => weeklyBudgetsDao.addItem(
           budgetId: budgetId,
           name: 'Renta',
-          amount: -50,
+          amount: -5000,
           kind: 'expense',
         ),
         throwsA(isA<WeeklyBudgetsDaoError>()
@@ -274,7 +274,7 @@ void main() {
         () => weeklyBudgetsDao.addItem(
           budgetId: budgetId,
           name: 'Renta',
-          amount: 100,
+          amount: 10000,
           kind: 'transfer',
         ),
         throwsA(isA<WeeklyBudgetsDaoError>()
@@ -290,7 +290,7 @@ void main() {
           budgetId: budgetId,
           name: 'Renta',
           categoryId: catViejaArchivada,
-          amount: 100,
+          amount: 10000,
           kind: 'expense',
         ),
         throwsA(isA<WeeklyBudgetsDaoError>()
@@ -303,7 +303,7 @@ void main() {
       final itemId = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renta',
-        amount: 100,
+        amount: 10000,
         kind: 'expense',
       );
 
@@ -320,7 +320,7 @@ void main() {
         budgetId: budgetId,
         name: 'Comida',
         categoryId: catComidaActiva,
-        amount: 200,
+        amount: 20000,
         kind: 'expense',
       );
 
@@ -343,19 +343,19 @@ void main() {
       final id1 = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Sueldo',
-        amount: 6500,
+        amount: 650000,
         kind: 'income',
       );
       final id2 = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renta',
-        amount: 1000,
+        amount: 100000,
         kind: 'expense',
       );
       final id3 = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Comida',
-        amount: 2000,
+        amount: 200000,
         kind: 'expense',
       );
 
@@ -385,18 +385,18 @@ void main() {
       final itemId = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Sueldo',
-        amount: 6500,
+        amount: 650000,
         kind: 'income',
       );
 
       final stream = weeklyBudgetsDao.watchBudgetBalance(budgetId);
       final expectation = expectLater(
         stream,
-        emitsThrough(predicate<double>((b) => b == 7000)),
+        emitsThrough(predicate<int>((b) => b == 700000)),
       );
 
       final rowsUpdated =
-          await weeklyBudgetsDao.updateItem(itemId, amount: 7000);
+          await weeklyBudgetsDao.updateItem(itemId, amount: 700000);
       expect(rowsUpdated, 1);
 
       await expectation;
@@ -404,7 +404,7 @@ void main() {
       final row = await (db.select(db.weeklyBudgetItems)
             ..where((i) => i.id.equals(itemId)))
           .getSingle();
-      expect(row.amount, 7000);
+      expect(row.amount, 700000);
     });
 
     test('UT-WB16: deleteItem remueve fila; balance re-emite', () async {
@@ -415,20 +415,20 @@ void main() {
       final incomeId = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Sueldo',
-        amount: 6500,
+        amount: 650000,
         kind: 'income',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renta',
-        amount: 1000,
+        amount: 100000,
         kind: 'expense',
       );
 
       final stream = weeklyBudgetsDao.watchBudgetBalance(budgetId);
       final expectation = expectLater(
         stream,
-        emitsThrough(predicate<double>((b) => b == -1000)),
+        emitsThrough(predicate<int>((b) => b == -100000)),
       );
 
       await weeklyBudgetsDao.deleteItem(incomeId);
@@ -460,7 +460,7 @@ void main() {
       final itemId = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renta',
-        amount: 5000,
+        amount: 500000,
         kind: 'expense',
       );
 
@@ -488,7 +488,7 @@ void main() {
       final itemId = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renta',
-        amount: 5000,
+        amount: 500000,
         kind: 'expense',
       );
       final before =
@@ -524,13 +524,13 @@ void main() {
       final marcadoId = await weeklyBudgetsDao.addItem(
         budgetId: templateId,
         name: 'Renta',
-        amount: 5000,
+        amount: 500000,
         kind: 'expense',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: templateId,
         name: 'Luz',
-        amount: 500,
+        amount: 50000,
         kind: 'expense',
       );
       await weeklyBudgetsDao.toggleItemDone(marcadoId);
@@ -568,19 +568,19 @@ void main() {
       final id1 = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Item1',
-        amount: 100,
+        amount: 10000,
         kind: 'expense',
       );
       final id2 = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Item2',
-        amount: 200,
+        amount: 20000,
         kind: 'expense',
       );
       final id3 = await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Item3',
-        amount: 300,
+        amount: 30000,
         kind: 'expense',
       );
 
@@ -613,30 +613,30 @@ void main() {
       await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Sueldo',
-        amount: 6500,
+        amount: 650000,
         kind: 'income',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Freelance',
-        amount: 500,
+        amount: 50000,
         kind: 'income',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Renta',
-        amount: 1000,
+        amount: 100000,
         kind: 'expense',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Comida',
-        amount: 4800,
+        amount: 480000,
         kind: 'expense',
       );
 
       final balance = await weeklyBudgetsDao.watchBudgetBalance(budgetId).first;
-      expect(balance, 1200); // 6500 + 500 − 1000 − 4800
+      expect(balance, 120000); // 6500 + 500 − 1000 − 4800
     });
 
     test(
@@ -648,20 +648,20 @@ void main() {
       await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Sueldo',
-        amount: 1500,
+        amount: 150000,
         kind: 'income',
       );
 
       final stream = weeklyBudgetsDao.watchBudgetBalance(budgetId);
       final expectation = expectLater(
         stream,
-        emitsThrough(predicate<double>((b) => b == 1200)),
+        emitsThrough(predicate<int>((b) => b == 120000)),
       );
 
       await weeklyBudgetsDao.addItem(
         budgetId: budgetId,
         name: 'Comida',
-        amount: 300,
+        amount: 30000,
         kind: 'expense',
       );
 
@@ -707,13 +707,13 @@ void main() {
       final templateItemId1 = await weeklyBudgetsDao.addItem(
         budgetId: templateId,
         name: 'Sueldo',
-        amount: 6500,
+        amount: 650000,
         kind: 'income',
       );
       final templateItemId2 = await weeklyBudgetsDao.addItem(
         budgetId: templateId,
         name: 'Renta',
-        amount: 1000,
+        amount: 100000,
         kind: 'expense',
       );
 
@@ -734,9 +734,9 @@ void main() {
       // Los valores sí se copian idénticos aunque los ids sean distintos.
       final sueldo = budgetItems.firstWhere((i) => i.name == 'Sueldo');
       final renta = budgetItems.firstWhere((i) => i.name == 'Renta');
-      expect(sueldo.amount, 6500);
+      expect(sueldo.amount, 650000);
       expect(sueldo.kind, 'income');
-      expect(renta.amount, 1000);
+      expect(renta.amount, 100000);
       expect(renta.kind, 'expense');
 
       // El budget derivado no queda marcado como plantilla.
@@ -768,13 +768,13 @@ void main() {
       await weeklyBudgetsDao.addItem(
         budgetId: templateId,
         name: 'Sueldo',
-        amount: 6500,
+        amount: 650000,
         kind: 'income',
       );
       await weeklyBudgetsDao.addItem(
         budgetId: templateId,
         name: 'Renta',
-        amount: 1000,
+        amount: 100000,
         kind: 'expense',
       );
 
@@ -793,7 +793,7 @@ void main() {
       await weeklyBudgetsDao.addItem(
         budgetId: templateId,
         name: 'Ahorro',
-        amount: 500,
+        amount: 50000,
         kind: 'expense',
       );
 
