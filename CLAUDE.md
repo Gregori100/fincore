@@ -377,6 +377,7 @@ El `textTheme` en `fincore_theme.dart` cablea los 15 slots M3 a los 7 tokens tip
 - **Prohibido** `BorderRadius.circular(N)` con `N` literal fuera de la escala de radios.
 - **Prohibido** `Color.withValues(alpha: N)` con `N` literal fuera de la escala de alphas.
 - **Prohibido** `Duration(milliseconds: N)` en animaciones sin usar `kMotionX`.
+- **Contenido de alto fijo**: en celdas de `GridView` con `childAspectRatio`, envolver los textos en `Flexible`. Un ratio ajustado a ojo se rompe con etiquetas largas o con la escala de fuente del sistema; `Flexible` evita el desborde estructuralmente. Ojo: las franjas de desborde sólo se pintan en debug, así que en release el síntoma es un recorte silencioso.
 
 Excepciones puntuales se marcan en el sitio con `// token-exception: <razón>`. Meta: mantenerlas ≤ 10 en toda la app; si un valor no cabe recurrentemente (≥3 usos), evaluar si falta un token en vez de multiplicar excepciones.
 

@@ -50,7 +50,7 @@ Corregidos (ambos en `loan_detail_screen.dart`, archivo que el sprint ya tocaba)
 - Enlace "Ver ingreso inicial en <cuenta>" — desbordaba 94px con nombres de cuenta largos.
 - Fila de pago: fecha + `Spacer` + monto — desbordaba 30px.
 
-**No corregido**: `kind_picker.dart:159` desborda 4px verticalmente en 360dp. Está en el formulario de movimiento, fuera del alcance del sprint. `WT-LF-10` usa el viewport por defecto para no toparse con él. **Queda como pendiente para el sprint que toque esa pantalla.**
+También corregido, aunque fuera del alcance original: `kind_picker.dart` desbordaba 4px verticalmente en 360dp. Ver M5 en la sección de correcciones de la revisión.
 
 ### D-05 — `_submit` no puede hacer `setState` después del `pop`
 
@@ -131,7 +131,9 @@ Un export v4 no lo lee la 0.33.0. Bajar de versión obliga a `adb uninstall`, qu
 - **M2** — el `DestructiveDialog` de eliminar préstamo no anunciaba los ajustes que se lleva. Añadido `countActiveAdjustments` y la línea de impacto (se omite cuando no hay ajustes).
 - **M3** — implementado WT-LF-09, la regresión del chip naranja de próximo pago.
 - **M4** — `applyPaymentSideEffects` renombrado a `recalculateLoanState`.
-- **M5** — el desborde de 4px de `kind_picker.dart:159` sigue pendiente: es preexistente y está en el formulario de movimiento, fuera del alcance de este sprint.
+- **M5** — corregido a petición de Diego tras cerrar el sprint. El `KindPicker` desbordaba 4px en anchos de 360dp cuando una etiqueta larga se partía en dos líneas. Dos cambios: `childAspectRatio` de 1.6 a 1.5 (holgura para el caso de dos líneas) y `Flexible` alrededor del `Text` del tile, que es la defensa estructural — evita el desborde a cualquier alto de celda y con cualquier escala de fuente del sistema, cosa que un ratio fijo no garantiza. `WT-LF-10` volvió al viewport de teléfono y actúa como regresión: un `RenderFlex` desbordado lanza excepción y hace fallar el test.
+
+  Nota sobre el síntoma real: las franjas amarillas y negras de desborde **sólo se pintan en builds de debug**. En el release que usa Diego el efecto era un recorte silencioso del borde inferior de la etiqueta, razón por la que nunca lo reportó.
 
 ## Pendientes
 

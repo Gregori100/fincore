@@ -41,10 +41,18 @@ class KindPicker extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: kSpaceSm,
           crossAxisSpacing: kSpaceSm,
-          // 1.6 (tiles horizontal-heavy): en 360dp da ~180×112, en 800dp da
-          // ~400×250. Con 3 filas en 800dp ocupa ~800dp de altura,
-          // requiere scroll dentro del ListView del form pero cabe.
-          childAspectRatio: 1.6,
+          // Hallazgo M5 de la revisión de rama (2026-08-05): con 1.6 la celda
+          // quedaba ~4px corta en anchos de 360dp, justo cuando una etiqueta
+          // larga ("Gasto a tarjeta", "Pago de tarjeta", "Transferencia") se
+          // parte en dos líneas. En release no se ven las franjas de
+          // desborde —sólo se pintan en debug— así que el síntoma real era
+          // un recorte silencioso del borde inferior de la etiqueta.
+          //
+          // 1.5 da el alto necesario con holgura. El `Flexible` del `_KindTile`
+          // es la defensa estructural: evita el desborde a cualquier alto de
+          // celda y con cualquier escala de fuente del sistema, que es lo que
+          // un ratio fijo no puede garantizar por sí solo.
+          childAspectRatio: 1.5,
           children: _order.map((k) {
             return _KindTile(
               kind: k,
@@ -165,15 +173,22 @@ class _KindTile extends StatelessWidget {
                 color: selected ? color : FincoreColors.textMuted,
               ),
               const SizedBox(height: kSpaceSm),
-              Text(
-                kind.label,
-                style: typo.bodyS.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: selected ? color : FincoreColors.textPrimary,
+              // Flexible en vez de Text suelto: la celda de la rejilla tiene
+              // alto fijo, así que sin esto el texto de dos líneas empujaba
+              // el Column más allá del contenedor. Con Flexible el texto
+              // cede espacio en vez de desbordar, sin importar el alto de la
+              // celda ni la escala de fuente que tenga el sistema.
+              Flexible(
+                child: Text(
+                  kind.label,
+                  style: typo.bodyS.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: selected ? color : FincoreColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

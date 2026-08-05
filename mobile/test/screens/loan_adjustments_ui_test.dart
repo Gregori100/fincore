@@ -362,11 +362,11 @@ void main() {
   testWidgets(
       'WT-LF-10: el picker de categorías no renderiza sección de recientes '
       '(RN-LF-13)', (tester) async {
-    // Sin `useTallScreen`: el formulario de movimiento arrastra desbordes de
-    // layout preexistentes en anchos de teléfono angostos (`kind_picker.dart`
-    // desborda 4px en 360dp). Corregirlos excede el alcance de este sprint;
-    // quedan anotados en la implementación. Este test usa el viewport por
-    // defecto, igual que el resto de tests de esa pantalla.
+    // Viewport de teléfono real. Corrió con el default 800x600 hasta que se
+    // arregló el desborde de `kind_picker.dart` (M5 de la revisión de rama):
+    // este test es ahora también la regresión de ese arreglo, porque un
+    // RenderFlex desbordado lanza excepción y hace fallar el test.
+    useTallScreen(tester);
     final harness = await pumpFincoreApp(
       tester,
       initialRoute: '/entries/new',
