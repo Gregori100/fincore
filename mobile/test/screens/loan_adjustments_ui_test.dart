@@ -317,6 +317,49 @@ void main() {
   });
 
   testWidgets(
+      'WT-LF-09: el chip naranja de próximo pago SIGUE apareciendo '
+      '(regresión)', (tester) async {
+    // Hallazgo M3 de la revisión de rama: WT-LF-08 sólo verifica que el chip
+    // rojo desapareció. Sin este test, si un cambio futuro rompiera también
+    // el naranja nadie lo notaría, y es el único indicador temporal que le
+    // queda al préstamo en el Dashboard.
+    useTallScreen(tester);
+    final hoy = DateTime.now();
+    // `payment_day` a 2 días de hoy → el chip aparece (umbral: ≤ 5 días).
+    final objetivo = hoy.add(const Duration(days: 2));
+    // El schema limita `payment_day` a 1-28; si el objetivo cae fuera, el
+    // test no aplica y se salta el rango problemático usando el día 1.
+    final paymentDay = objetivo.day <= 28 ? objetivo.day : 1;
+
+    final harness = await pumpFincoreApp(
+      tester,
+      seed: (db, deps) async {
+        final bolsa = await db.accountsDao
+            .listAll()
+            .then((l) => l.firstWhere((a) => a.type == 'cash'));
+        await db.loansDao.create(
+          name: 'BBVA',
+          principalAmount: 500000,
+          monthlyPayment: 50000,
+          initialDurationMonths: 12,
+          paymentDay: paymentDay,
+          contractDate: DateTime(hoy.year, hoy.month, 1),
+          destinationAccountId: bolsa.id,
+        );
+      },
+    );
+    await tester.pumpAndSettle();
+
+    if (paymentDay == objetivo.day) {
+      expect(find.textContaining('BBVA'), findsWidgets,
+          reason: 'el chip naranja de próximo pago debe seguir presente');
+    }
+    // En cualquier caso, el rojo no debe volver.
+    expect(find.textContaining('atrasado'), findsNothing);
+    await harness.dispose();
+  });
+
+  testWidgets(
       'WT-LF-10: el picker de categorías no renderiza sección de recientes '
       '(RN-LF-13)', (tester) async {
     // Sin `useTallScreen`: el formulario de movimiento arrastra desbordes de

@@ -1412,5 +1412,66 @@ void main() {
               .getSingle();
       expect(rows.read<int>('c'), 0);
     });
+
+    test(
+        'B1: el respaldo de una BD con un préstamo eliminado que tenía '
+        'ajustes SIGUE siendo importable', () async {
+      // Regresión del hallazgo bloqueante de la revisión de rama. Antes de
+      // la corrección, el export emitía el ajuste huérfano (su propio
+      // `deleted_at` seguía nulo) pero omitía el préstamo, y el import
+      // rechazaba el archivo ENTERO con `invalid_reference`. El usuario no
+      // se enteraba al exportar sino al intentar restaurar.
+      final loanId = await seedLoanConAjustes();
+      await db.loansDao.deleteLoan(loanId);
+
+      final json = await backup.exportToJson();
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+      expect(decoded['loans'], isEmpty);
+      expect(decoded['loan_adjustments'], isEmpty,
+          reason: 'los ajustes del préstamo eliminado no deben exportarse');
+
+      // Y el archivo se importa sin error.
+      await backup.importFromJson(json);
+      expect(await db.loansDao.watchActive().first, isEmpty);
+    });
+
+    test(
+        'B1: el guardrail del export filtra huérfanos aunque la cascada no '
+        'los haya marcado', () async {
+      // Simula una BD generada por la versión con el bug: el préstamo está
+      // eliminado pero sus ajustes siguen activos. El export debe producir
+      // igualmente un archivo importable, para que quien ya tenga ese estado
+      // pueda recuperar respaldos válidos.
+      final loanId = await seedLoanConAjustes();
+      final nowIso = DateTime.now().toIso8601String();
+      // Reproduce EXACTAMENTE lo que hacía `deleteLoan` antes del fix:
+      // cascadeaba el préstamo y sus movimientos, pero no los ajustes.
+      await db.customStatement(
+        'UPDATE loans SET deleted_at = ? WHERE id = ?', [nowIso, loanId]);
+      await db.customStatement(
+        'UPDATE journal_entries SET deleted_at = ? WHERE loan_id = ?',
+        [nowIso, loanId]);
+      final huerfanos = await db.select(db.loanAdjustments).get();
+      expect(huerfanos.every((a) => a.deletedAt == null), isTrue,
+          reason: 'precondición: ajustes activos con préstamo eliminado');
+
+      final json = await backup.exportToJson();
+      expect((jsonDecode(json) as Map<String, dynamic>)['loan_adjustments'],
+          isEmpty);
+      await backup.importFromJson(json);
+    });
+
+    test('M1: un motivo de más de 200 caracteres rechaza el import',
+        () async {
+      await seedLoanConAjustes();
+      final decoded =
+          jsonDecode(await backup.exportToJson()) as Map<String, dynamic>;
+      (decoded['loan_adjustments'] as List).first['reason'] = 'x' * 201;
+      expect(
+        () => backup.importFromJson(jsonEncode(decoded)),
+        throwsA(isA<BackupError>()),
+        reason: 'el import no debe admitir un estado que el DAO rechaza',
+      );
+    });
   });
 }

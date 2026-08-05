@@ -559,4 +559,78 @@ void main() {
           reason: 'el ajuste sigue vigente y el saldo no se corrompió');
     });
   });
+
+  group('cascada al eliminar el préstamo (hallazgo B1 de la revisión)', () {
+    test(
+        'B1: deleteLoan cascadea a loan_adjustments', () async {
+      await loansDao.registerAdjustment(
+          loanId: loanId, amount: 10000, occurredAt: DateTime.utc(2026, 8, 5));
+      await loansDao.registerAdjustment(
+          loanId: loanId, amount: -3000, occurredAt: DateTime.utc(2026, 8, 6));
+
+      await loansDao.deleteLoan(loanId);
+
+      final rows = await db.select(db.loanAdjustments).get();
+      expect(rows, hasLength(2), reason: 'soft delete, no borrado físico');
+      for (final r in rows) {
+        expect(r.deletedAt, isNotNull,
+            reason: 'sin la cascada, el export emitía ajustes huérfanos y el '
+                'respaldo resultante no se podía importar');
+      }
+      expect(await loansDao.watchAdjustments(loanId).first, isEmpty);
+    });
+
+    test('B1: `countActiveAdjustments` alimenta el diálogo destructivo',
+        () async {
+      expect(await loansDao.countActiveAdjustments(loanId), 0);
+      await loansDao.registerAdjustment(
+          loanId: loanId, amount: 10000, occurredAt: DateTime.utc(2026, 8, 5));
+      await loansDao.registerAdjustment(
+          loanId: loanId, amount: -3000, occurredAt: DateTime.utc(2026, 8, 6));
+      expect(await loansDao.countActiveAdjustments(loanId), 2);
+      await loansDao.deleteLoan(loanId);
+      expect(await loansDao.countActiveAdjustments(loanId), 0);
+    });
+  });
+
+  group('longitud del motivo (hallazgo M1 de la revisión)', () {
+    test('un motivo de más de 200 caracteres se rechaza en el alta', () async {
+      expect(
+        () => loansDao.registerAdjustment(
+          loanId: loanId,
+          amount: 10000,
+          occurredAt: DateTime.utc(2026, 8, 5),
+          reason: 'x' * 201,
+        ),
+        throwsA(isA<LoansDaoError>()
+            .having((e) => e.code, 'code', 'invalid_adjustment')),
+      );
+      expect(await loansDao.watchAdjustments(loanId).first, isEmpty);
+    });
+
+    test('exactamente 200 caracteres se acepta', () async {
+      final id = await loansDao.registerAdjustment(
+        loanId: loanId,
+        amount: 10000,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        reason: 'x' * 200,
+      );
+      expect((await loansDao.findAdjustmentById(id))!.reason!.length, 200);
+    });
+
+    test('la edición aplica el mismo límite', () async {
+      final id = await loansDao.registerAdjustment(
+          loanId: loanId, amount: 10000, occurredAt: DateTime.utc(2026, 8, 5));
+      expect(
+        () => loansDao.updateAdjustment(
+          id: id,
+          amount: 10000,
+          occurredAt: DateTime.utc(2026, 8, 5),
+          reason: 'x' * 201,
+        ),
+        throwsA(isA<LoansDaoError>()
+            .having((e) => e.code, 'code', 'invalid_adjustment')),
+      );
+    });
+  });
 }
