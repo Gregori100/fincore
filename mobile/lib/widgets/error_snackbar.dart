@@ -101,13 +101,16 @@ String _daoCodeToMessage(String code, String fallback) {
       return 'No se pueden registrar pagos sobre un préstamo cerrado.';
     case 'cannot_reopen_paid':
       return 'Un préstamo pagado no puede reabrirse. Elimina un pago para reactivarlo o elimina el préstamo.';
-    // Hotfix smoke Diego: unicidad de pago del mes + fecha < contrato.
+    // Hotfix smoke Diego: fecha < contrato.
     case 'payment_before_contract':
       return 'El pago no puede ser anterior a la fecha del contrato del préstamo.';
-    case 'duplicate_monthly_payment':
-      return fallback; // Mensaje del DAO ya sugiere "usa Abono a capital".
-    case 'capital_before_monthly':
-      return fallback; // Mensaje del DAO explica la regla de orden.
+    // Sprint flutter-loans-flexible-payments-v1: `duplicate_monthly_payment`
+    // y `capital_before_monthly` dejaron de existir. Los códigos no se
+    // conservan como casos muertos: si un respaldo viejo o un caller
+    // desactualizado los emitiera, caen en el `default` y muestran su
+    // mensaje original.
+    case 'invalid_adjustment':
+      return fallback; // El DAO explica si fue por cero o por saldo negativo.
     case 'not_loan_payment':
       return 'Este movimiento no es un pago de préstamo.';
     case 'overpay_loan':

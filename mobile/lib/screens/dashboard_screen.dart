@@ -466,15 +466,15 @@ class _LoanTotalCard extends StatelessWidget {
   }
 }
 
-/// Chip de estado del préstamo. Muestra uno de tres estados por prioridad:
-///   1. Atrasado (rojo): `monthsOverdue >= 1`. Prioridad máxima.
-///   2. Próximo pago (naranja): `daysUntil ≤ 5` y mes actual no pagado.
-///   3. Nada (invisible) si el préstamo está al día y sin pagos próximos.
+/// Chip de estado del préstamo. Muestra uno de dos estados:
+///   1. Próximo pago (naranja): `daysUntil ≤ 5` y mes actual no pagado.
+///   2. Nada (invisible) si el pago no está próximo o ya se registró.
 ///
-/// Hotfix smoke Diego v4: antes el chip usaba `_daysUntilPayment` que "rueda"
-/// al mes siguiente cuando el día ya pasó, lo que ocultaba pagos atrasados
-/// (paymentDay=15, hoy=17 → devolvía 29 días → no aparecía). Ahora el
-/// atraso se cuenta por MES CALENDARIO faltante, no por proximidad.
+/// Sprint flutter-loans-flexible-payments-v1: se retiró el chip rojo
+/// "N meses atrasados". Contaba meses calendario sin `is_monthly_payment=1`,
+/// lo que sólo tiene sentido si el préstamo se paga exactamente una vez al
+/// mes. El préstamo real de Diego es quincenal, así que el chip marcaba
+/// atraso permanente sobre un préstamo al corriente (RN-LF-12).
 class _LoanStatusChip extends StatelessWidget {
   final db.Loan loan;
   const _LoanStatusChip({required this.loan});
@@ -483,31 +483,20 @@ class _LoanStatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final deps = AppDependencies.of(context);
-    return StreamBuilder<int>(
-      stream: deps.loansDao.watchMonthsOverdue(
-        loanId: loan.id,
-        today: now,
-        contractDate: loan.contractDate,
-        paymentDay: loan.paymentDay,
+    // F-DES-12: AnimatedSize + AnimatedSwitcher para que el chip aparezca
+    // y desaparezca con transición suave (kMotionFast). Antes cambiaba
+    // de golpe cuando el stream reemitía tras registrar un pago —
+    // costaba percibir la causalidad ("pagué → el chip se fue").
+    return AnimatedSize(
+      duration: kMotionFast,
+      curve: kCurveStandard,
+      alignment: Alignment.centerLeft,
+      child: AnimatedSwitcher(
+        duration: kMotionFast,
+        switchInCurve: kCurveStandard,
+        switchOutCurve: kCurveExit,
+        child: _buildChip(context, deps, now),
       ),
-      builder: (context, overdueSnap) {
-        final overdue = overdueSnap.data ?? 0;
-        // F-DES-12: AnimatedSize + AnimatedSwitcher para que el chip aparezca
-        // y desaparezca con transición suave (kMotionFast). Antes cambiaba
-        // de golpe cuando el stream reemitía tras registrar un pago —
-        // costaba percibir la causalidad ("pagué → el chip se fue").
-        return AnimatedSize(
-          duration: kMotionFast,
-          curve: kCurveStandard,
-          alignment: Alignment.centerLeft,
-          child: AnimatedSwitcher(
-            duration: kMotionFast,
-            switchInCurve: kCurveStandard,
-            switchOutCurve: kCurveExit,
-            child: _buildChip(context, deps, now, overdue),
-          ),
-        );
-      },
     );
   }
 
@@ -515,18 +504,7 @@ class _LoanStatusChip extends StatelessWidget {
     BuildContext context,
     AppDependencies deps,
     DateTime now,
-    int overdue,
   ) {
-    if (overdue >= 1) {
-      return _ChipShell(
-        key: ValueKey('overdue-${loan.id}'),
-        loanId: loan.id,
-        color: FincoreColors.negative,
-        icon: Icons.priority_high,
-        label:
-            '${loan.name} · $overdue ${overdue == 1 ? "mes atrasado" : "meses atrasados"}',
-      );
-    }
     final days = _daysUntilPayment(loan.paymentDay);
     if (days > 5) {
       return const SizedBox.shrink(key: ValueKey('empty'));
@@ -560,7 +538,6 @@ class _ChipShell extends StatelessWidget {
   final IconData icon;
   final String label;
   const _ChipShell({
-    super.key,
     required this.loanId,
     required this.color,
     required this.icon,

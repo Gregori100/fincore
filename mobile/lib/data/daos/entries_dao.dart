@@ -409,14 +409,24 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
 
     final id = UuidV7.generate();
     final now = DateTime.now();
-    final monthKey =
-        '${occurredAt.year.toString().padLeft(4, '0')}-${occurredAt.month.toString().padLeft(2, '0')}';
 
     await transaction(() async {
-      // Hotfix quality-review M1: los 3 checks de unicidad/orden y overpay
-      // corren DENTRO de la transacción re-computando estado. Antes
-      // vivían fuera y dos submits paralelos podían pasar ambos con foto
-      // stale (dos monthly del mismo mes, o balance negativo silencioso).
+      // Hotfix quality-review M1: el check de overpay corre DENTRO de la
+      // transacción re-computando estado. Antes vivía fuera y dos submits
+      // paralelos podían pasar ambos con foto stale (balance negativo
+      // silencioso).
+      //
+      // Sprint flutter-loans-flexible-payments-v1: aquí vivían además los
+      // candados `duplicate_monthly_payment` (un solo pago del mes por mes
+      // calendario) y `capital_before_monthly` (todo abono a capital exige
+      // pago del mes previo). Ambos asumían que un préstamo se paga una vez
+      // al mes; el préstamo real de Diego es quincenal, así que la
+      // suposición era falsa. `is_monthly_payment` sobrevive como etiqueta
+      // descriptiva, sin poder de validación (RN-LF-03).
+      //
+      // `overpay_loan` NO se relajó: es la única regla contable del
+      // préstamo y sigue impidiendo que la suma de capitales exceda el
+      // saldo, ahora también con ajustes en la fórmula.
       final freshLoan = await (select(attachedDatabase.loans)
             ..where((l) => l.id.equals(loanId) & l.deletedAt.isNull()))
           .getSingleOrNull();
@@ -427,29 +437,6 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
         throw const EntriesDaoError(
           'loan_closed',
           'No se pueden registrar pagos sobre un préstamo cerrado.',
-        );
-      }
-      final monthlyCountRow = await customSelect(
-        "SELECT COUNT(*) AS c FROM journal_entries "
-        "WHERE loan_id = ? AND kind = 'loan_payment' "
-        "AND deleted_at IS NULL AND is_monthly_payment = 1 "
-        "AND strftime('%Y-%m', occurred_at) = ?",
-        variables: [
-          Variable.withString(loanId),
-          Variable.withString(monthKey),
-        ],
-      ).getSingle();
-      final monthlyCount = monthlyCountRow.read<int>('c');
-      if (isMonthlyPayment && monthlyCount > 0) {
-        throw const EntriesDaoError(
-          'duplicate_monthly_payment',
-          'Ya registraste el pago del mes para este préstamo. Si vas a pagar de más, usa "Abono a capital".',
-        );
-      }
-      if (!isMonthlyPayment && monthlyCount == 0) {
-        throw const EntriesDaoError(
-          'capital_before_monthly',
-          'Registra primero el pago del mes correspondiente antes de hacer abonos a capital.',
         );
       }
       final currentBalance =
@@ -566,41 +553,18 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     // El tipo del pago (monthly vs capital) se preserva del entry existente
     // — el edit NO permite cambiar el tipo (para eso hay que eliminar y
     // recrear).
-    final isMonthly = existing.isMonthlyPayment;
     final oldPrincipal = existing.principalAmount ?? 0;
-    final monthKey =
-        '${occurredAt.year.toString().padLeft(4, '0')}-${occurredAt.month.toString().padLeft(2, '0')}';
     final now = DateTime.now();
 
     await transaction(() async {
-      // Hotfix quality-review M1: los checks de mes y overpay corren
-      // DENTRO de la transacción con estado fresco. Antes vivían afuera y
-      // dos edits paralelos podían pasar la validación con foto stale.
-      final monthlyCountRow = await customSelect(
-        "SELECT COUNT(*) AS c FROM journal_entries "
-        "WHERE loan_id = ? AND kind = 'loan_payment' "
-        "AND deleted_at IS NULL AND is_monthly_payment = 1 "
-        "AND strftime('%Y-%m', occurred_at) = ? "
-        "AND id != ?",
-        variables: [
-          Variable.withString(loanId),
-          Variable.withString(monthKey),
-          Variable.withString(entryId),
-        ],
-      ).getSingle();
-      final otherMonthlyCount = monthlyCountRow.read<int>('c');
-      if (isMonthly && otherMonthlyCount > 0) {
-        throw const EntriesDaoError(
-          'duplicate_monthly_payment',
-          'Ya existe otro pago del mes para este préstamo en ese mes.',
-        );
-      }
-      if (!isMonthly && otherMonthlyCount == 0) {
-        throw const EntriesDaoError(
-          'capital_before_monthly',
-          'No puedes dejar un abono a capital sin pago del mes correspondiente en su mes.',
-        );
-      }
+      // Hotfix quality-review M1: el check de overpay corre DENTRO de la
+      // transacción con estado fresco. Antes vivía afuera y dos edits
+      // paralelos podían pasar la validación con foto stale.
+      //
+      // Sprint flutter-loans-flexible-payments-v1: se retiraron los mismos
+      // dos candados de mes que `registerLoanPayment` (ver la nota extensa
+      // ahí). Mover un pago a un mes que ya tiene pago del mes ahora es
+      // válido.
       final currentBalance =
           await attachedDatabase.loansDao.balanceOf(loanId);
       final availableBalance = currentBalance + oldPrincipal;
@@ -626,35 +590,17 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
     });
   }
 
-  /// Hotfix smoke Diego v3: cuenta abonos a capital del mismo mes de un
-  /// pago del mes específico. Usado por la UI para mostrar warning de
-  /// eliminación en cascada antes de confirmar el delete de un monthly.
-  Future<int> countCapitalPaymentsInSameMonth(String monthlyEntryId) async {
-    final row = await customSelect(
-      "SELECT COUNT(*) AS c FROM journal_entries m "
-      "WHERE m.loan_id = (SELECT loan_id FROM journal_entries WHERE id = ?1) "
-      "AND m.kind = 'loan_payment' "
-      "AND m.deleted_at IS NULL "
-      "AND m.is_monthly_payment = 0 "
-      "AND strftime('%Y-%m', m.occurred_at) = "
-      "  strftime('%Y-%m', (SELECT occurred_at FROM journal_entries WHERE id = ?1))",
-      variables: [Variable.withString(monthlyEntryId)],
-    ).getSingle();
-    return row.read<int>('c');
-  }
-
   /// Sprint flutter-loans-v1: elimina un `loan_payment`. Reabre el préstamo
   /// automáticamente si estaba `paid` y ahora el saldo vuelve a > 0 (RN-L12).
   /// Los cerrados manualmente (`manual`) no se tocan.
   ///
-  /// Hotfix smoke Diego v3: si el pago eliminado es "Pago del mes" y
-  /// `cascadeCapitalInMonth=true`, elimina en cascada todos los abonos a
-  /// capital del mismo mes calendario (para no dejarlos huérfanos rompiendo
-  /// la regla `capital_before_monthly`).
-  Future<void> deleteLoanPayment(
-    String entryId, {
-    bool cascadeCapitalInMonth = false,
-  }) async {
+  /// Sprint flutter-loans-flexible-payments-v1: se retiró el parámetro
+  /// `cascadeCapitalInMonth`, que borraba en cascada los abonos a capital del
+  /// mismo mes calendario. Existía únicamente para sostener el invariante
+  /// `capital_before_monthly`; sin ese candado, la cascada pasaba a ser un
+  /// borrado destructivo sin justificación (RN-LF-04). Cada pago se elimina
+  /// ahora de forma independiente.
+  Future<void> deleteLoanPayment(String entryId) async {
     final existing = await (select(journalEntries)
           ..where((e) => e.id.equals(entryId)))
         .getSingleOrNull();
@@ -688,27 +634,6 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
           updatedAt: Value(now),
         ),
       );
-      // Hotfix smoke Diego v3: si el pago eliminado es "Pago del mes" y
-      // el caller solicitó cascada, borrar en la misma transacción todos
-      // los abonos a capital del mismo mes calendario del préstamo.
-      // Preserva el invariante `capital_before_monthly`.
-      if (cascadeCapitalInMonth && existing.isMonthlyPayment) {
-        final monthKey =
-            '${existing.occurredAt.year.toString().padLeft(4, '0')}-${existing.occurredAt.month.toString().padLeft(2, '0')}';
-        // Hotfix smoke Diego v4: `customStatement` NO acepta `Variable<T>`
-        // — solo primitivos (null, bool, int, num, String, List<int>).
-        // Pasar `Variable.withDateTime(now)` tiraba `ArgumentError` fuera
-        // de `EntriesDaoError`, se filtraba silenciosamente por el catch
-        // de la UI y Diego veía "el modal se cerró y no borró nada".
-        final nowIso = now.toIso8601String();
-        await customStatement(
-          "UPDATE journal_entries SET deleted_at = ?, updated_at = ? "
-          "WHERE loan_id = ? AND kind = 'loan_payment' "
-          "AND is_monthly_payment = 0 AND deleted_at IS NULL "
-          "AND strftime('%Y-%m', occurred_at) = ?",
-          [nowIso, nowIso, loanId, monthKey],
-        );
-      }
       // Hotfix quality-review M2: auto-close/reopen unificado. Respeta
       // RN-L13 (cerrado manual nunca reabre) porque el helper filtra
       // closeReason == 'manual' antes de tocar.
