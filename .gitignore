@@ -20,3 +20,6 @@ Thumbs.db
 # `adb backup io.github.gregori100.fincore` deja un .ab vacío (47 bytes) en cwd.
 # Es el artefacto del smoke de privacidad (RF-008); no se commitea.
 *.ab
+
+# Worktrees de git creados por Claude Code (no son código fuente).
+.claude/worktrees/
