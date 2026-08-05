@@ -1,7 +1,7 @@
 # Resumen de implementación — flutter-loans-flexible-payments-v1
 
 Versión entregada: **0.34.0+122**. Schema **v15**. Backup **v4**.
-Suite: **945 tests verdes** (partió de 896). `flutter analyze`: 3 hints preexistentes en `entry_form_screen.dart:510-513`.
+Suite: **954 tests verdes** (partió de 896). `flutter analyze`: 3 hints preexistentes en `entry_form_screen.dart:510-513`.
 
 ## Qué se implementó
 
@@ -122,10 +122,20 @@ Preparado en `~/fincore-respaldos/` **antes** de entregar el APK (R-01):
 
 Un export v4 no lo lee la 0.33.0. Bajar de versión obliga a `adb uninstall`, que borra la BD, así que el respaldo v3 es el único punto de retorno.
 
+## Correcciones de la revisión de rama (2026-08-05 16:09)
+
+`engineering/quality-review/flutter-loans-flexible-payments-v1/2026-08-05-1609-branch-quality-review.md` reportó un bloqueante y cinco hallazgos menores. Aplicados todos salvo M5, que es preexistente y fuera de alcance:
+
+- **B1 (bloqueante)** — `deleteLoan` no cascadeaba a `loan_adjustments`. El export emitía el ajuste huérfano pero omitía su préstamo, y el respaldo resultante fallaba al importar con `invalid_reference`; el usuario se enteraba al restaurar, no al exportar. Corregida la cascada **y** añadido un guardrail en el export que filtra ajustes cuyo préstamo no se exporta — necesario para que una instalación que ya generó huérfanos vuelva a producir respaldos válidos. Dos tests de DAO y tres de backup, incluido uno que reproduce el estado previo al fix.
+- **M1** — `reason` tenía tres límites distintos (UI 200, import 1000, DAO ninguno). Unificados a 200 vía `LoansDao.kMaxAdjustmentReasonLength`, que el import ahora referencia.
+- **M2** — el `DestructiveDialog` de eliminar préstamo no anunciaba los ajustes que se lleva. Añadido `countActiveAdjustments` y la línea de impacto (se omite cuando no hay ajustes).
+- **M3** — implementado WT-LF-09, la regresión del chip naranja de próximo pago.
+- **M4** — `applyPaymentSideEffects` renombrado a `recalculateLoanState`.
+- **M5** — el desborde de 4px de `kind_picker.dart:159` sigue pendiente: es preexistente y está en el formulario de movimiento, fuera del alcance de este sprint.
+
 ## Pendientes
 
 1. **Smoke en el teléfono** (SM-01 a SM-08 de `test-plan.md`). El único que la suite no puede cubrir es CM-05: que el saldo de la app cuadre con el de la app del banco tras registrar el ajuste real.
-2. **`branch-quality-review`** (T036) — no ejecutada.
-3. **`kind_picker.dart:159`** — desborde de 4px en anchos de 360dp (D-04).
+2. **`kind_picker.dart:159`** — desborde de 4px en anchos de 360dp (D-04).
 4. **`applyPaymentSideEffects`** conserva un nombre que ya no describe todos sus disparadores. Deuda menor asumida.
 5. **R-07 de la spec sigue vigente**: el préstamo continúa modelado como mensual (`payment_day` único, `initial_duration_months`). Este sprint quitó los bloqueos, no corrigió el modelo. El chip naranja seguirá mostrando una fecha mensual aunque el préstamo sea quincenal.

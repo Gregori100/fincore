@@ -164,7 +164,11 @@ saldo = principal_amount + Σ(ajustes.amount) − Σ(pagos.principal_amount)
 
 **Ajustes de saldo**: dos asimetrías deliberadas frente a los pagos. Se puede ajustar un préstamo **cerrado** (RN-LF-10 — es el caso de uso central: el banco corrige algo que la app dio por liquidado, y el ajuste lo reabre si el saldo vuelve a ser positivo), y se acepta `occurred_at` anterior a `contract_date` (un ajuste puede estar corrigiendo la captura del monto original). Un ajuste que dejaría el saldo negativo se rechaza con `invalid_adjustment` (RN-LF-07); el cálculo corre **dentro de la transacción** y la edición se excluye a sí misma del saldo base.
 
-`applyPaymentSideEffects` conserva su nombre pero ya no lo disparan sólo los pagos: las tres mutaciones de ajuste también lo llaman. Es la reevaluación de estado del préstamo ante cualquier cambio de saldo.
+`recalculateLoanState` (antes `applyPaymentSideEffects`) es la reevaluación de estado del préstamo ante cualquier cambio de saldo: la disparan los pagos y también las tres mutaciones de ajuste.
+
+**Cascada al eliminar un préstamo**: `deleteLoan` marca `deleted_at` en el préstamo, sus `journal_entries` (income inicial + pagos) **y sus ajustes**. Omitir los ajustes producía un export con referencias huérfanas que hacía el respaldo entero no importable. El export además filtra defensivamente los ajustes cuyo préstamo no se está exportando.
+
+`reason` está limitado a 200 caracteres en el DAO, en el import y en el formulario. Los tres deben moverse juntos.
 
 ### Backup JSON v4
 
