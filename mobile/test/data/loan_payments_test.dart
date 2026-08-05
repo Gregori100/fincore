@@ -324,9 +324,14 @@ void main() {
     });
   });
 
-  group('deleteLoanPayment cascadeCapitalInMonth (hotfix smoke Diego v4)', () {
-    test('elimina monthly + todos los capital del mismo mes en una tx',
-        () async {
+  group('deleteLoanPayment sin cascada (RN-LF-04)', () {
+    test(
+        'UT-LF-28: borrar el pago del mes NO arrastra los abonos a capital '
+        'del mismo mes', () async {
+      // Antes del sprint flutter-loans-flexible-payments-v1 este borrado
+      // eliminaba en cascada los abonos del mismo mes calendario, para no
+      // dejarlos huérfanos frente al candado `capital_before_monthly`. Sin
+      // ese candado la cascada era destrucción de datos sin justificación.
       final monthlyId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
@@ -354,46 +359,21 @@ void main() {
         occurredAt: DateTime.utc(2026, 8, 20),
         isMonthlyPayment: false,
       );
-      // Sanity: countCapitalPaymentsInSameMonth ve los dos.
-      expect(await entriesDao.countCapitalPaymentsInSameMonth(monthlyId), 2);
 
-      await entriesDao.deleteLoanPayment(
-        monthlyId,
-        cascadeCapitalInMonth: true,
-      );
+      await entriesDao.deleteLoanPayment(monthlyId);
 
-      // Los tres quedaron con deleted_at != null.
-      for (final id in [monthlyId, cap1, cap2]) {
-        final row = await entriesDao.findById(id);
-        expect(row?.entry.deletedAt, isNotNull,
-            reason: '$id debería haber quedado soft-deleted');
+      expect((await entriesDao.findById(monthlyId))?.entry.deletedAt,
+          isNotNull);
+      for (final id in [cap1, cap2]) {
+        expect((await entriesDao.findById(id))?.entry.deletedAt, isNull,
+            reason: '$id debe sobrevivir al borrado del pago del mes');
       }
-      // Balance vuelve al principal completo (5000) porque nada quedó
-      // activo.
-      expect(await loansDao.balanceOf(loanId), 500000);
     });
 
-    test('cascade sobre pago SIN abonos del mes no borra pagos de otro mes',
-        () async {
-      final jul = await entriesDao.registerLoanPayment(
-        loanId: loanId,
-        accountOriginId: bolsaId,
-        amount: 50000,
-        principalAmount: 40000,
-        interestAmount: 10000,
-        occurredAt: DateTime.utc(2026, 7, 20),
-        isMonthlyPayment: true,
-      );
-      final julCap = await entriesDao.registerLoanPayment(
-        loanId: loanId,
-        accountOriginId: bolsaId,
-        amount: 10000,
-        principalAmount: 10000,
-        interestAmount: 0,
-        occurredAt: DateTime.utc(2026, 7, 25),
-        isMonthlyPayment: false,
-      );
-      final ago = await entriesDao.registerLoanPayment(
+    test(
+        'UT-LF-29: el saldo tras el borrado refleja SÓLO el capital del pago '
+        'eliminado', () async {
+      final monthlyId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
         amount: 50000,
@@ -402,15 +382,23 @@ void main() {
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
-
-      // Cascade sobre AGOSTO (no tiene capitales) NO debe tocar julio.
-      await entriesDao.deleteLoanPayment(
-        ago,
-        cascadeCapitalInMonth: true,
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 20000,
+        principalAmount: 20000,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 10),
+        isMonthlyPayment: false,
       );
-      expect((await entriesDao.findById(ago))?.entry.deletedAt, isNotNull);
-      expect((await entriesDao.findById(jul))?.entry.deletedAt, isNull);
-      expect((await entriesDao.findById(julCap))?.entry.deletedAt, isNull);
+      // 500000 - 40000 - 20000.
+      expect(await loansDao.balanceOf(loanId), 440000);
+
+      await entriesDao.deleteLoanPayment(monthlyId);
+
+      // Devuelve los 40000 del pago borrado; los 20000 del abono siguen
+      // descontados porque ese pago sigue vivo.
+      expect(await loansDao.balanceOf(loanId), 480000);
     });
   });
 
@@ -513,9 +501,9 @@ void main() {
       expect(loan?.closeReason, isNull);
     });
 
-    test('rechaza mover monthly a un mes con otro monthly existente',
-        () async {
-      // Registrar monthly de septiembre.
+    test(
+        'UT-LF-27: permite mover un pago del mes a un mes que YA tiene pago '
+        'del mes (RN-LF-01)', () async {
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
@@ -525,23 +513,25 @@ void main() {
         occurredAt: DateTime.utc(2026, 9, 5),
         isMonthlyPayment: true,
       );
-      // Mover el de agosto a septiembre debe fallar.
-      expect(
-        () => entriesDao.updateLoanPayment(
-          entryId: monthlyId,
-          amount: 50000,
-          principalAmount: 40000,
-          interestAmount: 10000,
-          occurredAt: DateTime.utc(2026, 9, 10),
-        ),
-        throwsA(isA<EntriesDaoError>()
-            .having((e) => e.code, 'code', 'duplicate_monthly_payment')),
+      // Antes esto lanzaba `duplicate_monthly_payment`. Con préstamos
+      // quincenales, dos pagos con intereses en el mismo mes son lo normal.
+      await entriesDao.updateLoanPayment(
+        entryId: monthlyId,
+        amount: 50000,
+        principalAmount: 40000,
+        interestAmount: 10000,
+        occurredAt: DateTime.utc(2026, 9, 10),
       );
+      final moved = await entriesDao.findById(monthlyId);
+      expect(moved?.entry.occurredAt, DateTime.utc(2026, 9, 10));
+      expect(moved?.entry.deletedAt, isNull);
+      // Los dos pagos siguen descontando capital: 500000 - 40000 - 40000.
+      expect(await loansDao.balanceOf(loanId), 420000);
     });
 
     test(
-        'rechaza mover capital a un mes sin monthly (capital_before_monthly)',
-        () async {
+        'permite mover un abono a capital a un mes SIN pago del mes '
+        '(RN-LF-02)', () async {
       final capId = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
@@ -551,18 +541,18 @@ void main() {
         occurredAt: DateTime.utc(2026, 8, 15),
         isMonthlyPayment: false,
       );
-      // Mover el capital a septiembre (no hay monthly ahí) debe fallar.
-      expect(
-        () => entriesDao.updateLoanPayment(
-          entryId: capId,
-          amount: 10000,
-          principalAmount: 10000,
-          interestAmount: 0,
-          occurredAt: DateTime.utc(2026, 9, 15),
-        ),
-        throwsA(isA<EntriesDaoError>()
-            .having((e) => e.code, 'code', 'capital_before_monthly')),
+      // Septiembre no tiene pago del mes: antes lanzaba
+      // `capital_before_monthly`.
+      await entriesDao.updateLoanPayment(
+        entryId: capId,
+        amount: 10000,
+        principalAmount: 10000,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 9, 15),
       );
+      final moved = await entriesDao.findById(capId);
+      expect(moved?.entry.occurredAt, DateTime.utc(2026, 9, 15));
+      expect(moved?.entry.deletedAt, isNull);
     });
 
     test('rechaza payment_before_contract', () async {
@@ -767,9 +757,12 @@ void main() {
     });
 
     test(
-        'isMonthlyPayment=true bloquea 2do pago con interest > 0 en el mismo mes',
-        () async {
-      await entriesDao.registerLoanPayment(
+        'UT-LF-21: isMonthlyPayment=true PERMITE un 2do pago del mes en el '
+        'mismo mes calendario (RN-LF-01)', () async {
+      // El caso que originó el sprint: el préstamo de Diego es quincenal, así
+      // que dos pagos con intereses en agosto son lo normal. Antes el segundo
+      // moría con `duplicate_monthly_payment`.
+      final primero = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
         amount: 50000,
@@ -778,20 +771,45 @@ void main() {
         occurredAt: DateTime.utc(2026, 8, 5),
         isMonthlyPayment: true,
       );
-      // Segundo intento del mismo mes → rechazado.
-      expect(
-        () => entriesDao.registerLoanPayment(
+      final segundo = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 50000,
+        principalAmount: 30000,
+        interestAmount: 20000,
+        occurredAt: DateTime.utc(2026, 8, 20),
+        isMonthlyPayment: true,
+      );
+
+      // Afirma ESTADO RESULTANTE, no sólo ausencia de excepción: un test que
+      // sólo comprobara "no lanza" pasaría aunque el insert no ocurriera.
+      expect(primero, isNot(segundo));
+      for (final id in [primero, segundo]) {
+        final row = await entriesDao.findById(id);
+        expect(row?.entry.deletedAt, isNull);
+        expect(row?.entry.isMonthlyPayment, isTrue);
+      }
+      expect(await loansDao.countActivePayments(loanId), 2);
+      // 500000 - 40000 - 30000.
+      expect(await loansDao.balanceOf(loanId), 430000);
+    });
+
+    test(
+        'UT-LF-23: tres pagos del mes en el mismo mes quedan los tres activos',
+        () async {
+      for (final day in [5, 15, 25]) {
+        await entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 50000,
-          principalAmount: 30000,
-          interestAmount: 20000,
-          occurredAt: DateTime.utc(2026, 8, 20),
+          amount: 20000,
+          principalAmount: 10000,
+          interestAmount: 10000,
+          occurredAt: DateTime.utc(2026, 8, day),
           isMonthlyPayment: true,
-        ),
-        throwsA(isA<EntriesDaoError>().having(
-            (e) => e.code, 'code', 'duplicate_monthly_payment')),
-      );
+        );
+      }
+      expect(await loansDao.countActivePayments(loanId), 3);
+      expect(await loansDao.balanceOf(loanId), 470000);
     });
 
     test(
@@ -849,22 +867,96 @@ void main() {
     });
 
     test(
-        'abono capital SIN monthly previo del mes: rechaza con capital_before_monthly',
+        'UT-LF-22: abono a capital SIN pago del mes previo se acepta '
+        '(RN-LF-02)', () async {
+      // Segundo caso reportado por Diego: quería abonar a capital en un mes
+      // donde todavía no había capturado el pago con intereses.
+      final id = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 50000,
+        principalAmount: 50000,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: false,
+      );
+
+      final row = await entriesDao.findById(id);
+      expect(row?.entry.deletedAt, isNull);
+      expect(row?.entry.isMonthlyPayment, isFalse);
+      expect(await loansDao.countActivePayments(loanId), 1);
+      expect(await loansDao.balanceOf(loanId), 450000);
+      // Y el mes sigue sin pago del mes registrado: el abono no lo suple.
+      expect(await loansDao.hasMonthlyPaymentIn(loanId, 2026, 8), isFalse);
+    });
+
+    test(
+        'UT-LF-25: overpay_loan sigue vigente en un abono sin pago del mes',
         () async {
+      // Quitar el candado de orden no debe debilitar la única regla contable
+      // del préstamo.
       expect(
         () => entriesDao.registerLoanPayment(
           loanId: loanId,
           accountOriginId: bolsaId,
-          amount: 50000,
-          principalAmount: 50000,
+          amount: 600000,
+          principalAmount: 600000,
           interestAmount: 0,
           occurredAt: DateTime.utc(2026, 8, 5),
           isMonthlyPayment: false,
         ),
         throwsA(isA<EntriesDaoError>()
-            .having((e) => e.code, 'code', 'capital_before_monthly')),
+            .having((e) => e.code, 'code', 'overpay_loan')),
       );
     });
+
+    test(
+        'UT-LF-24: overpay_loan vigente cuando DOS pagos del mes suman más '
+        'que el saldo', () async {
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 300000,
+        principalAmount: 300000,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: true,
+      );
+      // Saldo restante 200000: un segundo pago de 250000 debe rebotar aunque
+      // ya no exista el candado de unicidad mensual.
+      expect(
+        () => entriesDao.registerLoanPayment(
+          loanId: loanId,
+          accountOriginId: bolsaId,
+          amount: 250000,
+          principalAmount: 250000,
+          interestAmount: 0,
+          occurredAt: DateTime.utc(2026, 8, 20),
+          isMonthlyPayment: true,
+        ),
+        throwsA(isA<EntriesDaoError>()
+            .having((e) => e.code, 'code', 'overpay_loan')),
+      );
+    });
+
+    test(
+        'UT-LF-26: el préstamo se cierra como paid cuando quien lo liquida es '
+        'un abono a capital suelto', () async {
+      await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 500000,
+        principalAmount: 500000,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        isMonthlyPayment: false,
+      );
+      final loan = await loansDao.findById(loanId);
+      expect(loan?.closedAt, isNotNull);
+      expect(loan?.closeReason, 'paid');
+      expect(await loansDao.balanceOf(loanId), 0);
+    });
+
   });
 
   // Hotfix smoke Diego: watchHasMonthlyPaymentIn del LoansDao para el chip
@@ -1003,8 +1095,8 @@ void main() {
       'Monthly con interest=0 (hotfix quality-review B8 — antes proxy '
       'legacy fallaba)', () {
     test(
-        'registrar monthly con interest=0 persiste is_monthly_payment=true '
-        'y bloquea segundo monthly del mes', () async {
+        'registrar monthly con interest=0 persiste is_monthly_payment=true; '
+        'un segundo monthly del mes ya NO se bloquea', () async {
       final id = await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
@@ -1017,21 +1109,18 @@ void main() {
       final e = await entriesDao.findById(id);
       expect(e?.entry.isMonthlyPayment, isTrue);
       expect(await loansDao.hasMonthlyPaymentIn(loanId, 2026, 8), isTrue);
-      // Segundo monthly del mes: rechaza.
-      expect(
-        () => entriesDao.registerLoanPayment(
-          loanId: loanId,
-          accountOriginId: bolsaId,
-          amount: 30000,
-          principalAmount: 30000,
-          interestAmount: 0,
-          occurredAt: DateTime.utc(2026, 8, 20),
-          isMonthlyPayment: true,
-        ),
-        throwsA(isA<EntriesDaoError>()
-            .having((e) => e.code, 'code', 'duplicate_monthly_payment')),
+      // Segundo monthly del mismo mes: antes rechazaba, ahora se acepta.
+      final segundo = await entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsaId,
+        amount: 30000,
+        principalAmount: 30000,
+        interestAmount: 0,
+        occurredAt: DateTime.utc(2026, 8, 20),
+        isMonthlyPayment: true,
       );
-      // Capital posterior en el mismo mes: acepta.
+      expect((await entriesDao.findById(segundo))?.entry.deletedAt, isNull);
+      // Capital posterior en el mismo mes: también acepta.
       await entriesDao.registerLoanPayment(
         loanId: loanId,
         accountOriginId: bolsaId,
@@ -1041,7 +1130,11 @@ void main() {
         occurredAt: DateTime.utc(2026, 8, 20),
         isMonthlyPayment: false,
       );
+      expect(await loansDao.countActivePayments(loanId), 3);
+      // 500000 - 50000 - 30000 - 30000.
+      expect(await loansDao.balanceOf(loanId), 390000);
     });
+
   });
 
   group('deleteLoanPayment default (hotfix quality-review B9)', () {

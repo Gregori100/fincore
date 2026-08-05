@@ -95,12 +95,13 @@ void main() {
     expect((await accountsDao.listAll()).length, before);
   });
 
-  test('Import con version > 2 rechaza', () async {
-    // Sprint flutter-loans-v1: export ahora emite v2. Cualquier version > 2
-    // (v3, v99, futura) sigue siendo rechazada con unsupported_version.
+  test('Import con version > la soportada rechaza', () async {
+    // Sprint flutter-loans-flexible-payments-v1: export emite v4. Cualquier
+    // version superior (v5, v99, futura) sigue siendo rechazada con
+    // unsupported_version.
     await seed();
     final json = await backup.exportToJson();
-    final bumped = json.replaceFirst('"version": 3', '"version": 99');
+    final bumped = json.replaceFirst('"version": 4', '"version": 99');
     expect(
       () => backup.importFromJson(bumped),
       throwsA(isA<BackupError>()
@@ -206,10 +207,10 @@ void main() {
     expect((await entriesDao.watchPage().first).length, 2);
   });
 
-  test('Export con BD vacía produce JSON v2 con arrays vacíos', () async {
+  test('Export con BD vacía produce JSON v4 con arrays vacíos', () async {
     await accountsDao.createBolsa(); // mínimo: solo bolsa
     final json = await backup.exportToJson();
-    expect(json, contains('"version": 3'));
+    expect(json, contains('"version": 4'));
     expect(json, contains('"loans"'));
     expect(json, contains('"accounts"'));
     expect(json, contains('"categories": []'));
@@ -746,6 +747,8 @@ void main() {
       'categories',
       'journal_entries',
       'loans',
+      // Sprint flutter-loans-flexible-payments-v1 (backup v4).
+      'loan_adjustments',
     };
 
     test(
@@ -1233,6 +1236,181 @@ void main() {
         throwsA(isA<BackupError>()
             .having((e) => e.code, 'code', 'invalid_loan_data')),
       );
+    });
+  });
+
+  // ==========================================================================
+  // Sprint flutter-loans-flexible-payments-v1 — backup v4 con loan_adjustments
+  // ==========================================================================
+
+  group('backup v4: loan_adjustments', () {
+    /// Préstamo + un pago + dos ajustes de signo opuesto.
+    Future<String> seedLoanConAjustes() async {
+      final bolsa = await accountsDao.createBolsa();
+      final loanId = await db.loansDao.create(
+        name: 'BBVA',
+        principalAmount: 3700000,
+        monthlyPayment: 250000,
+        initialDurationMonths: 24,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 5, 1),
+        destinationAccountId: bolsa,
+      );
+      await db.entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 250000,
+        principalAmount: 210000,
+        interestAmount: 40000,
+        occurredAt: DateTime.utc(2026, 6, 5),
+        isMonthlyPayment: true,
+      );
+      await db.loansDao.registerAdjustment(
+        loanId: loanId,
+        amount: 10000,
+        occurredAt: DateTime.utc(2026, 8, 5),
+        reason: 'Ajuste del banco',
+      );
+      await db.loansDao.registerAdjustment(
+        loanId: loanId,
+        amount: -5000,
+        occurredAt: DateTime.utc(2026, 8, 10),
+      );
+      return loanId;
+    }
+
+    test('IT-LF-01: el export declara v4 y trae los ajustes', () async {
+      await seedLoanConAjustes();
+      final json = await backup.exportToJson();
+      final decoded = jsonDecode(json) as Map<String, dynamic>;
+
+      expect(decoded['version'], 4);
+      final adjustments = decoded['loan_adjustments'] as List;
+      expect(adjustments, hasLength(2));
+      // Montos con signo, en centavos enteros (RN-IC-01).
+      final amounts = adjustments.map((a) => a['amount']).toList();
+      expect(amounts, containsAll(<int>[10000, -5000]));
+      expect(amounts.every((a) => a is int), isTrue);
+      expect(adjustments.first['reason'], isNotNull);
+    });
+
+    test('IT-LF-02: sin ajustes la clave existe y viene vacía (CB-15)',
+        () async {
+      await seed();
+      final decoded =
+          jsonDecode(await backup.exportToJson()) as Map<String, dynamic>;
+      expect(decoded.containsKey('loan_adjustments'), isTrue);
+      expect(decoded['loan_adjustments'], isEmpty);
+    });
+
+    test(
+        'IT-LF-03: round-trip export → wipe → import conserva saldo y ajustes',
+        () async {
+      final loanId = await seedLoanConAjustes();
+      final saldoAntes = await db.loansDao.balanceOf(loanId);
+      // 3700000 + 10000 - 5000 - 210000.
+      expect(saldoAntes, 3495000);
+
+      final json = await backup.exportToJson();
+      await backup.wipeAll();
+      await backup.importFromJson(json);
+
+      final loans = await db.loansDao.watchActive().first;
+      expect(loans, hasLength(1));
+      final restored = loans.first.id;
+      expect(await db.loansDao.watchAdjustments(restored).first, hasLength(2));
+      expect(await db.loansDao.balanceOf(restored), saldoAntes);
+    });
+
+    test('IT-LF-04: un backup v3 importa sin ajustes (CA-12)', () async {
+      final loanId = await seedLoanConAjustes();
+      final v4 = await backup.exportToJson();
+      // Degradar el payload a v3: quitar la clave y bajar la versión.
+      final decoded = jsonDecode(v4) as Map<String, dynamic>;
+      decoded['version'] = 3;
+      decoded.remove('loan_adjustments');
+
+      await backup.wipeAll();
+      await backup.importFromJson(jsonEncode(decoded));
+
+      final loans = await db.loansDao.watchActive().first;
+      final restored = loans.first.id;
+      expect(await db.loansDao.watchAdjustments(restored).first, isEmpty);
+      // Saldo por la fórmula de dos términos: 3700000 - 210000.
+      expect(await db.loansDao.balanceOf(restored), 3490000);
+      expect(loanId, isNotEmpty);
+    });
+
+    test('IT-LF-06: v4 sin la clave loan_adjustments se trata como vacío',
+        () async {
+      await seedLoanConAjustes();
+      final decoded =
+          jsonDecode(await backup.exportToJson()) as Map<String, dynamic>;
+      decoded.remove('loan_adjustments');
+      await backup.wipeAll();
+      // No debe crashear: la clave es opcional incluso en v4.
+      await backup.importFromJson(jsonEncode(decoded));
+      final loans = await db.loansDao.watchActive().first;
+      expect(await db.loansDao.watchAdjustments(loans.first.id).first, isEmpty);
+    });
+
+    test('IT-LF-07: un ajuste con loan_id inexistente rechaza', () async {
+      await seedLoanConAjustes();
+      final decoded =
+          jsonDecode(await backup.exportToJson()) as Map<String, dynamic>;
+      (decoded['loan_adjustments'] as List).first['loan_id'] =
+          '01999999-89ab-7cde-8def-0123456789ab';
+      expect(
+        () => backup.importFromJson(jsonEncode(decoded)),
+        throwsA(isA<BackupError>()
+            .having((e) => e.code, 'code', 'invalid_reference')),
+      );
+    });
+
+    test('IT-LF-08: un ajuste con amount double rechaza en v4', () async {
+      await seedLoanConAjustes();
+      final decoded =
+          jsonDecode(await backup.exportToJson()) as Map<String, dynamic>;
+      (decoded['loan_adjustments'] as List).first['amount'] = 100.5;
+      expect(
+        () => backup.importFromJson(jsonEncode(decoded)),
+        throwsA(isA<BackupError>()
+            .having((e) => e.code, 'code', 'invalid_amount_format')),
+      );
+    });
+
+    test('IT-LF-09: un ajuste con amount 0 rechaza (CB-18)', () async {
+      await seedLoanConAjustes();
+      final decoded =
+          jsonDecode(await backup.exportToJson()) as Map<String, dynamic>;
+      (decoded['loan_adjustments'] as List).first['amount'] = 0;
+      expect(
+        () => backup.importFromJson(jsonEncode(decoded)),
+        throwsA(isA<BackupError>()
+            .having((e) => e.code, 'code', 'invalid_amount_format')),
+      );
+    });
+
+    test('loan_adjustments con tipo no-List rechaza con invalid_json',
+        () async {
+      await seedLoanConAjustes();
+      final decoded =
+          jsonDecode(await backup.exportToJson()) as Map<String, dynamic>;
+      decoded['loan_adjustments'] = 'no soy una lista';
+      expect(
+        () => backup.importFromJson(jsonEncode(decoded)),
+        throwsA(
+            isA<BackupError>().having((e) => e.code, 'code', 'invalid_json')),
+      );
+    });
+
+    test('wipeAll borra los ajustes sin violar la FK contra loans', () async {
+      await seedLoanConAjustes();
+      await backup.wipeAll();
+      final rows =
+          await db.customSelect('SELECT COUNT(*) AS c FROM loan_adjustments')
+              .getSingle();
+      expect(rows.read<int>('c'), 0);
     });
   });
 }

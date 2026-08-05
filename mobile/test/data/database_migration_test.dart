@@ -651,4 +651,148 @@ void main() {
 
     await db.close();
   });
+
+  // ==========================================================================
+  // Sprint flutter-loans-flexible-payments-v1 — schemaVersion 15
+  // ==========================================================================
+
+  Future<bool> tableExists(FincoreDatabase db, String table) async {
+    final row = await db
+        .customSelect(
+          "SELECT COUNT(*) AS c FROM sqlite_master "
+          "WHERE type = 'table' AND name = '$table'",
+          readsFrom: const {},
+        )
+        .getSingle();
+    return row.read<int>('c') > 0;
+  }
+
+  /// Simula una BD en v14 dropeando la tabla que introduce la v15.
+  ///
+  /// `seed` corre ANTES del drop: los DAOs de préstamo referencian
+  /// `loan_adjustments` en su SQL de saldo, así que sin la tabla no se puede
+  /// sembrar nada.
+  Future<FincoreDatabase> openAtV14({
+    Future<void> Function(FincoreDatabase db)? seed,
+  }) async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll(); // fuerza onCreate
+    if (seed != null) await seed(db);
+    await db.customStatement('DROP INDEX IF EXISTS idx_loan_adjustments_loan');
+    await db.customStatement('DROP TABLE IF EXISTS loan_adjustments');
+    return db;
+  }
+
+  test(
+      'MG-LF-01: la migración 14 → 15 crea loan_adjustments con los tipos '
+      'correctos', () async {
+    final db = await openAtV14();
+    expect(await tableExists(db, 'loan_adjustments'), isFalse,
+        reason: 'precondición: la tabla no existe en v14');
+
+    await db.migration.onUpgrade(db.createMigrator(), 14, 15);
+
+    // `amount` es INTEGER porque son centavos con signo (RN-IC-01).
+    expect(await declaredType(db, 'loan_adjustments', 'amount'), 'INTEGER');
+    expect(await declaredType(db, 'loan_adjustments', 'id'), 'TEXT');
+    expect(await declaredType(db, 'loan_adjustments', 'loan_id'), 'TEXT');
+    expect(await declaredType(db, 'loan_adjustments', 'reason'), 'TEXT');
+    // `store_date_time_values_as_text: true` en build.yaml.
+    expect(await declaredType(db, 'loan_adjustments', 'occurred_at'), 'TEXT');
+    expect(await declaredType(db, 'loan_adjustments', 'deleted_at'), 'TEXT');
+    await db.close();
+  });
+
+  test('MG-LF-02: la migración crea el índice parcial por loan_id', () async {
+    final db = await openAtV14();
+    await db.migration.onUpgrade(db.createMigrator(), 14, 15);
+
+    final rows = await db
+        .customSelect("SELECT name FROM sqlite_master WHERE type = 'index' "
+            "AND tbl_name = 'loan_adjustments'")
+        .get();
+    expect(rows.map((r) => r.read<String>('name')),
+        contains('idx_loan_adjustments_loan'));
+    await db.close();
+  });
+
+  test(
+      'MG-LF-03: la migración 14 → 15 es idempotente (CB-12)', () async {
+    final db = await openAtV14();
+    await db.migration.onUpgrade(db.createMigrator(), 14, 15);
+    // Segunda pasada: el probe de `pragma_table_info` debe evitar el
+    // "table already exists" de `m.createTable`.
+    await db.migration.onUpgrade(db.createMigrator(), 14, 15);
+
+    final tables = await db
+        .customSelect("SELECT COUNT(*) AS c FROM sqlite_master "
+            "WHERE type = 'table' AND name = 'loan_adjustments'")
+        .getSingle();
+    expect(tables.read<int>('c'), 1);
+    await db.close();
+  });
+
+  test(
+      'MG-LF-04: las rutas defensivas X→15 crean la tabla sin lanzar (CB-13)',
+      () async {
+    for (final from in [5, 8, 11, 13, 14]) {
+      final db = await openAtV14();
+
+      await db.migration.onUpgrade(db.createMigrator(), from, 15);
+
+      expect(await declaredType(db, 'loan_adjustments', 'amount'), 'INTEGER',
+          reason: 'ruta $from→15 debe dejar la tabla creada');
+      // Y la cadena previa sigue aterrizando en centavos.
+      expect(await declaredType(db, 'journal_entries', 'amount'), 'INTEGER',
+          reason: 'ruta $from→15 debe conservar el paso a centavos de v14');
+      await db.close();
+    }
+  });
+
+  test(
+      'MG-LF-05: un préstamo con pagos conserva exactamente su saldo tras '
+      'migrar a v15 (CB-11)', () async {
+    late String loanId;
+    final db = await openAtV14(seed: (db) async {
+      final bolsa = await db.accountsDao.createBolsa();
+      loanId = await db.loansDao.create(
+        name: 'BBVA',
+        principalAmount: 3700000,
+        monthlyPayment: 250000,
+        initialDurationMonths: 24,
+        paymentDay: 5,
+        contractDate: DateTime.utc(2026, 5, 1),
+        destinationAccountId: bolsa,
+      );
+      await db.entriesDao.registerLoanPayment(
+        loanId: loanId,
+        accountOriginId: bolsa,
+        amount: 250000,
+        principalAmount: 210000,
+        interestAmount: 40000,
+        occurredAt: DateTime.utc(2026, 6, 5),
+        isMonthlyPayment: true,
+      );
+    });
+    // Saldo que el usuario tenía en v14, con la fórmula de dos términos.
+    const saldoEsperado = 3700000 - 210000;
+
+    await db.migration.onUpgrade(db.createMigrator(), 14, 15);
+
+    expect(await db.loansDao.balanceOf(loanId), saldoEsperado,
+        reason: 'sin ajustes, la fórmula de tres términos da lo mismo');
+    await db.close();
+  });
+
+  test(
+      'MG-LF-06: el guardrail sigue lanzando para un destino no implementado',
+      () async {
+    final db = FincoreDatabase(NativeDatabase.memory());
+    await db.accountsDao.listAll();
+    expect(
+      () => db.migration.onUpgrade(db.createMigrator(), 14, 99),
+      throwsA(isA<UnimplementedError>()),
+    );
+    await db.close();
+  });
 }

@@ -26,10 +26,17 @@ class FincoreTestHarness {
   final AppDependencies deps;
   final FirstRunState firstRunState;
 
+  /// Sprint flutter-loans-flexible-payments-v1: expuesto para poder navegar a
+  /// rutas cuyo path depende de un id generado DENTRO del `seed` (ej.
+  /// `/loans/:id`), que no se puede pasar por `initialRoute` porque todavía
+  /// no existe cuando se llama al harness.
+  final GoRouter router;
+
   FincoreTestHarness({
     required this.database,
     required this.deps,
     required this.firstRunState,
+    required this.router,
   });
 
   Future<void> dispose() async {
@@ -138,6 +145,7 @@ Future<FincoreTestHarness> pumpFincoreApp(
     database: database,
     deps: deps,
     firstRunState: firstRunState,
+    router: router,
   );
 }
 
