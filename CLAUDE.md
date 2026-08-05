@@ -55,6 +55,7 @@ dart run flutter_launcher_icons
 - **Account** (`lib/data/database.dart` tabla `accounts`): UUID v7 PK. `type ∈ { cash, debit, credit }`. La **Bolsa** es singleton: `type=cash`, `is_protected=true`, creada por `seedDefaults` al "Arrancar limpio". Los credit guardan `credit_limit` (NOT NULL DEFAULT 0 desde schema v5), `closing_day`, `payment_day`, `interest_rate`, `minimum_payment_pct`. Las tasas se guardan como decimal 0-1 (compat backup legacy: `0.05` = 5%); `interest_rate` y `minimum_payment_pct` quedan en schema por compat backup pero la UI ya no los expone. Acepta `description` (texto libre, máx 200).
 - **Category** (tabla `categories`): UUID v7 PK. `name`, `applies_to ∈ { income, expense, both }`, `color_slug` (1 de 10 colores curados), `icon_slug` (1 de ~30 iconos curados). Slugs en `lib/constants/category_catalog.dart`. SoftDelete: archived es terminal sin reactivación.
 - **JournalEntry** (tabla `journal_entries`): UUID v7 PK. `kind ∈ { income, expense, credit_expense, debt_payment, transfer, loan_payment }`. `account_origin_id` y `account_destination_id` opcionales según kind. Los `loan_payment` guardan además `loan_id`, `principal_amount`, `interest_amount` e `is_monthly_payment`. Soft delete para cancelación.
+- **LoanAdjustment** (tabla `loan_adjustments`, sprint `flutter-loans-flexible-payments-v1`): UUID v7 PK. `loan_id`, `amount` (centavos **con signo**: `+` sube la deuda, `−` la baja, nunca `0`), `reason` opcional (máx 200), `occurred_at`. Corrige el saldo pendiente **sin tocar `principal_amount`**. No es un movimiento de dinero: no genera `journal_entry` ni altera BO/DE/CR. Soft delete.
 - **Loan** (tabla `loans`, sprint `flutter-loans-v1`): UUID v7 PK. `name`, `principal_amount`, `monthly_payment`, `initial_duration_months`, `current_duration_months`, `payment_day` (1-28), `contract_date`, `destination_account_id` (cash/debit — inmutable). Estados: activo (`closed_at IS NULL`), `paid` (auto tras saldo ≤ 0), `manual` (cerrado por usuario). Soft delete cascada income + pagos.
 
 ### Kinds y reglas tipo↔cuenta (RN-011)
@@ -84,7 +85,7 @@ Los gastos, transfers y cargos a tarjeta se permiten **siempre**, incluso si dej
 
 ```
 data/
-├── database.dart           # Tablas drift + índices + schemaVersion=14 + PRAGMA foreign_keys=ON
+├── database.dart           # Tablas drift + índices + schemaVersion=15 + PRAGMA foreign_keys=ON
 ├── database.g.dart         # Generado por build_runner (no editar)
 ├── uuid.dart               # UuidV7 compatible con backend Laravel HasUuids
 ├── daos/
@@ -140,27 +141,56 @@ Consecuencia lateral: un `int` de Dart no puede ser NaN ni Infinity, así que lo
 
 **Migrar una columna monetaria nueva**: declararla `IntColumn` y, si tiene default, expresarlo en centavos (`minimum_floor` pasó de `150` a `15000`). La conversión de una columna REAL existente va por `m.alterTable` con `columnTransformer`, nunca por `UPDATE` — SQLite tiene *type affinity* y un `UPDATE` sobre una columna declarada REAL vuelve a guardar el valor como REAL.
 
-### Backup JSON v3
+### Préstamos flexibles (sprint `flutter-loans-flexible-payments-v1`, schema v15)
 
-Bumpeado a v3 en el sprint `flutter-integer-cents-v1`. Los montos se emiten como `int` en centavos:
+El modelo original asumía que todo préstamo se paga **una vez al mes**. El préstamo real de Diego es quincenal, así que esa suposición se retiró:
+
+- **RN-LF-01**: se admiten **N** pagos con `is_monthly_payment = 1` en el mismo mes calendario. El error `duplicate_monthly_payment` ya no existe.
+- **RN-LF-02**: un abono a capital se registra en cualquier fecha, con o sin pago del mes previo. El error `capital_before_monthly` ya no existe.
+- **RN-LF-03**: `is_monthly_payment` sobrevive como **etiqueta descriptiva** en el historial ("Pago del mes" vs "Abono a capital"), sin poder de validación.
+- **RN-LF-04**: eliminar un pago nunca arrastra otros. La cascada `cascadeCapitalInMonth` se retiró junto con el candado que la justificaba.
+- **RN-LF-12**: el Dashboard no calcula atraso por mes calendario. El chip rojo "N meses atrasados" y todo `watchMonthsOverdue` desaparecieron; sobrevive el chip naranja de próximo pago basado en `payment_day`.
+- **RN-LF-13**: el `CategoryPicker` no tiene sección de "recientes". Era un MRU en memoria de proceso que aparecía y desaparecía sin patrón visible.
+
+**Saldo de un préstamo (RN-LF-05)** — tres términos:
+
+```
+saldo = principal_amount + Σ(ajustes.amount) − Σ(pagos.principal_amount)
+```
+
+`principal_amount` es **inmutable como concepto histórico**: es lo que te prestaron y ningún ajuste lo modifica (RN-LF-06).
+
+**Ojo**: la fórmula vive duplicada en dos sitios y los dos deben cambiar juntos — `LoansDao._balanceSql` (por préstamo) y `FinancialStateService._buildTotalLoansSource` (agregado del Dashboard). El segundo no puede reusar el primero porque agrega sobre todos los préstamos activos.
+
+**Ajustes de saldo**: dos asimetrías deliberadas frente a los pagos. Se puede ajustar un préstamo **cerrado** (RN-LF-10 — es el caso de uso central: el banco corrige algo que la app dio por liquidado, y el ajuste lo reabre si el saldo vuelve a ser positivo), y se acepta `occurred_at` anterior a `contract_date` (un ajuste puede estar corrigiendo la captura del monto original). Un ajuste que dejaría el saldo negativo se rechaza con `invalid_adjustment` (RN-LF-07); el cálculo corre **dentro de la transacción** y la edición se excluye a sí misma del saldo base.
+
+`applyPaymentSideEffects` conserva su nombre pero ya no lo disparan sólo los pagos: las tres mutaciones de ajuste también lo llaman. Es la reevaluación de estado del préstamo ante cualquier cambio de saldo.
+
+### Backup JSON v4
+
+Bumpeado a v3 en `flutter-integer-cents-v1` (montos en centavos) y a **v4** en `flutter-loans-flexible-payments-v1` (clave `loan_adjustments`). Los montos se emiten como `int` en centavos:
 
 ```json
 {
-  "version": 3,
+  "version": 4,
   "exported_at": "ISO 8601",
   "accounts": [...],
   "categories": [...],
   "journal_entries": [{ "amount": 17377, ... }],
-  "loans": [...]
+  "loans": [...],
+  "loan_adjustments": [{ "amount": 10000, "loan_id": "...", ... }]
 }
 ```
 
-Export siempre emite v3. Import acepta v1, v2 y v3:
+Export siempre emite v4. Import acepta v1, v2, v3 y v4:
 
 - **v1/v2**: los montos vienen como `double` en unidades; se validan `isFinite` y se convierten con `centsFromDouble`.
-- **v3**: los montos deben ser `int`. Un `double` se rechaza con `invalid_amount_format` — no se convierte en silencio, porque rompería la invariante del formato.
+- **v3/v4**: los montos deben ser `int`. Un `double` se rechaza con `invalid_amount_format` — no se convierte en silencio, porque rompería la invariante del formato.
+- **v1/v2/v3**: sin `loan_adjustments`; se trata como lista vacía.
 
-El historial: v1 era bit a bit compatible con `/api/finance/backup/export` del backend legacy; v2 agregó `loans` + los campos de split; v3 cambió la unidad. **v3 ya no es importable por el backend Laravel** (fuera de scope; necesitaría su propio converter).
+El historial: v1 era bit a bit compatible con `/api/finance/backup/export` del backend legacy; v2 agregó `loans` + los campos de split; v3 cambió la unidad; v4 agregó los ajustes de saldo. **v3+ ya no es importable por el backend Laravel** (fuera de scope; necesitaría su propio converter).
+
+**Ruptura hacia atrás en cada bump de formato**: un export v4 no lo lee la 0.33.0. Antes de instalar una versión que suba el formato hay que dejar en `~/fincore-respaldos/` el APK saliente y un export con el formato viejo — bajar de versión obliga a desinstalar, y eso borra la BD.
 
 Export: serializa solo activos (`deleted_at IS NULL`). Import: reemplazo total (`wipeAll()` + insert) dentro de transacción. Errores tipados: `invalid_json`, `unsupported_version`, `invalid_amount_format`, `missing_bolsa`, `invalid_reference`.
 
@@ -259,8 +289,7 @@ Los DAOs lanzan errores con código y mensaje. Los mismos códigos del backend l
 | `not_found` | `EntriesDao.findById` | sí |
 | `unsupported_version` / `missing_bolsa` / `invalid_reference` / `invalid_json` | `BackupService.importFromJson` | sí |
 | `overpay_loan` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
-| `duplicate_monthly_payment` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
-| `capital_before_monthly` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
+| `invalid_adjustment` | `LoansDao.registerAdjustment/updateAdjustment` | sí |
 | `invalid_loan_split` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
 | `payment_before_contract` | `EntriesDao.registerLoanPayment/updateLoanPayment` | sí |
 | `loan_closed` | `EntriesDao.registerLoanPayment` | sí |
