@@ -205,11 +205,19 @@ class FinancialStateService {
         .stream;
   }
 
+  /// Nota (sprint flutter-loans-flexible-payments-v1): esta query replica la
+  /// fórmula de saldo de `LoansDao._balanceSql` en vez de reusarla, porque
+  /// agrega sobre TODOS los préstamos activos y `_balanceSql` está escrita
+  /// para un `?1` puntual. Es duplicación consciente: si RN-LF-05 cambia,
+  /// **los dos sitios** deben cambiar. El término de ajustes se agregó aquí
+  /// en el mismo commit por exactamente esa razón.
   Stream<int> _buildTotalLoansSource() {
     const sql = '''
       SELECT COALESCE(SUM(saldo), 0) AS total FROM (
         SELECT l.id,
           (l.principal_amount
+          + COALESCE((SELECT SUM(amount) FROM loan_adjustments
+                     WHERE loan_id = l.id AND deleted_at IS NULL), 0)
           - COALESCE((SELECT SUM(principal_amount) FROM journal_entries
                      WHERE loan_id = l.id AND kind = 'loan_payment' AND deleted_at IS NULL), 0)) AS saldo
         FROM loans l
@@ -217,7 +225,8 @@ class FinancialStateService {
       )
     ''';
     return _db
-        .customSelect(sql, readsFrom: {_db.loans, _db.journalEntries})
+        .customSelect(sql,
+            readsFrom: {_db.loans, _db.journalEntries, _db.loanAdjustments})
         .map((row) => row.read<int>('total'))
         .watchSingle();
   }

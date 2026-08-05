@@ -149,8 +149,10 @@ class JournalEntries extends Table {
 // =============================================================================
 // Préstamos personales que Diego recibe (bancarios, hipoteca, auto, amigos).
 // Entidad autónoma — NO es una Account virtual. El saldo pendiente se deriva
-// on-the-fly de `journal_entries` con `kind='loan_payment' AND loan_id=X`:
-//   saldo = principal_amount − Σ(loan_payment.principal_amount).
+// on-the-fly de `journal_entries` con `kind='loan_payment' AND loan_id=X` y de
+// los ajustes manuales de `loan_adjustments` (sprint
+// flutter-loans-flexible-payments-v1):
+//   saldo = principal_amount + Σ(ajustes.amount) − Σ(loan_payment.principal_amount).
 //
 // Cada Loan tiene un `income` inicial ligado por `loan_id` (creado
 // atómicamente en `LoansDao.create`) que representa el desembolso en
@@ -169,6 +171,8 @@ class JournalEntries extends Table {
 // (RN-L01, RN-L02) porque están atados al `income` inicial. `monthly_payment`,
 // `current_duration_months`, `payment_day`, `contract_date`, `name` sí son
 // editables.
+// Nota (sprint flutter-loans-flexible-payments-v1): los estados `paid` también
+// se reabren cuando un ajuste positivo devuelve el saldo por encima de cero.
 class Loans extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
@@ -183,6 +187,53 @@ class Loans extends Table {
       text().references(Accounts, #id)();
   DateTimeColumn get closedAt => dateTime().nullable()();
   TextColumn get closeReason => text().nullable()(); // 'paid' | 'manual'
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// =============================================================================
+// Tabla: loan_adjustments (sprint flutter-loans-flexible-payments-v1)
+// =============================================================================
+// Corrige el saldo pendiente de un préstamo sin falsear `principal_amount`.
+//
+// Caso real que la originó: el banco de Diego subió el saldo del préstamo sin
+// explicación y sin que mediara movimiento de dinero. Con un saldo derivado de
+// dos términos, la única forma de reflejarlo habría sido reescribir el monto
+// originalmente prestado — dato histórico que no debe tocarse (RN-L01).
+//
+// `amount` va CON SIGNO y en centavos:
+//   • positivo → sube la deuda,
+//   • negativo → la baja.
+// Nunca cero: un ajuste de cero no significa nada y se rechaza en el DAO con
+// `invalid_adjustment`.
+//
+// Un ajuste NO es un movimiento de dinero: no genera `journal_entry`, no
+// referencia cuentas y no altera BO/DE/CR ni ningún reporte de flujo
+// (RN-LF-08). Es un evento del préstamo y sólo afecta su saldo.
+//
+// Dos asimetrías deliberadas frente a los pagos:
+//   • se permite ajustar un préstamo CERRADO (es el caso de uso central: el
+//     banco ajusta algo que la app ya dio por liquidado, y el ajuste debe
+//     poder reabrirlo);
+//   • se permite `occurred_at` anterior a `contract_date` (un ajuste puede
+//     estar corrigiendo un error en la captura del monto original).
+//
+// Soft delete terminal, consistente con el resto del modelo.
+class LoanAdjustments extends Table {
+  TextColumn get id => text()();
+  TextColumn get loanId => text().references(Loans, #id)();
+
+  /// Centavos con signo. Positivo sube la deuda, negativo la baja.
+  IntColumn get amount => integer()();
+
+  /// Motivo libre. Diego no siempre sabe por qué el banco ajustó, así que es
+  /// opcional; cuando lo sabe, queda el rastro.
+  TextColumn get reason => text().nullable()();
+  DateTimeColumn get occurredAt => dateTime()();
   DateTimeColumn get createdAt => dateTime()();
   DateTimeColumn get updatedAt => dateTime()();
   DateTimeColumn get deletedAt => dateTime().nullable()();
@@ -338,6 +389,7 @@ class AppPreferences extends Table {
     Categories,
     JournalEntries,
     Loans,
+    LoanAdjustments,
     SavedViews,
     AppPreferences,
     WeeklyBudgets,
@@ -358,7 +410,7 @@ class FincoreDatabase extends _$FincoreDatabase {
       : super(executor ?? driftDatabase(name: 'fincore'));
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -442,8 +494,36 @@ class FincoreDatabase extends _$FincoreDatabase {
             'CREATE INDEX IF NOT EXISTS idx_loans_dest_account '
             'ON loans(destination_account_id) WHERE deleted_at IS NULL',
           );
+          // Sprint flutter-loans-flexible-payments-v1 (schemaVersion 15).
+          await customStatement(
+            'CREATE INDEX IF NOT EXISTS idx_loan_adjustments_loan '
+            'ON loan_adjustments(loan_id) WHERE deleted_at IS NULL',
+          );
         },
         onUpgrade: (m, from, to) async {
+          // Migración X → 15 (sprint flutter-loans-flexible-payments-v1):
+          // crea `loan_adjustments`. Es la primera migración PURAMENTE
+          // ADITIVA desde la v11: una tabla nueva, cero transformación de
+          // datos existentes. En el peor caso la tabla queda vacía; ninguna
+          // fila del usuario está en riesgo.
+          //
+          // Por qué una sola rama y no 10 ramas defensivas X→15: las ramas
+          // X→14 ya son nueve y replicarlas duplicaría el bloque sin agregar
+          // información — el paso de v15 es idéntico venga de donde venga.
+          // En vez de eso delegamos la cadena previa hasta 14 y agregamos
+          // el paso nuevo al final.
+          //
+          // El guardrail RN-H02 sigue intacto: si `from` no tiene ruta
+          // implementada hasta 14, la llamada delegada lanza
+          // `UnimplementedError` igual que antes. Una versión de origen sin
+          // soporte no pasa silenciosamente.
+          if (to == 15) {
+            if (from < 14) {
+              await migration.onUpgrade(m, from, 14);
+            }
+            await _createLoanAdjustmentsSchema(m);
+            return;
+          }
           // Migración 1 → 2 (RF-011 + RN-H02): agrega el índice parcial nuevo
           // a instalaciones existentes sin tocar datos del usuario.
           if (from == 1 && to == 2) {
@@ -1397,6 +1477,27 @@ class FincoreDatabase extends _$FincoreDatabase {
     await customStatement(
       'CREATE INDEX IF NOT EXISTS idx_loans_dest_account '
       'ON loans(destination_account_id) WHERE deleted_at IS NULL',
+    );
+  }
+
+  /// Sprint flutter-loans-flexible-payments-v1 (schemaVersion 15): crea la
+  /// tabla `loan_adjustments` y su índice parcial.
+  ///
+  /// Idempotente vía probe contra `pragma_table_info`, mismo patrón que
+  /// `_maybeAddColumn` y `_convertMoneyColumnsToInteger`. Hace falta porque
+  /// `m.createTable` NO emite `IF NOT EXISTS`: correrlo dos veces sobre la
+  /// misma BD lanzaría "table already exists". El caso no es hipotético — las
+  /// rutas defensivas de migración se ejercitan varias veces en los tests.
+  Future<void> _createLoanAdjustmentsSchema(Migrator m) async {
+    final probe = await customSelect(
+      "SELECT COUNT(*) AS c FROM pragma_table_info('loan_adjustments')",
+    ).getSingle();
+    if (probe.read<int>('c') == 0) {
+      await m.createTable(loanAdjustments);
+    }
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_loan_adjustments_loan '
+      'ON loan_adjustments(loan_id) WHERE deleted_at IS NULL',
     );
   }
 

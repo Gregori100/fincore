@@ -8,6 +8,7 @@ mixin _$LoansDaoMixin on DatabaseAccessor<FincoreDatabase> {
   $LoansTable get loans => attachedDatabase.loans;
   $CategoriesTable get categories => attachedDatabase.categories;
   $JournalEntriesTable get journalEntries => attachedDatabase.journalEntries;
+  $LoanAdjustmentsTable get loanAdjustments => attachedDatabase.loanAdjustments;
   LoansDaoManager get managers => LoansDaoManager(this);
 }
 
@@ -24,5 +25,10 @@ class LoansDaoManager {
       $$JournalEntriesTableTableManager(
         _db.attachedDatabase,
         _db.journalEntries,
+      );
+  $$LoanAdjustmentsTableTableManager get loanAdjustments =>
+      $$LoanAdjustmentsTableTableManager(
+        _db.attachedDatabase,
+        _db.loanAdjustments,
       );
 }
