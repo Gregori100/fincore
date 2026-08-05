@@ -126,6 +126,19 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
     return row.read<int>(attachedDatabase.journalEntries.id.count()) ?? 0;
   }
 
+  /// Cuenta los ajustes de saldo activos de un préstamo. Hallazgo M2 de la
+  /// revisión de rama: el `DestructiveDialog` de eliminar préstamo declaraba
+  /// el impacto sobre pagos e ingreso inicial pero callaba los ajustes, que
+  /// desde la corrección de B1 también se cancelan en cascada.
+  Future<int> countActiveAdjustments(String loanId) async {
+    final row = await customSelect(
+      'SELECT COUNT(*) AS c FROM loan_adjustments '
+      'WHERE loan_id = ?1 AND deleted_at IS NULL',
+      variables: [Variable.withString(loanId)],
+    ).getSingle();
+    return row.read<int>('c');
+  }
+
   // -----------------------------------------------------------------------
   // Writes
   // -----------------------------------------------------------------------
@@ -314,10 +327,10 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
   /// mutaciones de ajuste) — no abre transacción propia. Idempotente: si el
   /// estado ya coincide con la política, no escribe.
   ///
-  /// El nombre quedó corto: ya no son sólo "payment side effects" sino la
-  /// reevaluación de estado del préstamo ante cualquier cambio de saldo.
-  /// Renombrarlo tocaría seis llamadores y ensuciaría el diff funcional del
-  /// sprint; queda anotado como deuda menor.
+  /// Se llamaba `applyPaymentSideEffects` hasta el hallazgo M4 de la revisión
+  /// de rama: el nombre sugería que sólo lo disparaban los pagos, cuando las
+  /// tres mutaciones de ajuste también lo invocan. Es la reevaluación de
+  /// estado del préstamo ante cualquier cambio de saldo.
   ///
   /// Reglas (RN-L11/L12/L13 + RN-LF-09):
   ///  • Si `closeReason == 'manual'`: nunca toca (RN-L13).
@@ -327,7 +340,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
   /// Las comparaciones eran `<= 0.005` / `> 0.005` heredadas de la era
   /// `double`. Con `balance` en centavos enteros la tolerancia es ruido que
   /// contradice RN-IC-05.
-  Future<void> applyPaymentSideEffects({
+  Future<void> recalculateLoanState({
     required String loanId,
     required DateTime now,
   }) async {
@@ -425,6 +438,17 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
             ..where((e) =>
                 e.loanId.equals(id) & e.deletedAt.isNull()))
           .write(JournalEntriesCompanion(
+        deletedAt: Value(now),
+        updatedAt: Value(now),
+      ));
+      // Hallazgo B1 de la revisión de rama (2026-08-05): sin esta cascada los
+      // ajustes sobrevivían al borrado del préstamo. El export los emitía
+      // (su propio `deleted_at` seguía nulo) pero omitía el préstamo, así que
+      // el respaldo resultante fallaba al importar con `invalid_reference`.
+      // El usuario no se enteraba al exportar sino al intentar restaurar.
+      await (update(attachedDatabase.loanAdjustments)
+            ..where((a) => a.loanId.equals(id) & a.deletedAt.isNull()))
+          .write(LoanAdjustmentsCompanion(
         deletedAt: Value(now),
         updatedAt: Value(now),
       ));
@@ -582,6 +606,13 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         .getSingleOrNull();
   }
 
+  /// Longitud máxima del motivo de un ajuste. Hallazgo M1 de la revisión de
+  /// rama: el límite estaba declarado en `CLAUDE.md` y aplicado sólo por el
+  /// `maxLength` del formulario, mientras el import aceptaba hasta 1000 y el
+  /// DAO no validaba nada. La UI no puede ser la única barrera — `CLAUDE.md`
+  /// declara que el dominio vive en los DAOs.
+  static const int kMaxAdjustmentReasonLength = 200;
+
   /// Valida un ajuste contra el saldo del préstamo (RN-LF-07).
   ///
   /// `excludeAdjustmentId` permite que una EDICIÓN se excluya a sí misma del
@@ -593,12 +624,19 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
   Future<void> _validateAdjustment({
     required String loanId,
     required int amount,
+    String? reason,
     String? excludeAdjustmentId,
   }) async {
     if (amount == 0) {
       throw const LoansDaoError(
         'invalid_adjustment',
         'El ajuste no puede ser de cero.',
+      );
+    }
+    if (reason != null && reason.length > kMaxAdjustmentReasonLength) {
+      throw const LoansDaoError(
+        'invalid_adjustment',
+        'El motivo del ajuste no puede exceder 200 caracteres.',
       );
     }
     var base = await balanceOf(loanId);
@@ -641,7 +679,8 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
       if (loan == null) {
         throw const LoansDaoError('not_found', 'El préstamo no existe.');
       }
-      await _validateAdjustment(loanId: loanId, amount: amount);
+      await _validateAdjustment(
+          loanId: loanId, amount: amount, reason: reason);
       await into(attachedDatabase.loanAdjustments)
           .insert(LoanAdjustmentsCompanion.insert(
         id: id,
@@ -652,7 +691,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         createdAt: now,
         updatedAt: now,
       ));
-      await applyPaymentSideEffects(loanId: loanId, now: now);
+      await recalculateLoanState(loanId: loanId, now: now);
     });
     return id;
   }
@@ -675,6 +714,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
       await _validateAdjustment(
         loanId: existing.loanId,
         amount: amount,
+        reason: reason,
         excludeAdjustmentId: id,
       );
       await (update(attachedDatabase.loanAdjustments)
@@ -685,7 +725,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         occurredAt: Value(occurredAt),
         updatedAt: Value(now),
       ));
-      await applyPaymentSideEffects(loanId: existing.loanId, now: now);
+      await recalculateLoanState(loanId: existing.loanId, now: now);
     });
   }
 
@@ -729,7 +769,7 @@ class LoansDao extends DatabaseAccessor<FincoreDatabase>
         deletedAt: Value(now),
         updatedAt: Value(now),
       ));
-      await applyPaymentSideEffects(loanId: existing.loanId, now: now);
+      await recalculateLoanState(loanId: existing.loanId, now: now);
     });
   }
 }

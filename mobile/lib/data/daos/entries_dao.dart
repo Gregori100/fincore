@@ -463,7 +463,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       ));
       // Hotfix quality-review M2: auto-close/reopen unificado en helper.
       await attachedDatabase.loansDao
-          .applyPaymentSideEffects(loanId: loanId, now: now);
+          .recalculateLoanState(loanId: loanId, now: now);
     });
     return id;
   }
@@ -586,7 +586,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       );
       // Hotfix quality-review M2: auto-close/reopen unificado.
       await attachedDatabase.loansDao
-          .applyPaymentSideEffects(loanId: loanId, now: now);
+          .recalculateLoanState(loanId: loanId, now: now);
     });
   }
 
@@ -638,7 +638,7 @@ class EntriesDao extends DatabaseAccessor<FincoreDatabase>
       // RN-L13 (cerrado manual nunca reabre) porque el helper filtra
       // closeReason == 'manual' antes de tocar.
       await attachedDatabase.loansDao
-          .applyPaymentSideEffects(loanId: loanId, now: now);
+          .recalculateLoanState(loanId: loanId, now: now);
     });
   }
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:characters/characters.dart';
 import 'package:drift/drift.dart';
 import 'package:fincore/constants/category_catalog.dart';
+import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/data/financial_state.dart';
 import 'package:fincore/utils/money.dart';
@@ -142,9 +143,25 @@ class BackupService {
     // Sprint flutter-loans-flexible-payments-v1: los ajustes de saldo son
     // parte del estado financiero del préstamo — sin ellos el saldo
     // restaurado sería distinto del que el usuario tenía.
-    final activeAdjustments = await (_db.select(_db.loanAdjustments)
+    final allActiveAdjustments = await (_db.select(_db.loanAdjustments)
           ..where((a) => a.deletedAt.isNull()))
         .get();
+    // Hallazgo B1 de la revisión de rama (2026-08-05): guardrail defensivo.
+    // El import rechaza con `invalid_reference` cualquier ajuste cuyo
+    // préstamo no venga en el payload, así que un ajuste huérfano no sólo
+    // se pierde: hace que el respaldo ENTERO deje de ser importable, y el
+    // usuario se entera al restaurar, no al exportar.
+    //
+    // La causa raíz (la cascada faltante en `deleteLoan`) ya está corregida,
+    // pero este filtro sigue siendo necesario para que las instalaciones que
+    // ya generaron huérfanos con la versión defectuosa puedan volver a
+    // producir respaldos válidos. Preferimos perder un ajuste que ya no
+    // significa nada (su préstamo no existe) antes que emitir un archivo
+    // inservible.
+    final exportedLoanIds = activeLoans.map((l) => l.id).toSet();
+    final activeAdjustments = allActiveAdjustments
+        .where((a) => exportedLoanIds.contains(a.loanId))
+        .toList();
 
     // Sprint flutter-weekly-budgets-v1 (RN-B13): las 4 tablas del planeador
     // semanal (weekly_budgets, weekly_budget_items
@@ -913,7 +930,11 @@ class BackupService {
     _validateUuid('loan_adjustments.id', id);
     _validateUuid('loan_adjustments.loan_id', loanId);
     if (reason != null) {
-      _validateLength('loan_adjustments.reason', reason, _kMaxDescriptionLength);
+      // Hallazgo M1: alineado al límite del DAO (200), no al genérico de
+      // descripciones (1000). El import no debe admitir un estado que
+      // `registerAdjustment` rechaza.
+      _validateLength('loan_adjustments.reason', reason,
+          LoansDao.kMaxAdjustmentReasonLength);
     }
     if (amount == 0) {
       throw const BackupError(

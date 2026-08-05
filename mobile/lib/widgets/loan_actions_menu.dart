@@ -90,8 +90,11 @@ class _LoanActionsMenuState extends State<LoanActionsMenu> {
     final deps = AppDependencies.of(context);
     setState(() => _busy = true);
     final int payments;
+    final int adjustments;
     try {
       payments = await deps.loansDao.countActivePayments(widget.loan.id);
+      adjustments =
+          await deps.loansDao.countActiveAdjustments(widget.loan.id);
     } catch (e) {
       if (mounted) {
         showErrorSnackbar(context, e);
@@ -117,6 +120,16 @@ class _LoanActionsMenuState extends State<LoanActionsMenu> {
             : '$payments ${payments == 1 ? "pago" : "pagos"} '
                 '${payments == 1 ? "se cancelará" : "se cancelarán"}',
       ),
+      // Hallazgo M2 de la revisión de rama: los ajustes también se cancelan
+      // en cascada desde la corrección de B1, así que el diálogo debe
+      // declararlo. Se omite la línea cuando no hay ajustes para no añadir
+      // ruido al caso común.
+      if (adjustments > 0)
+        DestructiveImpact(
+          icon: Icons.tune_outlined,
+          label: '$adjustments ${adjustments == 1 ? "ajuste" : "ajustes"} '
+              'de saldo ${adjustments == 1 ? "se cancelará" : "se cancelarán"}',
+        ),
       DestructiveImpact(
         icon: Icons.account_balance_wallet_outlined,
         label:
