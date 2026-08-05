@@ -10,6 +10,7 @@ import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/icon_picker.dart';
 import 'package:fincore/utils/money.dart';
+import 'package:fincore/widgets/amount_input_formatter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -71,10 +72,10 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
         // valor es entero para que no se vea "5000.00" cuando el usuario
         // escribió "5000".
         if (c.monthlyLimit != null) {
-          final v = c.monthlyLimit!;
-          _monthlyLimitCtrl.text = v == v.truncateToDouble()
-              ? v.toInt().toString()
-              : v.toStringAsFixed(2);
+          // `monthlyLimit` son centavos enteros desde schema v14:
+          // `formatAmountForInput` ya omite los decimales cuando son cero,
+          // así que "5000" sigue viéndose "5,000" y no "5,000.00".
+          _monthlyLimitCtrl.text = formatAmountForInput(c.monthlyLimit!);
         }
       });
     } on CategoriesDaoError catch (e) {

@@ -8,6 +8,7 @@ import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_balance_hint.dart';
 import 'package:fincore/widgets/account_picker.dart';
 import 'package:fincore/utils/money.dart';
+import 'package:fincore/widgets/amount_input_formatter.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -83,7 +84,7 @@ class _LoanCapitalPaymentFormState extends State<LoanCapitalPaymentForm> {
         if (entry == null) {
           throw const EntriesDaoError('not_found', 'Pago no encontrado.');
         }
-        _amountCtrl.text = entry.entry.amount.toStringAsFixed(2);
+        _amountCtrl.text = formatAmountForInput(entry.entry.amount);
         _occurredAt = entry.entry.occurredAt;
         _originId = entry.entry.accountOriginId;
         _descCtrl.text = entry.entry.description ?? '';
@@ -168,7 +169,7 @@ class _LoanCapitalPaymentFormState extends State<LoanCapitalPaymentForm> {
       if (mounted) {
         final balance = await deps.loansDao.balanceOf(widget.loanId);
         if (mounted) {
-          if (balance <= 0.005) {
+          if (balance <= 0) {
             showSuccessSnackbar(context, 'Préstamo pagado en su totalidad.');
           } else {
             showSuccessSnackbar(context,
@@ -230,7 +231,8 @@ class _LoanCapitalPaymentFormState extends State<LoanCapitalPaymentForm> {
                 onSaldar: _balance > 0
                     ? () {
                         setState(() {
-                          _amountCtrl.text = _balance.toStringAsFixed(2);
+                          _amountCtrl.text =
+                              formatAmountForInput(_balance);
                         });
                       }
                     : null,

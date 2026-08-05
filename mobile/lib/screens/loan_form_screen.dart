@@ -5,6 +5,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_picker.dart';
+import 'package:fincore/widgets/amount_input_formatter.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/loan_actions_menu.dart';
 import 'package:fincore/utils/money.dart';
@@ -75,8 +76,8 @@ class _LoanFormScreenState extends State<LoanFormScreen> {
         }
         _existing = loan;
         _nameCtrl.text = loan.name;
-        _principalCtrl.text = loan.principalAmount.toStringAsFixed(2);
-        _monthlyCtrl.text = loan.monthlyPayment.toStringAsFixed(2);
+        _principalCtrl.text = formatAmountForInput(loan.principalAmount);
+        _monthlyCtrl.text = formatAmountForInput(loan.monthlyPayment);
         _durationCtrl.text = loan.currentDurationMonths.toString();
         _paymentDayCtrl.text = loan.paymentDay.toString();
         _contractDate = loan.contractDate;

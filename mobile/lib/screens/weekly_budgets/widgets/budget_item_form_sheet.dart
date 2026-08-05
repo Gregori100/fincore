@@ -121,14 +121,10 @@ class _BudgetItemFormSheetState extends State<BudgetItemFormSheet> {
     super.dispose();
   }
 
-  /// Evita ceros de más al precargar en edición: `150.0` → `"150"`,
-  /// `150.5` → `"150.5"`.
-  String _formatInitialAmount(int amount) {
-    if (amount == amount.truncateToDouble()) {
-      return amount.toStringAsFixed(0);
-    }
-    return amount.toString();
-  }
+  /// Precarga el monto en edición. `amount` son centavos enteros desde el
+  /// schema v14, así que `15000` debe renderizarse como `"150"` y no como
+  /// `"15000"`. `formatAmountForInput` omite los decimales cuando son cero.
+  String _formatInitialAmount(int amount) => formatAmountForInput(amount);
 
   Future<void> _loadCategories() async {
     if (!mounted) return;

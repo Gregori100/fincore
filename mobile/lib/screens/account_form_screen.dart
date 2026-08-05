@@ -6,6 +6,7 @@ import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
 import 'package:fincore/theme/fincore_spacing.dart';
 import 'package:fincore/widgets/account_type_picker.dart';
+import 'package:fincore/widgets/amount_input_formatter.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
 import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
@@ -75,7 +76,8 @@ class _AccountFormScreenState extends State<AccountFormScreen> {
         _nameCtrl.text = account.name;
         _descCtrl.text = account.description ?? '';
         if (account.type == 'credit') {
-          _creditLimitCtrl.text = account.creditLimit.toStringAsFixed(2);
+          _creditLimitCtrl.text =
+              formatAmountForInput(account.creditLimit);
           _closingDayCtrl.text = account.closingDay?.toString() ?? '';
           _paymentDayCtrl.text = account.paymentDay?.toString() ?? '';
         }

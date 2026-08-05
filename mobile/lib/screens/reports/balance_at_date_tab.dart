@@ -181,7 +181,7 @@ class _BalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFlat = delta.abs() < 0.005;
+    final isFlat = delta == 0;
     final isUp = delta > 0;
     final deltaColor = isFlat
         ? FincoreColors.textSubtle
@@ -311,7 +311,7 @@ class _AccountRow extends StatelessWidget {
 
     // Delta del saldo visible.
     final visualDelta = displayNow - displayAtDate;
-    final isFlat = visualDelta.abs() < 0.005;
+    final isFlat = visualDelta == 0;
     final isUp = visualDelta > 0;
     final deltaColor = isFlat
         ? FincoreColors.textSubtle

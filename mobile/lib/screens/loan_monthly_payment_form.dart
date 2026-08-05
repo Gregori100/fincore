@@ -283,7 +283,7 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
     }
     // El slider + auto-sync garantizan `principal + interest = amount`, pero
     // por defensa validamos igual antes de mandar al DAO.
-    if ((_principal + _interest - _amount).abs() >= 0.005) {
+    if (_principal + _interest != _amount) {
       showErrorSnackbar(context,
           'La suma de capital + intereses debe ser igual al monto.');
       return;
@@ -323,7 +323,7 @@ class _LoanMonthlyPaymentFormState extends State<LoanMonthlyPaymentForm> {
       if (mounted) {
         final balance = await deps.loansDao.balanceOf(widget.loanId);
         if (mounted) {
-          if (balance <= 0.005) {
+          if (balance <= 0) {
             showSuccessSnackbar(context, 'Préstamo pagado en su totalidad.');
           } else {
             showSuccessSnackbar(context,
