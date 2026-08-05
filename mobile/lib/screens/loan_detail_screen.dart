@@ -1,5 +1,6 @@
 import 'package:fincore/app_dependencies.dart';
 import 'package:fincore/data/daos/entries_dao.dart';
+import 'package:fincore/data/daos/loans_dao.dart';
 import 'package:fincore/data/database.dart';
 import 'package:fincore/theme/fincore_colors.dart';
 import 'package:fincore/theme/fincore_radii.dart';
@@ -8,7 +9,6 @@ import 'package:fincore/theme/fincore_typography.dart';
 import 'package:fincore/utils/money.dart';
 import 'package:fincore/widgets/base_card.dart';
 import 'package:fincore/widgets/confirm_dialog.dart';
-import 'package:fincore/widgets/destructive_dialog.dart';
 import 'package:fincore/widgets/error_snackbar.dart';
 import 'package:fincore/widgets/loan_actions_menu.dart';
 import 'package:fincore/widgets/skeleton.dart';
@@ -32,6 +32,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
   Stream<Loan?>? _loanStream;
   Stream<int>? _balanceStream;
   Stream<List<JournalEntry>>? _paymentsStream;
+  // Sprint flutter-loans-flexible-payments-v1.
+  Stream<List<LoanAdjustment>>? _adjustmentsStream;
+  Stream<int>? _adjustmentsTotalStream;
   List<Account> _accounts = const [];
   bool _loading = false;
   bool _loaded = false;
@@ -52,6 +55,9 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       _loanStream = deps.loansDao.watchById(widget.loanId);
       _balanceStream = deps.loansDao.watchBalance(widget.loanId);
       _paymentsStream = deps.loansDao.watchPayments(widget.loanId);
+      _adjustmentsStream = deps.loansDao.watchAdjustments(widget.loanId);
+      _adjustmentsTotalStream =
+          deps.loansDao.watchAdjustmentsTotal(widget.loanId);
     } catch (e) {
       if (mounted) showErrorSnackbar(context, e);
     } finally {
@@ -68,60 +74,12 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
 
   Future<void> _confirmDeletePayment(JournalEntry payment) async {
     final deps = AppDependencies.of(context);
-    // Hotfix smoke Diego v3: si el pago es "Pago del mes" y hay abonos a
-    // capital del mismo mes, advertir con `DestructiveDialog` explicando
-    // la cascada. Sin monthly, los abonos del mismo mes quedan huérfanos
-    // rompiendo el invariante capital_before_monthly.
-    if (payment.isMonthlyPayment) {
-      final capitalCount =
-          await deps.entriesDao.countCapitalPaymentsInSameMonth(payment.id);
-      if (!mounted) return;
-      if (capitalCount > 0) {
-        final impacts = <DestructiveImpact>[
-          DestructiveImpact(
-            icon: Icons.savings_outlined,
-            label:
-                '$capitalCount ${capitalCount == 1 ? "abono" : "abonos"} a capital '
-                '${capitalCount == 1 ? "se cancelará" : "se cancelarán"} en cascada',
-          ),
-          const DestructiveImpact(
-            icon: Icons.info_outline,
-            label: 'Los abonos requieren un pago del mes previo',
-          ),
-        ];
-        final confirmed = await showDestructiveDialog(
-          context,
-          title: 'Eliminar pago del mes',
-          objectName:
-              DateFormat("MMMM 'de' y", "es_MX").format(payment.occurredAt),
-          icon: Icons.delete_forever_outlined,
-          impacts: impacts,
-          description:
-              'Al eliminar el pago del mes se cancelan también los abonos a '
-              'capital de ese mismo mes calendario. Esta acción no se puede '
-              'deshacer.',
-          confirmLabel: 'Eliminar todo',
-        );
-        if (!confirmed || !mounted) return;
-        try {
-          await deps.entriesDao
-              .deleteLoanPayment(payment.id, cascadeCapitalInMonth: true);
-          if (mounted) {
-            showSuccessSnackbar(context,
-                'Pago del mes y $capitalCount abono(s) capital eliminados.');
-          }
-        } on EntriesDaoError catch (e) {
-          if (mounted) showErrorSnackbar(context, e);
-        } catch (e) {
-          // Hotfix smoke Diego v4: atrapar cualquier excepción no tipada
-          // para evitar el fallo silencioso ("cerró el modal y no pasó
-          // nada"). Cualquier error del DAO llega a Diego como snackbar.
-          if (mounted) showErrorSnackbar(context, e);
-        }
-        return;
-      }
-    }
-    // Sin cascada: confirmDialog normal.
+    // Sprint flutter-loans-flexible-payments-v1: aquí vivía un
+    // `DestructiveDialog` que advertía sobre el borrado en cascada de los
+    // abonos a capital del mismo mes. La cascada existía sólo para sostener
+    // el invariante `capital_before_monthly`; sin ese candado, cada pago se
+    // elimina de forma independiente (RN-LF-04) y no hay impacto sobre
+    // otros registros que advertir.
     final ok = await showConfirmDialog(
       context,
       title: 'Eliminar pago',
@@ -136,6 +94,26 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
       await deps.entriesDao.deleteLoanPayment(payment.id);
       if (mounted) showSuccessSnackbar(context, 'Pago eliminado.');
     } on EntriesDaoError catch (e) {
+      if (mounted) showErrorSnackbar(context, e);
+    }
+  }
+
+  Future<void> _confirmDeleteAdjustment(LoanAdjustment adj) async {
+    final deps = AppDependencies.of(context);
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Eliminar ajuste',
+      message:
+          'Eliminar el ajuste de ${formatCents(adj.amount, showSign: true)} '
+          'del ${DateFormat("d MMM y", "es_MX").format(adj.occurredAt)}. El '
+          'saldo del préstamo se recalcula y puede cambiar su estado.',
+      confirmLabel: 'Eliminar ajuste',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await deps.loansDao.deleteAdjustment(adj.id);
+      if (mounted) showSuccessSnackbar(context, 'Ajuste eliminado.');
+    } on LoansDaoError catch (e) {
       if (mounted) showErrorSnackbar(context, e);
     }
   }
@@ -254,6 +232,7 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                   loan: loan,
                   balanceStream: _balanceStream!,
                   paymentsStream: _paymentsStream!,
+                  adjustmentsTotalStream: _adjustmentsTotalStream!,
                   destAccount: destAccount,
                   onViewInitialIncome: _viewInitialIncome,
                 ),
@@ -331,6 +310,65 @@ class _LoanDetailScreenState extends State<LoanDetailScreen> {
                     );
                   },
                 ),
+                const SizedBox(height: kSpaceXl),
+                // Sprint flutter-loans-flexible-payments-v1: los ajustes van
+                // en su propia sección y no mezclados con los pagos. Son
+                // eventos de naturaleza distinta — no movieron dinero — y
+                // fundirlos en una sola línea de tiempo invitaba a leerlos
+                // como pagos.
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Ajustes de saldo',
+                        style: TextStyle(
+                          color: FincoreColors.textMuted,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      // Disponible incluso con el préstamo cerrado: ese es
+                      // justamente el caso de uso (RN-LF-10).
+                      onPressed: () => context
+                          .push('/loans/${widget.loanId}/adjustments/new'),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Ajustar'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: kSpaceXs),
+                StreamBuilder<List<LoanAdjustment>>(
+                  stream: _adjustmentsStream,
+                  builder: (context, snap) {
+                    final adjustments = snap.data ?? const <LoanAdjustment>[];
+                    if (adjustments.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: kSpaceSm),
+                        child: Text(
+                          'Sin ajustes. Úsalos si el banco cambia tu saldo '
+                          'sin que medie un pago.',
+                          style: TextStyle(
+                              color: FincoreColors.textSubtle, fontSize: 12),
+                        ),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        for (final a in adjustments) ...[
+                          _AdjustmentRow(
+                            adjustment: a,
+                            loanId: widget.loanId,
+                            onDeleteRequested: () =>
+                                _confirmDeleteAdjustment(a),
+                          ),
+                          const SizedBox(height: kSpaceSm),
+                        ],
+                      ],
+                    );
+                  },
+                ),
               ],
             ),
           ),
@@ -345,12 +383,14 @@ class _Header extends StatelessWidget {
   final Loan loan;
   final Stream<int> balanceStream;
   final Stream<List<JournalEntry>> paymentsStream;
+  final Stream<int> adjustmentsTotalStream;
   final Account? destAccount;
   final VoidCallback onViewInitialIncome;
   const _Header({
     required this.loan,
     required this.balanceStream,
     required this.paymentsStream,
+    required this.adjustmentsTotalStream,
     required this.destAccount,
     required this.onViewInitialIncome,
   });
@@ -384,6 +424,29 @@ class _Header extends StatelessWidget {
             'de ${formatCents(loan.principalAmount)} originales',
             style: const TextStyle(
                 color: FincoreColors.textSubtle, fontSize: 12),
+          ),
+          // Sprint flutter-loans-flexible-payments-v1: cuando hay ajustes, el
+          // saldo deja de ser explicable sólo con "prestado − pagado". La
+          // línea existe para que quede claro que el monto original no se
+          // tocó y la diferencia viene de ajustes manuales.
+          StreamBuilder<int>(
+            stream: adjustmentsTotalStream,
+            builder: (context, snap) {
+              final total = snap.data ?? 0;
+              if (total == 0) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: kSpace2xs),
+                child: Text(
+                  'incluye ${formatCents(total, showSign: true)} de ajustes',
+                  style: TextStyle(
+                    color: total > 0
+                        ? FincoreColors.negative
+                        : FincoreColors.positive,
+                    fontSize: 12,
+                  ),
+                ),
+              );
+            },
           ),
           const SizedBox(height: kSpaceLg),
           StreamBuilder<List<JournalEntry>>(
@@ -458,14 +521,23 @@ class _Header extends StatelessWidget {
                     const Icon(Icons.receipt_long_outlined,
                         size: 16, color: FincoreColors.accent),
                     const SizedBox(width: kSpaceSm),
-                    Text(
-                      destAccount != null
-                          ? 'Ver ingreso inicial en ${destAccount!.name}'
-                          : 'Ver ingreso inicial',
-                      style: const TextStyle(
-                        color: FincoreColors.accent,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                    // Sprint flutter-loans-flexible-payments-v1: el texto era
+                    // un `Text` suelto y desbordaba el Row en anchos de
+                    // teléfono reales (~360dp) cuando el nombre de la cuenta
+                    // destino es largo. Lo tapaba el viewport de 800dp que
+                    // usan los widget tests por defecto.
+                    Expanded(
+                      child: Text(
+                        destAccount != null
+                            ? 'Ver ingreso inicial en ${destAccount!.name}'
+                            : 'Ver ingreso inicial',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: FincoreColors.accent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
@@ -616,6 +688,85 @@ class _StateChipRow extends StatelessWidget {
 /// Ahora son dos pill-badges de color contra fondo tint — más rápido de
 /// leer y coherentes con los acumulados del header y con el slider del
 /// payment form (mismos colores: accent capital / warning intereses).
+/// Fila de un ajuste de saldo (sprint flutter-loans-flexible-payments-v1).
+///
+/// El color sigue el EFECTO sobre el usuario, no el signo aritmético: un
+/// ajuste positivo sube la deuda, así que se pinta en rojo aunque el número
+/// lleve `+`. Es consistente con la semántica de color declarada en
+/// CLAUDE.md, donde `negative` significa "peor para tu bolsillo".
+class _AdjustmentRow extends StatelessWidget {
+  final LoanAdjustment adjustment;
+  final String loanId;
+  final VoidCallback onDeleteRequested;
+  const _AdjustmentRow({
+    required this.adjustment,
+    required this.loanId,
+    required this.onDeleteRequested,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fmt = DateFormat("d MMM y", "es_MX");
+    final raisesDebt = adjustment.amount > 0;
+    final color =
+        raisesDebt ? FincoreColors.negative : FincoreColors.positive;
+    return BaseCard(
+      onTap: () => context
+          .push('/loans/$loanId/adjustments/${adjustment.id}/edit'),
+      padding: const EdgeInsets.symmetric(
+          horizontal: kSpaceMd, vertical: kSpaceMd),
+      child: Row(
+        children: [
+          Icon(Icons.tune_outlined, size: 18, color: color),
+          const SizedBox(width: kSpaceMd),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fmt.format(adjustment.occurredAt),
+                  style: const TextStyle(
+                    color: FincoreColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: kSpace2xs),
+                Text(
+                  adjustment.reason?.isNotEmpty == true
+                      ? adjustment.reason!
+                      : (raisesDebt
+                          ? 'Aumento de saldo'
+                          : 'Disminución de saldo'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: FincoreColors.textMuted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: kSpaceSm),
+          Text(
+            formatCents(adjustment.amount, showSign: true),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline,
+                size: 18, color: FincoreColors.textMuted),
+            tooltip: 'Eliminar ajuste',
+            onPressed: onDeleteRequested,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PaymentRow extends StatelessWidget {
   final JournalEntry payment;
   final String loanId;
@@ -672,11 +823,18 @@ class _PaymentRow extends StatelessWidget {
                           size: 12, color: FincoreColors.textMuted),
                       const SizedBox(width: kSpaceXs),
                     ],
-                    Text(
-                      fmt.format(payment.occurredAt),
-                      style: TextStyle(
-                        color: textSecondary,
-                        fontWeight: FontWeight.w600,
+                    // Flexible + ellipsis: con `Spacer` y dos `Text` rígidos,
+                    // la fila desbordaba ~30px en anchos de teléfono reales
+                    // cuando la fecha y el monto son largos.
+                    Flexible(
+                      child: Text(
+                        fmt.format(payment.occurredAt),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                     const Spacer(),

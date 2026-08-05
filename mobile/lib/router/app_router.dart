@@ -10,6 +10,7 @@ import 'package:fincore/screens/entries_list_screen.dart';
 import 'package:fincore/screens/entry_form_screen.dart';
 import 'package:fincore/screens/first_run_screen.dart';
 import 'package:fincore/screens/help_screen.dart';
+import 'package:fincore/screens/loan_adjustment_form.dart';
 import 'package:fincore/screens/loan_capital_payment_form.dart';
 import 'package:fincore/screens/loan_detail_screen.dart';
 import 'package:fincore/screens/loan_form_screen.dart';
@@ -231,6 +232,20 @@ GoRouter buildAppRouter({
                 builder: (_, st) => LoanCapitalPaymentForm(
                   loanId: st.pathParameters['id']!,
                   paymentId: st.pathParameters['paymentId'],
+                ),
+              ),
+              // Sprint flutter-loans-flexible-payments-v1: ajustes de saldo.
+              GoRoute(
+                path: 'adjustments/new',
+                builder: (_, st) => LoanAdjustmentForm(
+                  loanId: st.pathParameters['id']!,
+                ),
+              ),
+              GoRoute(
+                path: 'adjustments/:adjustmentId/edit',
+                builder: (_, st) => LoanAdjustmentForm(
+                  loanId: st.pathParameters['id']!,
+                  adjustmentId: st.pathParameters['adjustmentId'],
                 ),
               ),
             ],

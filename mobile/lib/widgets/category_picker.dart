@@ -127,11 +127,12 @@ class _CategoryPickerSheet extends StatefulWidget {
 }
 
 class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
-  /// MRU en memoria persistente durante la sesión de la app (se pierde al
-  /// restart). Máx 5 IDs, más reciente al inicio.
-  static final List<String> _sessionMRU = [];
-
-  static const int _mruLimit = 5;
+  // Sprint flutter-loans-flexible-payments-v1: aquí vivía un MRU de las
+  // últimas 5 categorías elegidas, que renderizaba una sección "RECIENTES"
+  // cuando quedaban ≥2 visibles. Se eliminó porque era estado invisible: la
+  // lista se llenaba durante la sesión y se perdía al reiniciar la app, así
+  // que la sección aparecía y desaparecía sin patrón discernible desde
+  // afuera. El picker presenta ahora siempre la misma estructura (RN-LF-13).
   static const int _autofocusThreshold = 12;
 
   final TextEditingController _searchCtrl = TextEditingController();
@@ -141,14 +142,6 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
-  }
-
-  void _touchMRU(String id) {
-    _sessionMRU.remove(id);
-    _sessionMRU.insert(0, id);
-    if (_sessionMRU.length > _mruLimit) {
-      _sessionMRU.removeRange(_mruLimit, _sessionMRU.length);
-    }
   }
 
   bool _matchesQuery(db.Category c) {
@@ -167,19 +160,6 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
     // Determina si el sheet muestra headers de sección (income/expense/both).
     final showsGroupHeaders = widget.validAppliesTo.contains('income') &&
         widget.validAppliesTo.contains('expense');
-
-    // MRU visible: sólo IDs que sigan en el listado válido/activo y matcheen
-    // la query. Se muestra la sección si quedan ≥2 items.
-    final mruVisible = <db.Category>[];
-    for (final id in _sessionMRU) {
-      for (final c in filtered) {
-        if (c.id == id) {
-          mruVisible.add(c);
-          break;
-        }
-      }
-    }
-    final showMru = mruVisible.length >= 2;
 
     // Lista principal, opcionalmente agrupada.
     final sections = <_Section>[];
@@ -273,30 +253,13 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
           const SizedBox(height: kSpaceSm),
           // Cuerpo scrollable.
           Flexible(
-            child: (items.isEmpty && !showMru)
+            child: items.isEmpty
                 ? const _EmptyState()
                 : ListView.builder(
                     shrinkWrap: true,
-                    itemCount:
-                        (showMru ? mruVisible.length + 2 : 0) + items.length,
+                    itemCount: items.length,
                     itemBuilder: (context, index) {
-                      var i = index;
-                      if (showMru) {
-                        if (i == 0) return _headerRow('RECIENTES');
-                        i -= 1;
-                        if (i < mruVisible.length) {
-                          return _categoryRow(mruVisible[i]);
-                        }
-                        i -= mruVisible.length;
-                        if (i == 0) {
-                          return const Divider(
-                            color: FincoreColors.border,
-                            height: 1,
-                          );
-                        }
-                        i -= 1;
-                      }
-                      final item = items[i];
+                      final item = items[index];
                       if (item is _HeaderItem) return _headerRow(item.text);
                       if (item is _CategoryItem) {
                         return _categoryRow(item.category);
@@ -322,10 +285,7 @@ class _CategoryPickerSheetState extends State<_CategoryPickerSheet> {
       contentPadding: EdgeInsets.zero,
       leading: CategoryBadge(category: _toModelCategory(c), compact: true),
       title: Text(c.name, style: typo.bodyM),
-      onTap: () {
-        _touchMRU(c.id);
-        Navigator.of(context).pop(_SheetResult(c.id));
-      },
+      onTap: () => Navigator.of(context).pop(_SheetResult(c.id)),
     );
   }
 }
