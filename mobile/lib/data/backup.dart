@@ -55,13 +55,25 @@ class ImportReport {
 ///
 /// Ejemplo: `{"amount": 17377}` (v3) donde v2 emitía `{"amount": 173.77}`.
 ///
-/// El export SIEMPRE emite v3. El import acepta v1, v2 y v3:
+/// Sprint flutter-loans-flexible-payments-v1: bump a v4 con la clave
+/// `loan_adjustments`. Son ajustes manuales del saldo de un préstamo, dato
+/// financiero irrecuperable si se pierde, así que entran al respaldo (a
+/// diferencia de `weekly_budgets`, `saved_views` y `app_preferences`, que
+/// siguen fuera por decisión de diseño).
+///
+/// El export SIEMPRE emite v4. El import acepta v1, v2, v3 y v4:
 ///   - v1/v2 → los montos llegan como `double` y se convierten con
 ///     `centsFromDouble` (redondeo, nunca truncado).
-///   - v3 → los montos llegan como `int` y se usan tal cual. Un `double` en
-///     un payload v3 es un error de formato (`invalid_amount_format`), no se
-///     convierte silenciosamente: rompería la invariante "v3 = enteros".
-const _supportedVersion = 3;
+///   - v3/v4 → los montos llegan como `int` y se usan tal cual. Un `double` en
+///     un payload v3+ es un error de formato (`invalid_amount_format`), no se
+///     convierte silenciosamente: rompería la invariante "v3+ = enteros".
+///   - v1/v2/v3 → sin `loan_adjustments`; se trata como lista vacía y el
+///     saldo de cada préstamo queda en la fórmula de dos términos.
+///
+/// Ruptura hacia atrás: un export v4 NO es importable por 0.33.0 ni
+/// anteriores (`unsupported_version`). El respaldo v3 previo es el único
+/// punto de retorno hacia esas versiones.
+const _supportedVersion = 4;
 const _minSupportedVersion = 1;
 
 /// Primera versión del backup que expresa los montos en centavos enteros.
@@ -127,6 +139,12 @@ class BackupService {
     final activeLoans = await (_db.select(_db.loans)
           ..where((l) => l.deletedAt.isNull()))
         .get();
+    // Sprint flutter-loans-flexible-payments-v1: los ajustes de saldo son
+    // parte del estado financiero del préstamo — sin ellos el saldo
+    // restaurado sería distinto del que el usuario tenía.
+    final activeAdjustments = await (_db.select(_db.loanAdjustments)
+          ..where((a) => a.deletedAt.isNull()))
+        .get();
 
     // Sprint flutter-weekly-budgets-v1 (RN-B13): las 4 tablas del planeador
     // semanal (weekly_budgets, weekly_budget_items
@@ -139,6 +157,8 @@ class BackupService {
       'categories': activeCategories.map(_categoryToJson).toList(),
       'journal_entries': activeEntries.map(_entryToJson).toList(),
       'loans': activeLoans.map(_loanToJson).toList(),
+      'loan_adjustments':
+          activeAdjustments.map(_loanAdjustmentToJson).toList(),
     };
 
     return const JsonEncoder.withIndent('  ').convert(payload);
@@ -213,6 +233,16 @@ class BackupService {
         'El campo `loans` debe ser una lista.',
       );
     }
+    // Sprint flutter-loans-flexible-payments-v1: `loan_adjustments` es
+    // opcional en v1/v2/v3 y en cualquier v4 que venga sin ajustes. Ausente
+    // → lista vacía. Presente pero no-List → error de estructura.
+    final adjustmentsRaw = payload['loan_adjustments'];
+    if (adjustmentsRaw != null && adjustmentsRaw is! List) {
+      throw const BackupError(
+        'invalid_json',
+        'El campo `loan_adjustments` debe ser una lista.',
+      );
+    }
 
     // Pre-parseo (lanza si algo inválido) ANTES de tocar la BD.
     // Sprint flutter-reports-credit-cards-v1: `_accountFromJson` retorna un
@@ -231,6 +261,7 @@ class BackupService {
     final List<CategoriesCompanion> categoriesParsed;
     final List<JournalEntriesCompanion> entriesParsed;
     final List<LoansCompanion> loansParsed;
+    final List<LoanAdjustmentsCompanion> adjustmentsParsed;
     try {
       accountsParsedRaw = accountsRaw
           .map((e) => _accountFromJson(e as Map<String, dynamic>, version))
@@ -249,6 +280,11 @@ class BackupService {
               ?.map((e) => _loanFromJson(e as Map<String, dynamic>, version))
               .toList() ??
           <LoansCompanion>[];
+      adjustmentsParsed = (adjustmentsRaw as List?)
+              ?.map((e) =>
+                  _loanAdjustmentFromJson(e as Map<String, dynamic>, version))
+              .toList() ??
+          <LoanAdjustmentsCompanion>[];
     } on TypeError catch (e) {
       throw BackupError(
         'invalid_json',
@@ -297,6 +333,19 @@ class BackupService {
         );
       }
     }
+    // Sprint flutter-loans-flexible-payments-v1: todo ajuste debe apuntar a
+    // un préstamo presente en el propio payload. Con `PRAGMA foreign_keys=ON`
+    // el insert reventaría igual, pero como `SqliteException` sin tipar: el
+    // check explícito da el error de dominio correcto.
+    for (final adj in adjustmentsParsed) {
+      final target = adj.loanId.value;
+      if (!loanIds.contains(target)) {
+        throw BackupError(
+          'invalid_reference',
+          'Un ajuste de saldo referencia un préstamo que no existe ($target).',
+        );
+      }
+    }
     // Hotfix quality-review B4: cada Loan del payload debe tener exactamente
     // 1 income inicial en journal_entries con {kind:'income',
     // loan_id=loan.id, account_destination_id=loan.destination_account_id,
@@ -312,7 +361,7 @@ class BackupService {
           e.kind.value == 'income' &&
           e.loanId.value == loanId &&
           e.accountDestinationId.value == expectedDest &&
-          (e.amount.value - expectedAmount).abs() < 0.005);
+          e.amount.value == expectedAmount);
       if (loanIncomes.isEmpty) {
         throw BackupError(
           'invalid_reference',
@@ -375,6 +424,9 @@ class BackupService {
         b.insertAll(_db.categories, categoriesParsed);
         b.insertAll(_db.loans, loansParsed);
         b.insertAll(_db.journalEntries, entriesParsed);
+        // Después de `loans`: la FK `loan_adjustments.loan_id` se valida en
+        // runtime con `PRAGMA foreign_keys=ON`.
+        b.insertAll(_db.loanAdjustments, adjustmentsParsed);
       });
     });
     // Invalidar cache de streams tras reemplazo total (RF-012). Las nuevas
@@ -410,6 +462,9 @@ class BackupService {
     // Sprint flutter-loans-v1: journal_entries → loans → accounts respetando
     // FKs (los entries pueden referenciar loans; loans referencian accounts).
     await _db.delete(_db.journalEntries).go();
+    // Sprint flutter-loans-flexible-payments-v1: los ajustes referencian
+    // `loans`, así que van ANTES que los préstamos o el delete viola la FK.
+    await _db.delete(_db.loanAdjustments).go();
     await _db.delete(_db.loans).go();
     await _db.delete(_db.categories).go();
     await _db.delete(_db.accounts).go();
@@ -471,9 +526,11 @@ class BackupService {
         if (e.principalAmount != null) 'principal_amount': e.principalAmount,
         if (e.interestAmount != null) 'interest_amount': e.interestAmount,
         // Hotfix quality-review B1: sin este flag el round-trip convierte
-        // TODOS los loan_payment en capital (default 0 del schema), rompe
-        // watchHasMonthlyPaymentIn y capital_before_monthly después de
-        // cualquier import.
+        // TODOS los loan_payment en capital (default 0 del schema) y rompe
+        // `watchHasMonthlyPaymentIn` después de cualquier import. Desde
+        // flutter-loans-flexible-payments-v1 `is_monthly_payment` ya no
+        // gobierna validaciones (RN-LF-03), pero sigue distinguiendo el tipo
+        // de pago en el historial y alimentando el chip de próximo pago.
         if (e.kind == 'loan_payment')
           'is_monthly_payment': e.isMonthlyPayment,
         'created_at': e.createdAt.toUtc().toIso8601String(),
@@ -498,6 +555,19 @@ class BackupService {
         if (l.closeReason != null) 'close_reason': l.closeReason,
         'created_at': l.createdAt.toUtc().toIso8601String(),
         'updated_at': l.updatedAt.toUtc().toIso8601String(),
+      };
+
+  /// Sprint flutter-loans-flexible-payments-v1: serialización de un ajuste de
+  /// saldo. `amount` va con signo (positivo sube la deuda).
+  Map<String, dynamic> _loanAdjustmentToJson(LoanAdjustment a) =>
+      <String, dynamic>{
+        'id': a.id,
+        'loan_id': a.loanId,
+        'amount': a.amount,
+        if (a.reason != null) 'reason': a.reason,
+        'occurred_at': a.occurredAt.toUtc().toIso8601String(),
+        'created_at': a.createdAt.toUtc().toIso8601String(),
+        'updated_at': a.updatedAt.toUtc().toIso8601String(),
       };
 
   /// Sprint flutter-integer-cents-v1: lee un monto del payload y lo devuelve
@@ -818,6 +888,45 @@ class BackupService {
       destinationAccountId: destinationAccountId,
       closedAt: Value(_parseDate(json['closed_at'])),
       closeReason: Value(closeReason),
+      createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
+      updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
+    );
+  }
+
+  /// Sprint flutter-loans-flexible-payments-v1: parseo de un ajuste de saldo.
+  ///
+  /// El monto se valida contra cero por la misma razón que en el DAO: un
+  /// ajuste de cero no significa nada. Sin este check, un payload podría
+  /// meter por la puerta trasera un estado que `registerAdjustment` prohíbe.
+  ///
+  /// NO se valida el signo (un ajuste negativo es legítimo) ni que el saldo
+  /// resultante sea positivo: el import es un reemplazo total y el conjunto
+  /// de pagos que lo acompaña puede justificar cualquier neto. Esa validación
+  /// pertenece a la captura interactiva, no a la restauración.
+  LoanAdjustmentsCompanion _loanAdjustmentFromJson(
+      Map<String, dynamic> json, int version) {
+    final id = json['id'] as String;
+    final loanId = json['loan_id'] as String;
+    final amount =
+        _moneyFromJson('loan_adjustments.amount', json['amount'], version)!;
+    final reason = json['reason'] as String?;
+    _validateUuid('loan_adjustments.id', id);
+    _validateUuid('loan_adjustments.loan_id', loanId);
+    if (reason != null) {
+      _validateLength('loan_adjustments.reason', reason, _kMaxDescriptionLength);
+    }
+    if (amount == 0) {
+      throw const BackupError(
+        'invalid_amount_format',
+        'Un ajuste de saldo no puede ser de cero.',
+      );
+    }
+    return LoanAdjustmentsCompanion.insert(
+      id: id,
+      loanId: loanId,
+      amount: amount,
+      reason: Value(reason),
+      occurredAt: _parseDate(json['occurred_at']) ?? DateTime.now(),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
     );
